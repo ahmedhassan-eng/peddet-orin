@@ -1,0 +1,111 @@
+"""The one postprocess: anchors, box decoding, score filtering and NMS.
+
+The exported network stops at raw box regression and class logits. Everything
+after that lives here, outside any graph, and every precision goes through this
+same code, so accuracy differences between precisions can only come from the
+network outputs.
+
+The anchors and the box coder are torchvision's own objects, taken from an SSDLite
+model built without weights. The thresholds are read from that same model, which
+keeps this module from carrying a second copy of torchvision's configuration.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Sequence
+
+import torch
+from torchvision.models.detection.image_list import ImageList
+from torchvision.ops import boxes as box_ops
+
+from peddet_orin.preprocess import INPUT_SHAPE, INPUT_SIZE
+
+BACKGROUND_LABEL = 0
+PERSON_LABEL = 1
+LOGITS_DIM = -1
+
+
+@dataclass
+class Detections:
+    """Detections for one image, with boxes as xyxy in original-image pixels."""
+
+    boxes: torch.Tensor
+    scores: torch.Tensor
+    labels: torch.Tensor
+
+
+class Postprocessor:
+    """Turn raw network outputs into detections, for a batch holding a single image."""
+
+    def __init__(
+        self,
+        anchors: torch.Tensor,
+        box_coder,
+        score_threshold: float,
+        nms_iou_threshold: float,
+        detections_per_image: int,
+        top_k_per_class: int,
+    ) -> None:
+        self.anchors = anchors
+        self.box_coder = box_coder
+        self.score_threshold = score_threshold
+        self.nms_iou_threshold = nms_iou_threshold
+        self.detections_per_image = detections_per_image
+        self.top_k_per_class = top_k_per_class
+
+    @classmethod
+    def from_torchvision(cls, model) -> "Postprocessor":
+        """Build the postprocess from an SSD model's own generator, coder and settings."""
+        probe = torch.zeros(INPUT_SHAPE)
+        with torch.no_grad():
+            features = list(model.backbone(probe).values())
+        image_list = ImageList(probe, [INPUT_SIZE])
+        anchors = model.anchor_generator(image_list, features)[0]
+        return cls(
+            anchors=anchors,
+            box_coder=model.box_coder,
+            score_threshold=model.score_thresh,
+            nms_iou_threshold=model.nms_thresh,
+            detections_per_image=model.detections_per_img,
+            top_k_per_class=model.topk_candidates,
+        )
+
+    def __call__(
+        self,
+        box_regression: torch.Tensor,
+        class_logits: torch.Tensor,
+        original_size: Sequence[int],
+    ) -> Detections:
+        """Decode one image's outputs; ``original_size`` is (height, width)."""
+        boxes = self.box_coder.decode_single(box_regression[0], self.anchors)
+        boxes = box_ops.clip_boxes_to_image(boxes, INPUT_SIZE)
+        scores = torch.softmax(class_logits[0], dim=LOGITS_DIM)
+
+        kept_boxes, kept_scores, kept_labels = [], [], []
+        for label in range(scores.shape[LOGITS_DIM]):
+            if label == BACKGROUND_LABEL:
+                continue
+            class_scores = scores[:, label]
+            mask = class_scores > self.score_threshold
+            class_scores, class_boxes = class_scores[mask], boxes[mask]
+            count = min(self.top_k_per_class, class_scores.numel())
+            class_scores, order = class_scores.topk(count)
+            kept_boxes.append(class_boxes[order])
+            kept_scores.append(class_scores)
+            kept_labels.append(torch.full((count,), label, dtype=torch.int64))
+
+        all_boxes = torch.cat(kept_boxes)
+        all_scores = torch.cat(kept_scores)
+        all_labels = torch.cat(kept_labels)
+        # batched_nms suppresses only within a class and returns indices by falling score.
+        keep = box_ops.batched_nms(all_boxes, all_scores, all_labels, self.nms_iou_threshold)
+        keep = keep[: self.detections_per_image]
+        return Detections(_to_original(all_boxes[keep], original_size), all_scores[keep], all_labels[keep])
+
+
+def _to_original(boxes: torch.Tensor, original_size: Sequence[int]) -> torch.Tensor:
+    """Scale xyxy boxes from network-input pixels to original-image pixels."""
+    input_height, input_width = INPUT_SIZE
+    height, width = original_size
+    factors = torch.tensor([width / input_width, height / input_height] * 2, dtype=boxes.dtype)
+    return boxes * factors

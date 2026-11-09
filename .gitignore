@@ -1,0 +1,15 @@
+.venv/
+data/
+.cache/
+PROGRESS.txt
+REPORT.txt
+artifacts/
+__pycache__/
+*.pyc
+*.onnx
+*.engine
+*.pt
+*.pth
+*.egg-info/
+.pytest_cache/
+build/
