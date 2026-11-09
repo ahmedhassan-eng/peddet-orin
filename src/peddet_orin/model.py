@@ -20,7 +20,7 @@ import peddet_orin.debug as debug
 BBOX_KEY = "bbox_regression"
 LOGITS_KEY = "cls_logits"
 # Torch warns about compute capability 8.7 on its first CUDA use; only that warning is filtered.
-SM87_WARNING_PATTERN = r".*compute capability.*8\.7.*"
+SM87_WARNING_PATTERN = r"(?s)\s*Found GPU\d+ .*compute capability.*8\.7"
 
 
 def load_detector(pretrained: bool) -> nn.Module:
