@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import re
 import resource
 import subprocess
@@ -21,7 +22,7 @@ import torch
 from PIL import Image
 
 from peddet_orin import debug, runlog
-from peddet_orin.evaluate import CPU, IMAGES, PRECISIONS, make_backend
+from peddet_orin.evaluate import CUDA, IMAGES, PRECISIONS, make_backend
 from peddet_orin.model import load_detector
 from peddet_orin.postprocess import Postprocessor
 from peddet_orin.preprocess import PIXEL_MAX, preprocess
@@ -118,7 +119,7 @@ def _mean_or_unreadable(values: list[int], scale: float = 1.0) -> float | str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--precision", choices=PRECISIONS, required=True)
-    parser.add_argument("--device", default=CPU, help="torch device for fp32; TensorRT always uses the GPU")
+    parser.add_argument("--device", default=CUDA, help="torch device for fp32; TensorRT always uses the GPU")
     parser.add_argument("--iterations", type=int, default=TIMED_ITERATIONS)
     parser.add_argument("--warmup", type=int, default=WARMUP_ITERATIONS)
     args = parser.parse_args()
@@ -148,6 +149,8 @@ def main() -> int:
             engine_seconds.append(engine)
             total_seconds.append(total)
         sampler.stop()
+        # The one-minute load average shows whether other CPU work shared the timed run.
+        one_minute_load = os.getloadavg()[0]
 
         ram = sampler.values(RAM_PATTERN)
         base_ram = baseline.values(RAM_PATTERN)
@@ -163,6 +166,7 @@ def main() -> int:
                 "avg_power_w": _mean_or_unreadable(power, MW_PER_W),
                 "power_samples": len(power),
                 "gpu_busy_pct_before_timing": _mean_or_unreadable(baseline.values(GPU_BUSY_PATTERN)),
+                "cpu_load_1min": one_minute_load,
                 "clocks_locked": CLOCKS_LOCKED_STATUS,
                 "power_mode": runlog._command_output(["nvpmodel", "-q"]),
             }

@@ -14,6 +14,7 @@ failed comparison. The exit status is non-zero if the check fails.
 """
 from __future__ import annotations
 
+import re
 import sys
 import warnings
 
@@ -36,6 +37,8 @@ MIN_BOX_PIXELS = 8.0
 MAX_BOX_PIXELS = 64.0
 NMS_IOU = 0.5
 NOT_RUN = "not run"  # Stands in for a measurement whose operation raised an error.
+SLICE_PATTERN = re.compile(r"sm_(\d)(\d+)$")
+NO_COMPATIBLE_SLICE = "none"
 
 
 def matmul_difference(generator: torch.Generator) -> float:
@@ -69,6 +72,21 @@ def nms_comparison(generator: torch.Generator) -> dict[str, int | bool]:
     }
 
 
+def compatible_slice(arch_list: list[str], major: int, minor: int) -> str:
+    """Return the newest slice a device of this capability can load, by CUDA's rule.
+
+    A CUDA binary compiled for capability X.y runs on X.z when z >= y, and never
+    across major versions. The driver does not report which slice it loaded, so this
+    is an inference from that rule and the wheel's own list, and is logged as one.
+    """
+    candidates = []
+    for arch in arch_list:
+        match = SLICE_PATTERN.match(arch)
+        if match and int(match.group(1)) == major and int(match.group(2)) <= minor:
+            candidates.append((int(match.group(2)), arch))
+    return max(candidates)[1] if candidates else NO_COMPATIBLE_SLICE
+
+
 def attempt(operation, generator: torch.Generator) -> tuple[object, str]:
     """Run one comparison, returning (result, error text); only one of them is set.
 
@@ -99,10 +117,14 @@ def main() -> int:
         matmul_ok = difference is not None and difference <= MATMUL_TOLERANCE
         nms_ok = comparison is not None and bool(comparison["nms_identical"])
         usable = matmul_ok and nms_ok
+        arch_list = list(torch.cuda.get_arch_list()) if available else []
+        major, minor = torch.cuda.get_device_capability(0) if available else (0, 0)
         log.results.update(
             {
                 "cuda_available": available,
-                "arch_list": list(torch.cuda.get_arch_list()) if available else [],
+                "arch_list": arch_list,
+                "device_compute_capability": f"{major}.{minor}",
+                "inferred_slice": compatible_slice(arch_list, major, minor),
                 "matmul_max_abs_difference": difference if difference is not None else NOT_RUN,
                 "matmul_tolerance": MATMUL_TOLERANCE,
                 "matmul_matches": matmul_ok,

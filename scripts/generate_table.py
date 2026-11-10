@@ -91,8 +91,17 @@ def _notes(logs: list[dict]) -> list[str]:
             notes.append(
                 f"{PRECISION_NAMES[precision]} benchmark: power mode `{mode}`, "
                 f"clocks locked: {results['clocks_locked']}, "
+                f"one-minute CPU load after timing: {results['cpu_load_1min']:.1f}, "
                 f"other GPU processes: {benchmark['other_gpu_processes']}."
             )
+    check = latest(logs, "gpu_check", "fp32")
+    if check:
+        results = check["results"]
+        notes.append(
+            f"PyTorch GPU check: usable {results['gpu_torch_usable']}, device compute capability "
+            f"{results['device_compute_capability']}, wheel slices {', '.join(results['arch_list'])}, "
+            f"slice that runs by CUDA's binary-compatibility rule: {results['inferred_slice']}."
+        )
     return notes
 
 

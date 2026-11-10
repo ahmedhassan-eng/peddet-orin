@@ -14,7 +14,9 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 | INT8 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 <!-- results:end -->
 
-The FP32 row runs PyTorch on the CPU, so its timing is not comparable with the TensorRT rows. The PyTorch wheels available for this board have no kernels for its GPU. Its accuracy is the reference for the other rows.
+The FP32 row runs PyTorch on the GPU. The PyTorch wheels carry no slice built for this board's compute capability, so the GPU runs the compatible slice named in the notes above. The driver does not report which slice it loaded, so the notes give the one CUDA's binary-compatibility rule selects. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable.
+
+Clocks are not locked by this project, since that needs root, and the benchmark logs record their state as `UNREADABLE`. Timings therefore include any clock scaling, and other work on the board.
 
 Peak process RSS does not fully capture memory allocated on the device. System RAM rise is the highest system-wide RAM during timing minus the mean just before, so it also includes any other activity on the board.
 
@@ -22,7 +24,7 @@ Peak process RSS does not fully capture memory allocated on the device. System R
 
 The steps below need a Jetson Orin Nano Super on JetPack 7. The CPU tests need only the Python packages. `nvpmodel` and `tegrastats` must be on `PATH`; a log records `UNREADABLE` for anything it cannot read.
 
-Set `INDEX` to the Jetson AI Lab pip index for SBSA and CUDA 13.0, whose path ends in `sbsa/cu130`. Then run these from the repository root:
+Run these from the repository root:
 
 ```sh
 export TORCH_HOME="$PWD/.cache/torch" PIP_CACHE_DIR="$PWD/.cache/pip" XDG_CACHE_HOME="$PWD/.cache/xdg"
@@ -30,9 +32,8 @@ export MPLCONFIGDIR="$PWD/.cache/mpl" CUDA_CACHE_PATH="$PWD/.cache/cuda"
 export PYTHONPATH="$PWD/src:$PWD/scripts"
 python3 -m venv .venv --system-site-packages
 . .venv/bin/activate
-pip install --index-url "$INDEX" torch==2.10.0 torchvision==0.25.0 nvpl "nvidia-cudss-cu13<1" "numpy<2"
-pip install "numpy<2" onnx onnxruntime pycocotools
-export LD_LIBRARY_PATH="$PWD/.venv/lib/python3.12/site-packages/nvpl/lib:$PWD/.venv/lib/python3.12/site-packages/nvidia/cu13/lib"
+pip install --index-url https://download.pytorch.org/whl/cu130 "torch==2.14.1+cu130" "torchvision==0.29.1+cu130"
+pip install "numpy<2" onnx onnxruntime pycocotools pytest
 ```
 
 Run the tests, which use the CPU and no network:
@@ -41,13 +42,14 @@ Run the tests, which use the CPU and no network:
 python -m pytest
 ```
 
-Fetch the data, then build and measure. `FP32` runs on the CPU here, as explained above.
+Fetch the data, check the GPU, then build and measure.
 
 ```sh
 python scripts/fetch_coco.py annotations
 python scripts/fetch_coco.py val
 python scripts/fetch_coco.py calibration
 
+python -m peddet_orin.gpu_check
 python -m peddet_orin.export
 python -m peddet_orin.engine_build --precision fp16
 python -m peddet_orin.engine_build --precision int8

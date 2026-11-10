@@ -27,7 +27,7 @@ AP50_INDEX = 1  # COCOeval.stats[1] is AP at IoU 0.50.
 PROGRESS_EVERY = 500
 EVAL_SEED = 0  # Evaluation is deterministic; the field is logged for uniformity.
 PRECISIONS = ("fp32", "fp16", "int8")
-CPU = "cpu"
+CUDA = "cuda"
 
 
 def make_backend(precision: str, device: str, detector):
@@ -76,7 +76,7 @@ def detect_people(backend, postprocess: Postprocessor, ground_truth: COCO, image
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--precision", choices=PRECISIONS, required=True)
-    parser.add_argument("--device", default=CPU, help="torch device for fp32; TensorRT always uses the GPU")
+    parser.add_argument("--device", default=CUDA, help="torch device for fp32; TensorRT always uses the GPU")
     args = parser.parse_args()
 
     with contextlib.redirect_stdout(io.StringIO()):
