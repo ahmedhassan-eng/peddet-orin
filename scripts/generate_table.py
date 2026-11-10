@@ -22,6 +22,13 @@ INT8_DROP_LIMIT_POINTS = 2.0
 POINTS = 100.0
 MISSING = "n/a"
 UNREADABLE = "UNREADABLE"
+# Each row's first cell names its device and its precision, e.g. "GPU, PyTorch FP32".
+# The key is the ``runtime`` field the benchmark and evaluation logs record.
+DEVICE_AND_FRAMEWORK = {
+    "pytorch-cuda": "GPU, PyTorch",
+    "pytorch-cpu": "CPU, PyTorch",
+    "tensorrt-gpu": "GPU, TensorRT",
+}
 
 
 def load_logs(runs_dir: Path) -> list[dict]:
@@ -53,9 +60,9 @@ def _row(logs: list[dict], precision: str) -> str:
         int8_path = build["results"]["int8_path"] if build else MISSING
     else:
         int8_path = "-"
+    runtime = (timing or scores or {}).get("runtime", MISSING)
     cells = [
-        PRECISION_NAMES[precision],
-        (timing or scores or {}).get("runtime", MISSING),
+        f"{DEVICE_AND_FRAMEWORK.get(runtime, runtime)} {PRECISION_NAMES[precision]}",
         _latency(timing["engine"]) if timing else MISSING,
         _latency(timing["end_to_end"]) if timing else MISSING,
         _number(timing["engine"]["fps"], 1) if timing else MISSING,
@@ -109,7 +116,7 @@ def build_block(runs_dir: Path = RUNS_DIR) -> str:
     """Render the full results block, markers excluded."""
     logs = load_logs(runs_dir)
     header = (
-        "| Precision | Runtime | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | "
+        "| Device and precision | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | "
         "End-to-end FPS | Peak process RSS (MiB) | System RAM rise (MiB) | Avg power VDD_IN (W) | "
         "Person AP@[.5:.95] | Person AP50 | INT8 path |"
     )

@@ -7,11 +7,11 @@ Person detection on a Jetson Orin Nano with torchvision's SSDLite320 MobileNetV3
 Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. All precisions use the same postprocess.
 
 <!-- results:begin -->
-| Precision | Runtime | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | End-to-end FPS | Peak process RSS (MiB) | System RAM rise (MiB) | Avg power VDD_IN (W) | Person AP@[.5:.95] | Person AP50 | INT8 path |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| FP32 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |
-| FP16 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |
-| INT8 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| Device and precision | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | End-to-end FPS | Peak process RSS (MiB) | System RAM rise (MiB) | Avg power VDD_IN (W) | Person AP@[.5:.95] | Person AP50 | INT8 path |
+|---|---|---|---|---|---|---|---|---|---|---|
+| n/a FP32 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |
+| n/a FP16 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |
+| n/a INT8 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 <!-- results:end -->
 
 The FP32 row runs PyTorch on the GPU. The PyTorch wheels carry no slice built for this board's compute capability, so the GPU runs the compatible slice named in the notes above. The driver does not report which slice it loaded, so the notes give the one CUDA's binary-compatibility rule selects. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable.
