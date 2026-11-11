@@ -1,0 +1,69 @@
+# Pins for the Jetson Orin venv: Python 3.12, created with --system-site-packages,
+# because TensorRT 10.16.2.10 comes from the JetPack system Python, not from pip.
+# Used by the README's install line as: pip install -c constraints/jetson-orin.txt ...
+#
+# The 52 pins below are the earlier venv's own packages (pip freeze --local), unchanged.
+# A constraint pins only what something asks for, so packages nothing here needs
+# (streamlit and its dependencies, for example) are pinned but not installed.
+altair==6.2.2
+anyio==4.14.2
+cuda-bindings==13.3.1
+cuda-pathfinder==1.6.0
+cuda-toolkit==13.0.3.0
+filelock==3.32.0
+fsspec==2026.6.0
+gitdb==4.0.12
+GitPython==3.1.56
+h11==0.16.0
+httptools==0.8.0
+itsdangerous==2.2.0
+kiwisolver==1.5.0
+matplotlib==3.11.1
+mpmath==1.3.0
+narwhals==2.24.0
+networkx==3.6.1
+numpy==1.26.4
+nvidia-cublas==13.1.1.3
+nvidia-cuda-cupti==13.0.85
+nvidia-cuda-nvrtc==13.0.88
+nvidia-cuda-runtime==13.0.96
+nvidia-cudnn-cu13==9.24.0.43
+nvidia-cufft==12.0.0.61
+nvidia-cufile==1.15.1.6
+nvidia-curand==10.4.0.35
+nvidia-cusolver==12.0.4.66
+nvidia-cusparse==12.6.3.3
+nvidia-cusparselt-cu13==0.8.1
+nvidia-nccl-cu13==2.30.7
+nvidia-nvjitlink==13.3.33
+nvidia-nvshmem-cu13==3.4.5
+nvidia-nvtx==13.0.85
+protobuf==7.35.1
+pyarrow==24.0.0
+pycocotools==2.0.11
+pydeck==0.9.3
+python-multipart==0.0.32
+setuptools==83.0.0
+smmap==5.0.3
+starlette==1.3.1
+streamlit==1.60.0
+sympy==1.14.0
+tenacity==9.1.4
+toml==0.10.2
+torch==2.14.1+cu130
+torchvision==0.29.1+cu130
+triton==3.8.0
+typing_extensions==4.16.0
+uvicorn==0.51.0
+watchdog==6.0.0
+websockets==16.1.1
+#
+# Not in that venv: onnx and onnxruntime came from pip in the build venv, and pytest
+# and pillow come from the system Python; flatbuffers and ml_dtypes come with onnx and
+# onnxruntime. These are the versions used on this board.
+onnx==1.23.2
+onnxruntime==1.31.1
+pillow==10.2.0
+pytest==7.4.4
+flatbuffers==25.12.19
+ml_dtypes==0.5.4

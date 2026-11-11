@@ -1,0 +1,15 @@
+# CPU-only set for CI (ubuntu-latest, Python 3.10 to 3.12). No CUDA, no TensorRT:
+# the GPU and TensorRT tests skip when those are absent.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+torchvision==0.29.1+cpu
+numpy==1.26.4
+onnx==1.23.2
+# onnxruntime 1.31.1 has no wheel for Python 3.10; 1.23.2 is the newest that does.
+onnxruntime==1.31.1; python_version >= "3.11"
+onnxruntime==1.23.2; python_version < "3.11"
+pycocotools==2.0.11
+pillow==10.2.0
+pytest==7.4.4
+flatbuffers==25.12.19
+ml_dtypes==0.5.4

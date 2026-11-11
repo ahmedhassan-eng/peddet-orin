@@ -29,12 +29,13 @@ Run these from the repository root:
 ```sh
 export TORCH_HOME="$PWD/.cache/torch" PIP_CACHE_DIR="$PWD/.cache/pip" XDG_CACHE_HOME="$PWD/.cache/xdg"
 export MPLCONFIGDIR="$PWD/.cache/mpl" CUDA_CACHE_PATH="$PWD/.cache/cuda"
-export PYTHONPATH="$PWD/src:$PWD/scripts"
-python3 -m venv .venv --system-site-packages
+python3.12 -m venv .venv --system-site-packages
 . .venv/bin/activate
-pip install --index-url https://download.pytorch.org/whl/cu130 "torch==2.14.1+cu130" "torchvision==0.29.1+cu130"
-pip install "numpy<2" onnx onnxruntime pycocotools pytest
+pip install -c constraints/jetson-orin.txt --extra-index-url https://download.pytorch.org/whl/cu130 "torch==2.14.1+cu130" "torchvision==0.29.1+cu130"
+pip install -c constraints/jetson-orin.txt -e ".[test]"
 ```
+
+The venv uses `--system-site-packages` because TensorRT 10.16.2.10 comes from the JetPack system Python. `constraints/jetson-orin.txt` pins every package version.
 
 Run the tests, which use the CPU and no network:
 
