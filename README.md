@@ -153,7 +153,6 @@ peddet-orin/
 ├── AGENTS.md                        rules for changes, with the shared commit-message rule
 ├── CHANGELOG.md
 ├── CITATION.cff
-├── CODE_OF_CONDUCT.md
 ├── CONTRIBUTING.md
 ├── LICENSE
 ├── NOTICE
@@ -193,4 +192,4 @@ Built with AI coding agents under the direction of [Ahmed Hassan](https://github
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md) and, for vulnerabilities, [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) and, for vulnerabilities, [SECURITY.md](SECURITY.md).

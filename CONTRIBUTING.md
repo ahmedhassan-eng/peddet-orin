@@ -5,7 +5,6 @@ published number traceable to a run log.
 
 ## Before you start
 
-- Read the [Code of Conduct](CODE_OF_CONDUCT.md).
 - Report a vulnerability privately, as [SECURITY.md](SECURITY.md) describes, not in an issue.
 - Open an issue before a large change, so that the approach can be agreed first.
 

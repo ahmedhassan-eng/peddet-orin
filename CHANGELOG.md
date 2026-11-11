@@ -18,6 +18,6 @@ All notable changes to this project are recorded here. The format follows
 - GPU and TensorRT tests, which skip where there is no CUDA device or no TensorRT.
 - Tests for the repository's rules: the README layout tree, the CI contract, unique test names, the commit rule
   copied in `AGENTS.md`, version agreement, and strict skips in CI.
-- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CITATION.cff` and issue and pull request templates.
+- `CONTRIBUTING.md`, `SECURITY.md`, `CITATION.cff` and issue and pull request templates.
 
 [0.1.0]: https://github.com/ahmedhassan-eng/peddet-orin/releases/tag/v0.1.0
