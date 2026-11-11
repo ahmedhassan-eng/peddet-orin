@@ -2,10 +2,9 @@
 import pytest
 import torch
 
+from helpers import lively_detector
 from peddet_orin.export import OnnxMismatch, assert_matches, export, seeded_batches
 from peddet_orin.model import SsdNetwork
-
-from helpers import lively_detector
 
 SEED = 321
 BATCHES = 2

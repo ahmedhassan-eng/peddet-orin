@@ -8,8 +8,8 @@ from __future__ import annotations
 import os
 import sys
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 DEBUG_ENV_VAR = "DEBUG"
 FALSE_VALUES = ("", "0", "false", "no")

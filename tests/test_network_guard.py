@@ -14,14 +14,16 @@ OFFENDING_TEST = """
 import socket
 
 def test_opens_socket():
-    socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((socket.inet_ntoa(socket.INADDR_LOOPBACK.to_bytes(4, "big")), 9))
+    address = (socket.inet_ntoa(socket.INADDR_LOOPBACK.to_bytes(4, "big")), 9)
+    socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(address)
 """
 SWALLOWING_TEST = """
 import socket
 
 def test_hides_socket_failure():
     try:
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((socket.inet_ntoa(socket.INADDR_LOOPBACK.to_bytes(4, "big")), 9))
+        address = (socket.inet_ntoa(socket.INADDR_LOOPBACK.to_bytes(4, "big")), 9)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(address)
     except Exception:
         pass
 """

@@ -3,11 +3,10 @@ import pytest
 import torch
 from torchvision.models.detection._utils import BoxCoder
 
+from helpers import lively_detector
 from peddet_orin.model import SsdNetwork
 from peddet_orin.postprocess import Postprocessor
 from peddet_orin.preprocess import INPUT_SIZE, preprocess
-
-from helpers import lively_detector
 
 CODER_WEIGHTS = (10.0, 10.0, 5.0, 5.0)
 SCORE_THRESHOLD = 0.5

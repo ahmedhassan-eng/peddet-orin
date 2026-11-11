@@ -5,9 +5,7 @@ import argparse
 import contextlib
 import io
 import sys
-from pathlib import Path
 
-import numpy as np
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
@@ -58,7 +56,7 @@ def detect_people(backend, postprocess: Postprocessor, ground_truth: COCO, image
         box_regression, class_logits = backend(preprocess(image))
         found = postprocess(box_regression, class_logits, image.shape[-2:])
         people = found.labels == PERSON_LABEL
-        for (x1, y1, x2, y2), score in zip(found.boxes[people].tolist(), found.scores[people].tolist()):
+        for (x1, y1, x2, y2), score in zip(found.boxes[people].tolist(), found.scores[people].tolist(), strict=True):
             results.append(
                 {
                     "image_id": image_id,

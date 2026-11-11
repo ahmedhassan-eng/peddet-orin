@@ -11,8 +11,8 @@ keeps this module from carrying a second copy of torchvision's configuration.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import torch
 from torchvision.models.detection.image_list import ImageList
@@ -54,7 +54,7 @@ class Postprocessor:
         self.top_k_per_class = top_k_per_class
 
     @classmethod
-    def from_torchvision(cls, model) -> "Postprocessor":
+    def from_torchvision(cls, model) -> Postprocessor:
         """Build the postprocess from an SSD model's own generator, coder and settings."""
         probe = torch.zeros(INPUT_SHAPE)
         with torch.no_grad():

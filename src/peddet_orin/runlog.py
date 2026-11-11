@@ -128,7 +128,7 @@ class RunLog:
         self.results: dict[str, Any] = {}
         self.path: Path | None = None
 
-    def __enter__(self) -> "RunLog":
+    def __enter__(self) -> RunLog:
         self.start_utc = _utc_now()
         self.gpu_processes = other_gpu_process_count()
         return self

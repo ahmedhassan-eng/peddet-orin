@@ -60,7 +60,7 @@ def max_difference(
             expected = network(normalise(raw))
         onnx_input = normalise(raw) if normalise_onnx_input else raw
         actual = onnx_runtime.run(list(OUTPUT_NAMES), {INPUT_NAME: onnx_input.numpy()})
-        for want, got in zip(expected, actual):
+        for want, got in zip(expected, actual, strict=True):
             worst = max(worst, float(np.max(np.abs(want.numpy() - got))))
     return worst
 
