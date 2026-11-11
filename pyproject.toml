@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,8 +7,25 @@ name = "peddet-orin"
 version = "0.1.0"
 description = "Person detection with torchvision SSDLite on a Jetson Orin Nano, in FP32, FP16 and INT8."
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.10"
+authors = [{ name = "Ahmed Hassan" }]
+keywords = ["Jetson", "orin", "tensorrt", "onnx", "pytorch", "object-detection", "benchmark", "int8", "coco"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: GPU :: NVIDIA CUDA",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: System :: Benchmark",
+]
 dependencies = [
     "torch>=2.9",
     "torchvision>=0.24",
@@ -18,6 +35,12 @@ dependencies = [
     "pycocotools>=2.0.8",
     "pillow>=10",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ahmedhassan-eng/peddet-orin"
+Repository = "https://github.com/ahmedhassan-eng/peddet-orin"
+Issues = "https://github.com/ahmedhassan-eng/peddet-orin/issues"
+Changelog = "https://github.com/ahmedhassan-eng/peddet-orin/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 test = ["pytest>=7.4"]

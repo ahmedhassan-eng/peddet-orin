@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software or its results, please cite it as below."
+type: software
+title: "peddet-orin: person detection on the Jetson Orin in FP32, FP16 and INT8"
+version: 0.1.0
+authors:
+  - family-names: Hassan
+    given-names: Ahmed
+repository-code: "https://github.com/ahmedhassan-eng/peddet-orin"
+url: "https://github.com/ahmedhassan-eng/peddet-orin"
+license: Apache-2.0
+keywords:
+  - Jetson
+  - tensorrt
+  - object detection
+  - benchmark
+  - int8
