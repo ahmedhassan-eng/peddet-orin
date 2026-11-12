@@ -103,6 +103,11 @@ def test_a_valid_log_of_each_kind_is_accepted(kind):
     assert runlog.validate_log(make_log(kind)) == []
 
 
+def test_a_benchmark_without_tegrastats_records_power_and_ram_as_unreadable():
+    log = make_log("benchmark", "fp16", results={"avg_power_w": "UNREADABLE", "system_ram_rise_mib": "UNREADABLE"})
+    assert runlog.validate_log(log) == []
+
+
 def test_a_valid_int8_build_log_is_accepted():
     log = make_log("build", "int8", results={"int8_path": "entropy", "calibration_manifest_sha256": MANIFEST_SHA256})
     assert runlog.validate_log(log) == []
@@ -171,7 +176,8 @@ BAD_RESULTS = [
     ("benchmark", {"repeats": True}),
     ("benchmark", {"engine_p50_ms_per_repeat": [4.0, 4.1]}),
     ("benchmark", {"end_to_end_p50_ms_per_repeat": [9.0, 9.0, "x"]}),
-    ("benchmark", {"avg_power_w": "UNREADABLE"}),
+    ("benchmark", {"avg_power_w": "watts"}),
+    ("benchmark", {"system_ram_rise_mib": "lots"}),
     ("benchmark", {"system_ram_rise_mib": float("nan")}),
     ("benchmark", {"power_samples": 1.5}),
     ("benchmark", {"gpu_busy_pct_before_timing": "busy"}),

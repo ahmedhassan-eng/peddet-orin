@@ -22,6 +22,8 @@ EXPECTED_SKIPS = frozenset(
         "test_cuda_forward_matches_cpu",
         "test_tensorrt_fp16_engine_matches_cpu",
         "test_tensorrt_check_fails_on_unnormalised_input",
+        "test_tensorrt_int8_entropy_engine_builds_runs_and_logs_its_path",
+        "test_tensorrt_int8_qdq_fallback_engine_builds_runs_and_logs_its_path",
     }
 )
 # CI sets this, so that any other skip fails the run instead of passing quietly.

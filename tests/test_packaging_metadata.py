@@ -49,7 +49,9 @@ def cli_modules(package: Path = PACKAGE) -> list[str]:
 
 
 def expected_scripts(modules: list[str]) -> dict[str, str]:
-    return {f"peddet-orin-{module.replace('_', '-')}": f"peddet_orin.{module}:main" for module in modules}
+    """``python -m peddet_orin`` is ``peddet-orin``; each CLI module is ``peddet-orin-<module>``."""
+    return {("peddet-orin" if module == "__main__" else f"peddet-orin-{module.replace('_', '-')}"):
+            f"peddet_orin.{module}:main" for module in modules}
 
 
 def test_every_cli_module_has_a_console_script():

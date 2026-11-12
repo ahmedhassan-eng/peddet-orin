@@ -75,6 +75,13 @@ def make_backend(precision: str, device: str, detector, engine_path: Path | None
     return TensorRtBackend(engine_path if engine_path is not None else default_engine(precision))
 
 
+def release_backend(backend) -> None:
+    """Free a backend's device buffers and stream now, rather than when it is collected."""
+    close = getattr(backend, "close", None)
+    if close is not None:
+        close()
+
+
 def load_backend(prog: str, precision: str, device: str, detector, engine_path: Path | None):
     """Build the backend, exiting with one line if TensorRT cannot load the engine."""
     if precision == "fp32":
@@ -178,7 +185,10 @@ def main(argv: list[str] | None = None) -> int:
         detector = load_detector(pretrained=True)
         postprocess = Postprocessor.from_torchvision(detector)
         backend = load_backend(parser.prog, args.precision, args.device, detector, engine)
-        detections = detect_people(backend, postprocess, ground_truth, image_ids, images)
+        try:
+            detections = detect_people(backend, postprocess, ground_truth, image_ids, images)
+        finally:
+            release_backend(backend)
         scores = person_ap(ground_truth, detections, image_ids)
         log.results.update({**scores, "runtime": backend.label, "detections": len(detections)})
     print(f"{args.precision}: person AP {scores['ap']:.4f}, AP50 {scores['ap50']:.4f}")

@@ -375,8 +375,9 @@ RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
         "engine_p50_ms_per_repeat": _is_number_list,
         "end_to_end_p50_ms_per_repeat": _is_number_list,
         "peak_process_rss_mib": _is_number,
-        "system_ram_rise_mib": _is_number,
-        "avg_power_w": _is_number,
+        # Both come from tegrastats, so a host without it records them as UNREADABLE.
+        "system_ram_rise_mib": lambda value: _is_number(value) or value == UNREADABLE,
+        "avg_power_w": lambda value: _is_number(value) or value == UNREADABLE,
         "power_samples": lambda value: _is_integer(value) and value >= 0,
         "power_mode": _is_string,
         "cpu_load_1min_before_timing": _is_number,

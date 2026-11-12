@@ -30,6 +30,7 @@ from peddet_orin.evaluate import (
     add_common_options,
     check_engine,
     load_backend,
+    release_backend,
     usage_error,
 )
 from peddet_orin.model import load_detector
@@ -220,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
             engine_repeats.append(engine_seconds)
             total_repeats.append(total_seconds)
         sampler.stop()
+        release_backend(backend)
 
         power_samples = len(sampler.values(VDD_IN_PATTERN))
         debug.log(f"tegrastats samples: {power_samples}")

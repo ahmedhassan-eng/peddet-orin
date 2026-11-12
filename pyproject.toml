@@ -46,6 +46,7 @@ Changelog = "https://github.com/ahmedhassan-eng/peddet-orin/blob/main/CHANGELOG.
 test = ["pytest>=7.4", "ruff==0.17.4"]
 
 [project.scripts]
+peddet-orin = "peddet_orin.__main__:main"
 peddet-orin-benchmark = "peddet_orin.benchmark:main"
 peddet-orin-engine-build = "peddet_orin.engine_build:main"
 peddet-orin-evaluate = "peddet_orin.evaluate:main"

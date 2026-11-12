@@ -22,7 +22,7 @@ IDENTITY = ("-c", "user.name=peddet-orin tests", "-c", "user.email=1659721+ahmed
             "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main")
 # test_a_commit_id_that_is_not_in_the_history_is_detected needs no checkout, so it passes in every tree.
 HISTORY_TESTS = ["tests/test_commit_ids.py"]
-LISTING_TESTS = [*HISTORY_TESTS, "tests/test_readme_tree.py",
+LISTING_TESTS = [*HISTORY_TESTS, "tests/test_readme_tree.py", "tests/test_planted_defects.py",
                  "tests/test_doc_test_refs.py::test_every_cited_test_is_collected"]
 
 
@@ -75,8 +75,8 @@ def test_a_release_tarball_tree_skips_the_repository_rules(tmp_path):
     assert done.returncode == 0, done.stdout + done.stderr
     assert " failed" not in done.stdout and " error" not in done.stdout, done.stdout
     skips = skip_lines(done.stdout)
-    # 2 history tests, 5 tree tests and 1 cited-test check, all for the one reason.
-    assert "8 skipped" in done.stdout and "1 passed" in done.stdout, done.stdout
+    # 2 history tests, 5 tree tests, 3 registry tests and 1 cited-test check, all for the one reason.
+    assert "11 skipped" in done.stdout and "1 passed" in done.stdout, done.stdout
     assert skips and all(line.endswith(NO_GIT_REASON) for line in skips), skips
 
 

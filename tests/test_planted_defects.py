@@ -2,10 +2,16 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from planted_defects import DEFECTS
+from strict_skips import checkout_skip_reason
 from test_doc_test_refs import collected
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Every test here reads git ls-files, which a release tarball (no .git) cannot answer.
+CHECKOUT_SKIP = checkout_skip_reason(REPO_ROOT)
+pytestmark = pytest.mark.skipif(CHECKOUT_SKIP is not None, reason=CHECKOUT_SKIP or "")
 KEYS = {"id", "file", "old", "new", "catches"}
 
 

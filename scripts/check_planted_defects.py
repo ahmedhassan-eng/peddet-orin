@@ -40,6 +40,7 @@ def cuda_available() -> bool:
 def main() -> int:
     gpu = cuda_available()
     failures = 0
+    (REPO_ROOT / ".cache").mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="planted-", dir=REPO_ROOT / ".cache"))
     try:
         clean = fresh_clone(work, "clean")
