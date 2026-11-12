@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Decide by running whether the installed PyTorch can really use this GPU.
 
 PyTorch itself declares this GPU unsupported. On the first CUDA use it warns that

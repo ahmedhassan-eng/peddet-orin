@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Fetch the COCO 2017 files this project needs, from the official COCO URLs only.
 
 Four independent subcommands exist so that each artefact can be fetched when it

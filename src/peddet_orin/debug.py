@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Logging and profiling helpers, silent unless the ``DEBUG`` environment variable is set.
 
 Production paths call these freely: with ``DEBUG`` unset, ``log`` returns at once

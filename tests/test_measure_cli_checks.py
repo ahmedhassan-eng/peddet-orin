@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Up-front checks and options of the evaluate and benchmark commands, without data or a GPU."""
 
 import json

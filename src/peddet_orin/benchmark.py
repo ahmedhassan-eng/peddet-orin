@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Latency, throughput, memory and power for one precision, at batch size 1.
 
 Each timed iteration decodes and preprocesses an image from memory, runs inference

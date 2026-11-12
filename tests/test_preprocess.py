@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The shared preprocessing refuses images that would silently give a wrong batch."""
 import pytest
 import torch

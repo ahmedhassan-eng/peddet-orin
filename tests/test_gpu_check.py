@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The GPU check's slice inference, CLI and log fields, on the CPU with CUDA calls faked."""
 import warnings
 

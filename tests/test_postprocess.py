@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The shared postprocess, on synthetic tensors whose answers are known."""
 import pytest
 import torch

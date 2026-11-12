@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Under PDORIN_STRICT_SKIPS=1, only the named GPU and TensorRT tests may skip."""
 from pathlib import Path
 

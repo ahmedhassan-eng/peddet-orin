@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Write the README "Repository layout" tree from the files git tracks.
 
 Run with --write to update README.md in place; with no flag it prints the tree.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """CHANGELOG.md has a dated, non-empty entry with a release link for every version."""
 import re
 from pathlib import Path

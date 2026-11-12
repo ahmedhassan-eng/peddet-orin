@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The one postprocess: anchors, box decoding, score filtering and NMS.
 
 The exported network stops at raw box regression and class logits. Everything

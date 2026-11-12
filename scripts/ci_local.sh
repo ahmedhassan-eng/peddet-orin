@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
 # Run the CI matrix of .github/workflows/ci.yml on this machine: one fresh venv per Python version.
 # tests/test_ci_contract.py fails if the versions or the commands below differ from the workflow's.
 # Usage: scripts/ci_local.sh [log]   (default log: .cache/ci-local/ci-local.log)

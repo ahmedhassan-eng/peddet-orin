@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """pyproject.toml, requirements/ci-cpu.txt and constraints/jetson-orin.txt agree with each other and the code."""
 import ast
 import re

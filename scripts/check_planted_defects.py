@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Plant each registered defect in a fresh clone of HEAD and check that its named test catches it.
 
 For every entry in tests/planted_defects.py: the test must pass in the clean clone and fail once the defect is

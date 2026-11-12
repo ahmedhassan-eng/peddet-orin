@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Build TensorRT FP16 and INT8 engines from the ONNX network, on the device.
 
 INT8 uses IInt8EntropyCalibrator2 over the seeded calibration set. Should the

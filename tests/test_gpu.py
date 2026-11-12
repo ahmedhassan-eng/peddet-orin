@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """PyTorch on CUDA and TensorRT FP16 and INT8 engines, against PyTorch on the CPU.
 
 These need the Jetson: they skip where there is no CUDA device or no TensorRT, as in CI.

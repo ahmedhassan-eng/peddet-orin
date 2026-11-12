@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Generate the README results block from the JSON logs under ``runs/``.
 
 The block sits between two HTML comment markers in the README. ``--write`` replaces

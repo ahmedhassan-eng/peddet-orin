@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Device buffers, streams and backends on the CPU, with the CUDA runtime and TensorRT faked.
 
 The fake runtime keeps "device memory" in host byte arrays, so a copy in and a copy

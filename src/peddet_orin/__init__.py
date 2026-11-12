@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Person detection with torchvision SSDLite on a Jetson Orin Nano: PyTorch and TensorRT."""
 from importlib import metadata
 

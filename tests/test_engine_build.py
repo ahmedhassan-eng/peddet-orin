@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The engine build's input checks, CLI and fallback rule, on the CPU without TensorRT."""
 import hashlib
 import warnings

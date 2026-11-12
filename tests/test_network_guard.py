@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The guard must actually trip; a guard that never fires proves nothing."""
 import os
 import socket

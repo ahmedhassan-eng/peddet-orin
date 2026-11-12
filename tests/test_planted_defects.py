@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Every entry of the planted-defect registry still applies, and names a test that pytest collects."""
 import subprocess
 from pathlib import Path

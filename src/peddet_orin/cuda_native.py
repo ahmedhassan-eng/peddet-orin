@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """A minimal binding to the CUDA runtime, for TensorRT device buffers and streams.
 
 TensorRT's Python API takes raw device addresses and stream handles. Only these

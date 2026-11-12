@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Model loading, and the network-only module that gets exported.
 
 ``SsdNetwork`` holds the backbone and head and nothing else: it takes a normalised

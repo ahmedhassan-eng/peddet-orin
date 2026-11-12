@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The CI workflow runs exactly what the README says it runs, on the platforms it names."""
 import re
 from pathlib import Path

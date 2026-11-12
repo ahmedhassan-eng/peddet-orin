@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Every commit id that a tracked file cites is a commit in this repository's history.
 
 A cited id that is not in the history points at work nobody can check out, such as an unpushed or rewritten

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """A pytest plugin that fails any test which tries to use the network.
 
 The guard is installed once for the whole session, at pytest_configure, before any

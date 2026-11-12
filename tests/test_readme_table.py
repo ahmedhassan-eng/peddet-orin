@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The README results block must be exactly what the logs generate."""
 import json
 import re

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Every test file and test name that a tracked document cites exists and is collected by pytest."""
 import os
 import re

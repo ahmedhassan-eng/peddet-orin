@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Outside a full clone, the repository-rule tests skip with their fixed reason instead of failing.
 
 A release tarball (``git archive HEAD``) has no .git, and ``git clone --depth 1`` has no history.

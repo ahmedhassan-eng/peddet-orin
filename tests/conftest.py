@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Shared pytest setup: the whole session runs under the network guard, and strict skips apply in CI."""
 from network_guard import network_guard  # noqa: F401  (pytest collects the fixture by name)
 from network_guard import pytest_configure as configure_network_guard

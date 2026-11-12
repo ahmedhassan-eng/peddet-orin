@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """JSON run logs: writing them, recording host facts, and validating their shape.
 
 Every number published by this project comes from a file under ``runs/``. A log

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """A pytest plugin: under PDORIN_STRICT_SKIPS=1, any skip but the expected ones fails the run.
 
 Two kinds of skip are expected:

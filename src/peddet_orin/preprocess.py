@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The single image preprocessing path shared by calibration, evaluation and benchmarks.
 
 torchvision's SSDLite normalises each image and resizes it bilinearly to a fixed

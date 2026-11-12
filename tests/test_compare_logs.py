@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """scripts/compare_logs.py: a re-measure against the committed logs, metric by metric."""
 import json
 

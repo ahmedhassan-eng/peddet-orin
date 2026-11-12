@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Inference backends: the same call for PyTorch FP32 and TensorRT engines.
 
 Each backend takes a normalised CPU batch and returns CPU tensors, so evaluation

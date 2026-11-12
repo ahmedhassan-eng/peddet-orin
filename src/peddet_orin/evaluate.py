@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Person AP on COCO val2017, computed by pycocotools for one precision."""
 from __future__ import annotations
 

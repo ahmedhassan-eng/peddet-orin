@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Benchmark statistics, tegrastats parsing and the result record, checked on CPU with known answers."""
 
 import itertools

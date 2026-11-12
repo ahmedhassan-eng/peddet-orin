@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Print the package version and the subcommands, each run as ``python -m peddet_orin.<name>``.
 
 The subcommands are found by reading each module's source for a ``__main__`` guard,

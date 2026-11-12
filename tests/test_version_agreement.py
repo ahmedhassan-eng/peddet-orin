@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """pyproject.toml, CHANGELOG.md, CITATION.cff and peddet_orin.__version__ name the same version."""
 import re
 from pathlib import Path

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Person AP scoring against synthetic COCO annotations whose answers are known by hand."""
 
 import contextlib

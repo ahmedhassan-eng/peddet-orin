@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """CPU checks of the PRD requirements that the committed run logs and manifests must meet."""
 import hashlib
 import json

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Compare a new run's logs with the committed ones, metric by metric, against fixed tolerances.
 
 Usage: python scripts/compare_logs.py <new_runs_dir> [--against runs/]

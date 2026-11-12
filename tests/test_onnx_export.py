@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """ONNX Runtime on CPU against PyTorch, using an unweighted model and a fixed seed."""
 import onnx
 import pytest

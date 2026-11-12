@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """AGENTS.md carries the shared commit-message rule byte for byte, in the shared-rules v2 block.
 
 The block is a declared-digest line, then BEGIN and END markers, the shape the shared-rules checker reads.

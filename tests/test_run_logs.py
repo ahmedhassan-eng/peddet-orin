@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The shape of run logs: required fields, types, per-kind results, path hygiene, and writing them."""
 import copy
 import json

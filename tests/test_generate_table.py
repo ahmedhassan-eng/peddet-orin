@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """scripts/generate_table.py: which logs it picks, what it refuses, and what the block says."""
 import json
 

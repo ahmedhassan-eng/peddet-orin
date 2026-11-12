@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """scripts/fetch_coco.py on CPU, with every download replaced by a local stand-in."""
 import hashlib
 import re

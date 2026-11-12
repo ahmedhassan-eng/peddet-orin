@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The planted-defect registry: each entry is a defect and the one test that must catch it.
 
 scripts/check_planted_defects.py plants each defect in a fresh clone of HEAD, runs the named test, and fails unless
