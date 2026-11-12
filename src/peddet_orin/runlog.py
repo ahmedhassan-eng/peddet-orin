@@ -2,33 +2,108 @@
 
 Every number published by this project comes from a file under ``runs/``. A log
 is written only if the run completes, so a crashed run cannot supply a number.
-Paths are written relative to the repository root, and validation rejects any
-absolute path that is not in the system-file allowlist.
+Paths under the repository root are written relative to it, and every other
+absolute, home or ``file:`` path in a log string is replaced by ``<path>``
+before the log is written. Validation still rejects any such path that is not
+in the system-file allowlist, so a committed log cannot carry one.
+
+The repository root is the source checkout the package runs from. The
+environment variable ``PDORIN_ROOT`` overrides it, and must name a directory
+whose ``pyproject.toml`` is peddet-orin's. With neither, importing this module
+raises ``RuntimeError``: logs, data and artifacts belong to a checkout, never
+to the interpreter's installation tree.
 """
 from __future__ import annotations
 
 import json
+import math
 import os
+import platform
 import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_NAME = "peddet-orin"
+ROOT_ENVIRONMENT_VARIABLE = "PDORIN_ROOT"
+NO_CHECKOUT_MESSAGE = (
+    "peddet-orin runs from a source checkout: run it from a clone of the repository, "
+    "or set PDORIN_ROOT to the clone's directory"
+)
+BAD_OVERRIDE_MESSAGE = (
+    "PDORIN_ROOT does not hold peddet-orin's pyproject.toml; peddet-orin runs from a source checkout, "
+    "so set PDORIN_ROOT to the clone's directory"
+)
+
+
+def project_field(pyproject: Path, key: str) -> str | None:
+    """Return a quoted string value from the ``[project]`` table of a pyproject.toml, or ``None``.
+
+    A line-based reader, so that Python 3.10, which has no ``tomllib``, needs no extra package.
+    """
+    try:
+        text = pyproject.read_text()
+    except OSError:
+        return None
+    in_project = False
+    value = re.compile(rf'^{re.escape(key)}\s*=\s*"(?P<value>[^"]*)"\s*(?:#.*)?$')
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            in_project = stripped == "[project]"
+        elif in_project and (match := value.match(stripped)):
+            return match.group("value")
+    return None
+
+
+def is_checkout(directory: Path) -> bool:
+    """Report whether a directory holds peddet-orin's pyproject.toml."""
+    return project_field(directory / "pyproject.toml", "name") == PROJECT_NAME
+
+
+def resolve_root(environ: Mapping[str, str] | None = None, module_file: str | Path = __file__) -> Path:
+    """Return the repository root: ``PDORIN_ROOT`` if set, else the checkout above the package."""
+    environ = os.environ if environ is None else environ
+    override = environ.get(ROOT_ENVIRONMENT_VARIABLE, "")
+    if override:
+        root = Path(override).expanduser().resolve()
+        if not is_checkout(root):
+            raise RuntimeError(BAD_OVERRIDE_MESSAGE)
+        return root
+    # src/peddet_orin/runlog.py: the checkout is two levels above the package directory.
+    checkout = Path(module_file).resolve().parents[2]
+    if is_checkout(checkout):
+        return checkout
+    raise RuntimeError(NO_CHECKOUT_MESSAGE)
+
+
+REPO_ROOT = resolve_root()
 RUNS_DIR = REPO_ROOT / "runs"
 UNREADABLE = "UNREADABLE"
-SCHEMA_VERSION = 1
+NOT_PROBED = "NOT_PROBED"
+SCHEMA_VERSION = 2
 SUBPROCESS_TIMEOUT_S = 20
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 FILE_STAMP_FORMAT = "%Y%m%dT%H%M%SZ"
 TEGRA_RELEASE_FILE = "/etc/nv_tegra_release"
 ABSOLUTE_PATH_ALLOWLIST = frozenset({TEGRA_RELEASE_FILE})
+REDACTED_PATH = "<path>"
 # A slash that begins a token, so URLs and relative paths such as lib/x do not match.
-ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![\w:/.~-])/[\w.+-]+(?:/[\w.+-]+)*")
-HOME_PATH_PATTERN = re.compile(r"~/")
+# "https://host/x" never matches: its first slash is not followed by a name, and the
+# others follow a slash or a letter. A slash right after a colon does match, so each
+# entry of a colon-separated path list is found.
+ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![\w/.~-])/[\w.+-]+(?:/[\w.+-]+)*")
+HOME_PATH_PATTERN = re.compile(r"(?<![\w/.~-])~[\w.+-]*/[\w.+/-]*")
+FILE_URL_PATTERN = re.compile(r"\bfile:[^\s'\"<>]*", re.IGNORECASE)
+COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
+SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
+# Paths that never make a run's tree dirty: the logs the runs themselves write.
+DIRTY_EXCLUDES = (":!runs",)
 
 REQUIRED_FIELDS: dict[str, type | tuple[type, ...]] = {
     "schema_version": int,
@@ -45,6 +120,8 @@ REQUIRED_FIELDS: dict[str, type | tuple[type, ...]] = {
     "other_gpu_processes": (int, str),
     "results": dict,
 }
+# Fields typed int where JSON's true and false (Python bools) do not count.
+INTEGER_FIELDS = frozenset({"schema_version", "seed"})
 REQUIRED_ENVIRONMENT = (
     "nv_tegra_release",
     "tensorrt",
@@ -52,6 +129,10 @@ REQUIRED_ENVIRONMENT = (
     "torchvision",
     "onnxruntime",
     "nvpmodel",
+    "python",
+    "onnx",
+    "cuda",
+    "peddet_orin",
 )
 
 
@@ -78,6 +159,23 @@ def _module_version(name: str) -> str:
         return UNREADABLE
 
 
+def _torch_cuda_version() -> str:
+    """Return the CUDA version PyTorch was built with, or ``UNREADABLE`` (a CPU build has none)."""
+    try:
+        import torch
+
+        return str(torch.version.cuda) if torch.version.cuda else UNREADABLE
+    except (ImportError, AttributeError):
+        return UNREADABLE
+
+
+def _package_version() -> str:
+    try:
+        return metadata.version(PROJECT_NAME)
+    except metadata.PackageNotFoundError:
+        return UNREADABLE
+
+
 def environment_facts() -> dict[str, str]:
     """Collect the host's own strings. Anything unavailable is recorded as such."""
     try:
@@ -85,8 +183,11 @@ def environment_facts() -> dict[str, str]:
     except OSError:
         release = UNREADABLE
     facts = {"nv_tegra_release": release, "nvpmodel": _command_output(["nvpmodel", "-q"])}
-    for name in ("tensorrt", "torch", "torchvision", "onnxruntime"):
+    for name in ("tensorrt", "torch", "torchvision", "onnxruntime", "onnx"):
         facts[name] = _module_version(name)
+    facts["python"] = platform.python_version()
+    facts["cuda"] = _torch_cuda_version()
+    facts["peddet_orin"] = _package_version()
     return facts
 
 
@@ -106,19 +207,56 @@ def other_gpu_process_count() -> int | str:
 
 
 def _git(*arguments: str) -> str:
-    return subprocess.run(
-        ["git", *arguments], cwd=REPO_ROOT, capture_output=True, text=True, check=False
-    ).stdout.strip()
+    """Return a git command's stripped stdout in the repository root, or "" if it fails."""
+    try:
+        done = subprocess.run(
+            ["git", *arguments], cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+            timeout=SUBPROCESS_TIMEOUT_S,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def tree_is_dirty() -> bool:
+    """Report whether any file outside ``runs/`` differs from the commit, untracked files included."""
+    return bool(_git("status", "--porcelain", "--", ".", *DIRTY_EXCLUDES))
 
 
 def relative_command(arguments: list[str]) -> str:
     """Render an invocation with any path under the repository made relative."""
-    root = f"{REPO_ROOT}{os.sep}"
-    return " ".join(argument.replace(root, "") for argument in arguments)
+    root = str(REPO_ROOT)
+    prefix = f"{root}{os.sep}"
+    return " ".join("." if argument == root else argument.replace(prefix, "") for argument in arguments)
+
+
+def redact_paths(text: str) -> str:
+    """Replace every absolute, home or ``file:`` path outside the allowlist with ``<path>``."""
+    text = FILE_URL_PATTERN.sub(REDACTED_PATH, text)
+    text = ABSOLUTE_PATH_PATTERN.sub(
+        lambda match: match.group() if match.group() in ABSOLUTE_PATH_ALLOWLIST else REDACTED_PATH, text
+    )
+    return HOME_PATH_PATTERN.sub(REDACTED_PATH, text)
+
+
+def redacted(value: Any) -> Any:
+    """Return a copy of a nested structure with every string, dictionary keys included, redacted."""
+    if isinstance(value, str):
+        return redact_paths(value)
+    if isinstance(value, dict):
+        return {redacted(key): redacted(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [redacted(item) for item in value]
+    return value
 
 
 class RunLog:
-    """Context manager that writes one JSON log when its block finishes cleanly."""
+    """Context manager that writes one JSON log when its block finishes cleanly.
+
+    The commit and the dirty flag are read on entry, when the code that runs is the
+    code on disk. Entry fails at once if the commit cannot be read, rather than
+    after a long run.
+    """
 
     def __init__(self, kind: str, precision: str, seed: int, iterations: dict[str, int]) -> None:
         self.kind = kind
@@ -129,6 +267,10 @@ class RunLog:
         self.path: Path | None = None
 
     def __enter__(self) -> RunLog:
+        self.commit = _git("rev-parse", "HEAD")
+        if not COMMIT_PATTERN.fullmatch(self.commit):
+            raise RuntimeError("cannot read the git commit of the repository root; run from a git checkout")
+        self.dirty = tree_is_dirty()
         self.start_utc = _utc_now()
         self.gpu_processes = other_gpu_process_count()
         return self
@@ -139,23 +281,25 @@ class RunLog:
         return False
 
     def _write(self) -> Path:
-        module = sys.modules["__main__"].__spec__
+        module = getattr(sys.modules["__main__"], "__spec__", None)
         program = f"python -m {module.name}" if module else "python"
-        record = {
-            "schema_version": SCHEMA_VERSION,
-            "kind": self.kind,
-            "precision": self.precision,
-            "commit": _git("rev-parse", "HEAD"),
-            "dirty": bool(_git("status", "--porcelain", "--", ".", ":!runs", ":!README.md")),
-            "environment": environment_facts(),
-            "command": relative_command([program, *sys.argv[1:]]),
-            "seed": self.seed,
-            "iterations": self.iterations,
-            "start_utc": self.start_utc,
-            "end_utc": _utc_now(),
-            "other_gpu_processes": self.gpu_processes,
-            "results": self.results,
-        }
+        record = redacted(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "kind": self.kind,
+                "precision": self.precision,
+                "commit": self.commit,
+                "dirty": self.dirty,
+                "environment": environment_facts(),
+                "command": relative_command([program, *sys.argv[1:]]),
+                "seed": self.seed,
+                "iterations": self.iterations,
+                "start_utc": self.start_utc,
+                "end_utc": _utc_now(),
+                "other_gpu_processes": self.gpu_processes,
+                "results": self.results,
+            }
+        )
         problems = validate_log(record)
         if problems:
             raise ValueError(f"refusing to write an invalid log: {problems}")
@@ -163,7 +307,7 @@ class RunLog:
         stamp = datetime.now(timezone.utc).strftime(FILE_STAMP_FORMAT)
         path = RUNS_DIR / f"{self.kind}_{self.precision}_{stamp}.json"
         path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
-        print(f"log written: {path.relative_to(REPO_ROOT)}")
+        print(f"log written: {relative_command([str(path)])}")
         return path
 
 
@@ -179,9 +323,140 @@ def _strings_in(value: Any) -> list[str]:
 
 
 def forbidden_paths(text: str) -> list[str]:
-    """Return the absolute or home-relative paths in ``text`` outside the allowlist."""
-    found = [path for path in ABSOLUTE_PATH_PATTERN.findall(text) if path not in ABSOLUTE_PATH_ALLOWLIST]
+    """Return the absolute, home-relative or ``file:`` paths in ``text`` outside the allowlist."""
+    found = FILE_URL_PATTERN.findall(text)
+    text = FILE_URL_PATTERN.sub(" ", text)
+    found += [path for path in ABSOLUTE_PATH_PATTERN.findall(text) if path not in ABSOLUTE_PATH_ALLOWLIST]
     return found + HOME_PATH_PATTERN.findall(text)
+
+
+def _is_integer(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _is_string(value: Any) -> bool:
+    return isinstance(value, str)
+
+
+def _is_bool(value: Any) -> bool:
+    return isinstance(value, bool)
+
+
+def _is_fraction(value: Any) -> bool:
+    return _is_number(value) and 0 <= value <= 1
+
+
+def _is_latency(value: Any) -> bool:
+    keys = ("p50_ms", "p90_ms", "p99_ms", "fps")
+    return isinstance(value, dict) and set(value) == set(keys) and all(_is_number(value[key]) for key in keys)
+
+
+def _is_number_list(value: Any) -> bool:
+    return isinstance(value, list) and all(_is_number(item) for item in value)
+
+
+# The keys each kind of log carries in ``results``, and the test each value must pass.
+RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
+    "eval": {
+        "ap": _is_fraction,
+        "ap50": _is_fraction,
+        "detections": lambda value: _is_integer(value) and value >= 0,
+        "runtime": _is_string,
+    },
+    "benchmark": {
+        "runtime": _is_string,
+        "engine": _is_latency,
+        "end_to_end": _is_latency,
+        "repeats": lambda value: _is_integer(value) and value >= 1,
+        "engine_p50_ms_per_repeat": _is_number_list,
+        "end_to_end_p50_ms_per_repeat": _is_number_list,
+        "peak_process_rss_mib": _is_number,
+        "system_ram_rise_mib": _is_number,
+        "avg_power_w": _is_number,
+        "power_samples": lambda value: _is_integer(value) and value >= 0,
+        "power_mode": _is_string,
+        "cpu_load_1min_before_timing": _is_number,
+        "gpu_busy_pct_before_timing": lambda value: _is_number(value) or value == UNREADABLE,
+        "clocks_locked": lambda value: value == NOT_PROBED,
+    },
+    "build": {
+        "engine_bytes": lambda value: _is_integer(value) and value > 0,
+        "build_seconds": _is_number,
+        "int8_path": _is_string,
+        "entropy_failure": _is_string,
+        "calibration_manifest_sha256": _is_string,
+    },
+    "export": {
+        "max_abs_difference": _is_number,
+        "tolerance": _is_number,
+        "opset": _is_integer,
+        "input_shape": lambda value: isinstance(value, list) and bool(value) and all(map(_is_integer, value)),
+    },
+    "gpu_check": {
+        "cuda_available": _is_bool,
+        "arch_list": lambda value: isinstance(value, list) and all(map(_is_string, value)),
+        "device_compute_capability": _is_string,
+        "matmul_max_abs_difference": lambda value: _is_number(value) or _is_string(value),
+        "matmul_tolerance": _is_number,
+        "matmul_matches": _is_bool,
+        "matmul_error": _is_string,
+        "nms_comparison": lambda value: isinstance(value, (dict, str)),
+        "nms_matches": _is_bool,
+        "nms_error": _is_string,
+        "gpu_torch_usable": _is_bool,
+        "torch_warning": _is_string,
+        "cudnn_allow_tf32": _is_bool,
+        "matmul_allow_tf32": _is_bool,
+    },
+}
+# Keys a kind may carry beyond its required ones.
+OPTIONAL_RESULTS: dict[str, frozenset[str]] = {"gpu_check": frozenset({"inferred_slice"})}
+
+
+def _cross_field_problems(kind: str, precision: Any, results: dict) -> list[str]:
+    """Return the problems that involve more than one value of a log's results."""
+    problems = []
+    if kind == "eval" and _is_number(results.get("ap")) and _is_number(results.get("ap50")):
+        if results["ap"] > results["ap50"]:
+            problems.append("bad result: eval ap is above ap50")
+    if kind == "benchmark" and _is_integer(results.get("repeats")):
+        for key in ("engine_p50_ms_per_repeat", "end_to_end_p50_ms_per_repeat"):
+            if isinstance(results.get(key), list) and len(results[key]) != results["repeats"]:
+                problems.append(f"bad result: benchmark {key} does not hold one value per repeat")
+    if kind == "build":
+        manifest = results.get("calibration_manifest_sha256")
+        route = results.get("int8_path")
+        if precision == "int8":
+            if isinstance(manifest, str) and not SHA256_PATTERN.fullmatch(manifest):
+                problems.append("bad result: build calibration_manifest_sha256 is not a sha256")
+            if route in ("", "-"):
+                problems.append("bad result: build int8_path is empty for int8")
+        else:
+            if manifest not in (None, "-"):
+                problems.append("bad result: build calibration_manifest_sha256 must be - without int8")
+            if route not in (None, "-"):
+                problems.append("bad result: build int8_path must be - without int8")
+    return problems
+
+
+def _results_problems(kind: Any, precision: Any, results: Any) -> list[str]:
+    """Return the problems in ``results`` for a log's kind: missing, unexpected or bad values."""
+    if kind not in RESULT_CHECKS:
+        return [f"unknown kind: {kind}"]
+    if not isinstance(results, dict):
+        return []
+    checks = RESULT_CHECKS[kind]
+    problems = [f"missing result: {kind} {key}" for key in checks if key not in results]
+    allowed = set(checks) | OPTIONAL_RESULTS.get(kind, frozenset())
+    problems += [f"unexpected result: {kind} {key}" for key in sorted(map(str, set(results) - allowed))]
+    problems += [
+        f"bad result: {kind} {key}" for key, check in checks.items() if key in results and not check(results[key])
+    ]
+    return problems + _cross_field_problems(kind, precision, results)
 
 
 def validate_log(record: Any) -> list[str]:
@@ -192,16 +467,31 @@ def validate_log(record: Any) -> list[str]:
     for field, expected in REQUIRED_FIELDS.items():
         if field not in record:
             problems.append(f"missing field: {field}")
-        elif not isinstance(record[field], expected):
+        elif not isinstance(record[field], expected) or (field in INTEGER_FIELDS and isinstance(record[field], bool)):
             problems.append(f"wrong type for field: {field}")
+    version = record.get("schema_version")
+    if version != SCHEMA_VERSION or isinstance(version, bool):
+        problems.append(f"schema_version must be {SCHEMA_VERSION}")
+    if isinstance(record.get("commit"), str) and not COMMIT_PATTERN.fullmatch(record["commit"]):
+        problems.append("commit is not a 40-character hex sha")
     environment = record.get("environment")
     if isinstance(environment, dict):
         problems += [f"missing fact: {name}" for name in REQUIRED_ENVIRONMENT if name not in environment]
+        problems += [
+            f"fact is not a string: {name}"
+            for name in REQUIRED_ENVIRONMENT
+            if name in environment and not isinstance(environment[name], str)
+        ]
+    times = {}
     for field in ("start_utc", "end_utc"):
         try:
-            datetime.strptime(str(record.get(field)), TIMESTAMP_FORMAT)
+            times[field] = datetime.strptime(str(record.get(field)), TIMESTAMP_FORMAT)
         except ValueError:
             problems.append(f"bad timestamp: {field}")
+    if len(times) == 2 and times["start_utc"] > times["end_utc"]:
+        problems.append("start_utc is after end_utc")
+    if "kind" in record:
+        problems += _results_problems(record["kind"], record.get("precision"), record.get("results"))
     for text in _strings_in(record):
         problems += [f"forbidden path: {path}" for path in forbidden_paths(text)]
     return problems

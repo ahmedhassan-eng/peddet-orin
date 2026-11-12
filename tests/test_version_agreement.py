@@ -1,4 +1,4 @@
-"""pyproject.toml, CHANGELOG.md and CITATION.cff name the same version."""
+"""pyproject.toml, CHANGELOG.md, CITATION.cff and peddet_orin.__version__ name the same version."""
 import re
 from pathlib import Path
 
@@ -25,6 +25,12 @@ def current() -> tuple[str, str, str]:
 def test_versions_agree():
     found = versions(*current())
     assert None not in found.values() and len(set(found.values())) == 1, found
+
+
+def test_package_version_agrees_with_pyproject():
+    import peddet_orin
+
+    assert peddet_orin.__version__ == versions(*current())["pyproject"]
 
 
 def test_a_bumped_pyproject_alone_is_detected():
