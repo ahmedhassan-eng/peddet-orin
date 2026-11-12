@@ -17,14 +17,15 @@ COLLAPSED = ("runs/", "src/peddet_orin/", "tests/", ".github/ISSUE_TEMPLATE/")
 # A short note after a path; every key must be a tracked file or a shown directory.
 DESCRIPTIONS = {
     ".github/ISSUE_TEMPLATE/": "bug report, feature request and the private security link",
-    ".github/workflows/ci.yml": "ruff and the CPU tests on Python 3.10, 3.11 and 3.12",
+    ".github/workflows/ci.yml": "pip-audit, ruff and the CPU tests on Python 3.10, 3.11 and 3.12",
     "constraints/jetson-orin.txt": "every pin for the Jetson venv",
     "manifests/calibration_train2017.sha256": "the 500 calibration images and their sha256 hashes",
     "requirements/ci-cpu.txt": "the CPU-only set for CI",
     "runs/": "one JSON log per measurement; the results table is built from them",
     "scripts/check_planted_defects.py": "plants each registered defect and checks that its test fails",
     "scripts/ci_local.sh": "runs the CI matrix locally, one venv per Python version",
-    "scripts/fetch_coco.py": "fetches COCO 2017 from the official URLs into data/",
+    "scripts/compare_logs.py": "checks a re-measure against runs/ within the PRD tolerances",
+    "scripts/fetch_coco.py": "fetches COCO 2017 over HTTPS from the official URLs into data/",
     "scripts/generate_table.py": "writes the README results block from runs/",
     "scripts/generate_tree.py": "writes this tree from git ls-files",
     "src/peddet_orin/": "export, engine builds, evaluation, benchmarks and run logs",

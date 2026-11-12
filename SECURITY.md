@@ -18,10 +18,13 @@ security advisory.
 ## In scope
 
 - Code in this repository: `src/peddet_orin/`, `scripts/` and `tests/`.
-- `scripts/fetch_coco.py`: what it downloads, how it checks the MD5 and sha256 digests, and where it extracts archives.
-- The run logs' path hygiene: `src/peddet_orin/runlog.py` must not write absolute paths outside its allowlist.
+- `scripts/fetch_coco.py`: what it downloads (over HTTPS only), how it checks the MD5 and sha256 digests, and where it
+  extracts archives. It refuses to run without the calibration manifest unless `--write-manifest` is given.
+- `src/peddet_orin/model.py`: the pretrained weights load only after their full sha256 matches, and only as tensors.
+- The run logs' path hygiene: `src/peddet_orin/runlog.py` replaces any absolute path outside its allowlist with
+  `<path>` before it writes a log.
 - The network guard in `tests/network_guard.py`, which keeps the tests offline.
-- The CI workflow in `.github/workflows/ci.yml`.
+- The CI workflow in `.github/workflows/ci.yml`, which audits the pinned CPU set with `pip-audit`.
 
 ## Out of scope
 
@@ -29,5 +32,6 @@ security advisory.
   their own projects.
 - Loading model files from untrusted sources. A TensorRT engine or a PyTorch checkpoint can run code or crash the
   process when loaded; build engines yourself and load only files you trust.
-- The COCO dataset and the pretrained torchvision weights, which this project downloads but does not ship.
+- The COCO dataset and the content of the pretrained torchvision weights, which this project downloads but does not
+  ship.
 - Benchmark numbers that differ on other boards, power modes or software versions. Open an issue for those.

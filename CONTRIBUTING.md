@@ -19,8 +19,11 @@ python -m pip install -r requirements/ci-cpu.txt
 python -m pip install --no-deps -e .
 ```
 
-On a Jetson Orin, follow the README's "Quickstart" instead, which pins every package with
+On a Jetson Orin, follow the README's "Quickstart" instead, which pins every package it installs with
 `constraints/jetson-orin.txt`.
+
+The package runs from a source checkout. Its commands find the checkout two levels above the package, or the one
+`PDORIN_ROOT` names, and refuse to start anywhere else.
 
 ## Check your change
 
@@ -29,8 +32,9 @@ ruff check .
 python -m pytest -rs
 ```
 
-The GPU and TensorRT tests in `tests/test_gpu.py` skip without a CUDA device or TensorRT. If your change touches the
-GPU path, run the tests on a Jetson as well and say so in the pull request.
+The GPU and TensorRT tests in `tests/test_gpu.py` skip without a CUDA device or TensorRT. CI has neither, so they
+run only on a Jetson. If your change touches the GPU path, run them there and say so in the pull request. On the
+Jetson the whole suite takes about five minutes, because it builds TensorRT engines.
 
 The suite also enforces the repository's own rules:
 
@@ -41,8 +45,9 @@ The suite also enforces the repository's own rules:
 - `tests/test_test_names.py`: no two tests share a name.
 - `tests/test_agents_rule.py`: the commit-message rule in `AGENTS.md` is unchanged, with its declared digest.
 - `tests/test_version_agreement.py`: `pyproject.toml`, `CHANGELOG.md` and `CITATION.cff` name the same version.
-- `tests/test_strict_skips.py`: with `PDORIN_STRICT_SKIPS=1`, as in CI, any skip other than the three GPU and
-  TensorRT tests fails the run.
+- `tests/test_strict_skips.py`: with `PDORIN_STRICT_SKIPS=1`, as in CI, any skip other than the five GPU and
+  TensorRT tests fails the run. Outside CI, the repository-rule tests may also skip in a release tarball (no `.git`)
+  or a shallow clone, with exactly the reason `tests/strict_skips.py` names.
 - `tests/test_readme_table.py`: the README results table is exactly what the logs in `runs/` generate.
 - `tests/test_changelog.py`: `CHANGELOG.md` has a dated entry with a release link for every version.
 - `tests/test_doc_test_refs.py`: every test file and test name a tracked document cites exists and is collected.
@@ -53,13 +58,14 @@ The suite also enforces the repository's own rules:
 
 ## Results
 
-Never edit the results table by hand. Run the measurement, commit its JSON log under `runs/`, then run
-`python scripts/generate_table.py --write`. A new result must name its board, JetPack, power mode and package
-versions, which the run log records.
+Never edit the results table by hand. Run the measurement from a clean tree, commit its JSON log under `runs/`, then
+run `python scripts/generate_table.py --write`. Check a re-measure against the committed logs with
+`python scripts/compare_logs.py <new runs dir>`, which applies the tolerances of `PRD.md` R-11. The run log records
+the Jetson Linux release, power mode and package versions; name the board and JetPack version in the pull request.
 
 ## Commit messages
 
-Follow the commit-message rule in [AGENTS.md](AGENTS.md): an imperative subject of 72 characters or fewer, and a
+Follow the commit-message rule in [AGENTS.md](AGENTS.md): an imperative subject that aims for 50-72 characters, and a
 body of bullets with one claim each. This repository uses no commit trailers.
 
 ## Licence

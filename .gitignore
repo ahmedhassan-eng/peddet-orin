@@ -1,8 +1,6 @@
 .venv/
 data/
 .cache/
-PROGRESS.txt
-REPORT.txt
 artifacts/
 __pycache__/
 *.pyc

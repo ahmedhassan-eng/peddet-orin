@@ -1,7 +1,8 @@
 peddet-orin
-Copyright 2026 the peddet-orin authors.
+Copyright 2026 Ahmed Hassan.
 
 This project builds on torchvision (BSD 3-Clause licence) and on the COCO dataset:
 the COCO annotations are licensed under CC BY 4.0, and the COCO images remain under
 their own Flickr terms. Images and annotations are fetched at run time and are not
-redistributed here. Pretrained weights are downloaded by torchvision at run time.
+redistributed here. The pretrained torchvision weights are downloaded at run time
+and checked against a pinned sha256 before they are loaded.

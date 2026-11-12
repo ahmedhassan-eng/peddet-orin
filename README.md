@@ -4,7 +4,7 @@ Person detection on a Jetson Orin Nano Super with torchvision's SSDLite320 Mobil
 
 ## Hardware and software
 
-The results were measured with this stack. The run logs record the versions each run used.
+The results were measured with this stack. Each run log records the Jetson Linux release string, the power mode and the Python, PyTorch, torchvision, CUDA, TensorRT, ONNX, ONNX Runtime and peddet-orin versions it ran with. The board and JetPack rows come from the board's documentation, not from the logs.
 
 | Component | Version |
 |---|---|
@@ -34,15 +34,17 @@ pip install -c constraints/jetson-orin.txt --extra-index-url https://download.py
 pip install -c constraints/jetson-orin.txt -e ".[test]"
 ```
 
-The venv uses `--system-site-packages` because TensorRT 10.16.2.10 comes from the JetPack system Python. `constraints/jetson-orin.txt` pins every package version.
+The venv uses `--system-site-packages` because TensorRT 10.16.2.10 comes from the JetPack system Python. `constraints/jetson-orin.txt` pins every package that pip installs into the venv; TensorRT, and any package the system Python already provides at a compatible version, are used from the system.
 
-Run the tests. They need no network. On the Jetson, the GPU and TensorRT tests in `tests/test_gpu.py` run too:
+The package runs from this source checkout, not from an installed wheel. Its commands find the checkout two levels above the package, or the directory `PDORIN_ROOT` names, and refuse to start anywhere else. `python -m peddet_orin` lists the commands; each is also installed as a `peddet-orin-<command>` script.
+
+Run the tests. They need no network. On the Jetson, the GPU and TensorRT tests in `tests/test_gpu.py` run too, so the suite takes about five minutes while it builds TensorRT engines:
 
 ```sh
 python -m pytest -rs
 ```
 
-Export the network and build an FP16 engine. This downloads the pretrained weights through torchvision:
+Export the network and build an FP16 engine. This downloads the pretrained weights once, and checks their sha256 before every load:
 
 ```sh
 python -m peddet_orin.export
@@ -51,7 +53,7 @@ python -m peddet_orin.engine_build --precision fp16
 
 ## Reproduce the results
 
-After the quickstart, fetch the data, check the GPU, then build and measure. `nvpmodel` and `tegrastats` must be on `PATH`; a log records `UNREADABLE` for anything it cannot read.
+After the quickstart, fetch the data over HTTPS, check the GPU, then build and measure. `nvpmodel` and `tegrastats` must be on `PATH`; a log records `UNREADABLE` for anything it cannot read. Run the measurements from a clean tree, one at a time, with nothing else using the GPU.
 
 ```sh
 python scripts/fetch_coco.py annotations
@@ -74,35 +76,40 @@ python -m peddet_orin.benchmark --precision int8
 python scripts/generate_table.py --write
 ```
 
-Each command writes a JSON log to `runs/`, and the last one rewrites the results table from the newest logs. Set `DEBUG=1` to turn on diagnostic logging and profiling.
+Each command writes a JSON log to `runs/`, and the last one rewrites the results table from the newest clean logs, which must all come from one commit. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
+
+To check a re-measure against the committed numbers, write its logs to another directory, for example a fresh clone's `runs/`, and compare: `python scripts/compare_logs.py <that runs dir>`. It applies the tolerances of `PRD.md` R-11 and prints one line per metric. Set `DEBUG=1` to turn on diagnostic logging and profiling.
 
 ## Results
 
-Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. All precisions use the same postprocess. Accuracy is person AP on the 5000 COCO val2017 images, from pycocotools with `catIds=[1]`.
+Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. All precisions use the same postprocess. Each benchmark pools three timed repeats of its loop, and the notes give the range of the per-repeat medians. Accuracy is person AP on the 5000 COCO val2017 images, from pycocotools with `catIds=[1]`.
 
 <!-- results:begin -->
-| Device and precision | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | End-to-end FPS | Peak process RSS (MiB) | System RAM rise (MiB) | Avg power VDD_IN (W) | Person AP@[.5:.95] | Person AP50 | INT8 path |
-|---|---|---|---|---|---|---|---|---|---|---|
-| n/a FP32 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |
-| n/a FP16 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |
-| n/a INT8 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| Device and precision | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | End-to-end FPS | Peak process RSS (MiB) | Avg power VDD_IN (W) | Person AP@[.5:.95] | Person AP50 | INT8 path |
+|---|---|---|---|---|---|---|---|---|---|
+| n/a FP32 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |
+| n/a FP16 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |
+| n/a INT8 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 <!-- results:end -->
 
 ### Provenance
 
-- Each row is one run per precision, on one board. The numbers are as run, with no averaging across runs.
-- Every log records its commit, whether the tree was dirty, the start and end times, and the JetPack, TensorRT, PyTorch, torchvision and ONNX Runtime versions.
-- The power mode in the notes is what `nvpmodel -q` reported. The clocks were not locked, since that needs root, and their state could not be read, so it is recorded as `UNREADABLE`. Timings therefore include any clock scaling.
-- The number of other GPU processes could not be read either, and is recorded as `UNREADABLE`.
+- Each row is one run per precision, on one board. A benchmark pools three timed repeats of its loop; there is no averaging across runs.
+- Every log records its commit, whether the tree was dirty, the start and end times, the Jetson Linux release string, and the Python, PyTorch, torchvision, CUDA, TensorRT, ONNX, ONNX Runtime and peddet-orin versions. The table uses only clean logs, all from one commit.
+- The power mode in the notes is what `nvpmodel -q` reported. The clocks were not locked, since that needs root, and nothing reads their state, so it is recorded as `NOT_PROBED`. Timings therefore include any clock scaling.
+- The one-minute load average in the notes is read just before timing starts, so it shows what else was running then. The number of other GPU processes could not be read, and is recorded as `UNREADABLE`.
+- The measurements ran one at a time, at normal priority, while no other GPU or benchmark job ran on the board.
 - `tests/test_readme_table.py` fails if the block above differs from what `scripts/generate_table.py` makes of the logs.
 
-The FP32 row runs PyTorch on the GPU. The PyTorch wheels carry no slice built for this board's compute capability, so the GPU runs the compatible slice named in the notes above. The driver does not report which slice it loaded, so the notes give the one CUDA's binary-compatibility rule selects. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable.
+The FP32 row runs PyTorch on the GPU with TF32 turned off for cuDNN and matmul, so it is FP32 throughout. PyTorch warns on first CUDA use that its published 2.14.1+cu130 wheels do not support this board's compute capability, 8.7; the notes quote that warning, and the code does not hide it. Which kernel image the driver runs is not reported. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable: it compares a matmul and NMS against the CPU, and `tests/test_gpu.py` compares a full forward pass.
 
-Peak process RSS does not fully capture memory allocated on the device. System RAM rise is the highest system-wide RAM during timing minus the mean just before, so it also includes any other activity on the board.
+Peak process RSS does not fully capture memory allocated on the device. System RAM rise, the highest system-wide RAM during timing minus the mean just before, is in the logs but not in the table: it includes any other activity on the board and does not reproduce between runs.
 
 ## Limitations
 
 - One model, one dataset and one board. The numbers do not transfer to other Jetson modules, power modes or JetPack versions.
+- The export uses PyTorch's TorchScript-based ONNX exporter, which PyTorch has deprecated; `pyproject.toml` bounds torch below 2.15 for that reason.
+- CI runs on x86_64 CPUs only. The aarch64 build, the GPU tests and TensorRT run only on the Jetson, by hand, before a release.
 - Batch size 1 only.
 - Clocks are not locked, and other work on the board is not excluded, so latencies can vary between runs.
 - Power is the average of `tegrastats` VDD_IN readings during timing. It is the whole board's input power, not the GPU's alone.
@@ -111,13 +118,16 @@ Peak process RSS does not fully capture memory allocated on the device. System R
 
 ## Continuous integration
 
-CI runs on every push and pull request. It uses only the CPU, so the GPU and TensorRT tests in `tests/test_gpu.py` skip there, and `-rs` names each skip in the log. `PDORIN_STRICT_SKIPS=1` makes any other skip fail the run. `tests/test_ci_contract.py` fails if `.github/workflows/ci.yml` runs anything other than this:
+CI runs on every push to `main` and on every pull request, cancels a run that a newer push supersedes, and stops a job after 30 minutes. It uses only the CPU, so the GPU and TensorRT tests in `tests/test_gpu.py` skip there, and `-rs` names each skip in the log. `PDORIN_STRICT_SKIPS=1` makes any other skip fail the run. `pip-audit` checks the pinned CPU set for known vulnerabilities. `tests/test_ci_contract.py` fails if `.github/workflows/ci.yml` runs anything other than this:
 
 <!-- ci:begin -->
 ```sh
 # CI: ubuntu-latest, Python 3.10, 3.11 and 3.12
 python -m pip install -r requirements/ci-cpu.txt
 python -m pip install --no-deps -e .
+python -m venv --clear .cache/pip-audit
+.cache/pip-audit/bin/python -m pip install pip-audit==2.10.1
+.cache/pip-audit/bin/pip-audit --no-deps --disable-pip -r requirements/ci-cpu.txt
 ruff check .
 PDORIN_STRICT_SKIPS=1 python -m pytest -rs
 ```
@@ -133,7 +143,7 @@ peddet-orin/
 ├── .github/
 │   ├── ISSUE_TEMPLATE/              bug report, feature request and the private security link
 │   ├── workflows/
-│   │   └── ci.yml                   ruff and the CPU tests on Python 3.10, 3.11 and 3.12
+│   │   └── ci.yml                   pip-audit, ruff and the CPU tests on Python 3.10, 3.11 and 3.12
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── constraints/
 │   └── jetson-orin.txt              every pin for the Jetson venv
@@ -141,11 +151,11 @@ peddet-orin/
 │   └── calibration_train2017.sha256  the 500 calibration images and their sha256 hashes
 ├── requirements/
 │   └── ci-cpu.txt                   the CPU-only set for CI
-├── runs/                            one JSON log per measurement; the results table is built from them
 ├── scripts/
 │   ├── check_planted_defects.py     plants each registered defect and checks that its test fails
 │   ├── ci_local.sh                  runs the CI matrix locally, one venv per Python version
-│   ├── fetch_coco.py                fetches COCO 2017 from the official URLs into data/
+│   ├── compare_logs.py              checks a re-measure against runs/ within the PRD tolerances
+│   ├── fetch_coco.py                fetches COCO 2017 over HTTPS from the official URLs into data/
 │   ├── generate_table.py            writes the README results block from runs/
 │   └── generate_tree.py             writes this tree from git ls-files
 ├── src/
@@ -169,9 +179,9 @@ peddet-orin/
 
 ## Data, weights and licences
 
-This project uses the [COCO 2017](https://cocodataset.org) dataset. The COCO annotations are licensed under CC BY 4.0, and the images remain under their own Flickr terms. The images and annotations are fetched from the official COCO URLs into `data/` and are not redistributed here. The calibration set is 500 train2017 images chosen by a fixed seed, listed with their sha256 hashes in `manifests/calibration_train2017.sha256`.
+This project uses the [COCO 2017](https://cocodataset.org) dataset. The COCO annotations are licensed under CC BY 4.0, and the images remain under their own Flickr terms. The images and annotations are fetched over HTTPS from the official COCO URLs into `data/` and are not redistributed here. The calibration set is 500 train2017 images chosen by a fixed seed, listed with their sha256 hashes in `manifests/calibration_train2017.sha256`.
 
-The pretrained weights, torchvision's `SSDLite320_MobileNet_V3_Large_Weights.COCO_V1`, are downloaded by torchvision at run time and are not committed. torchvision's code is BSD 3-Clause. The weights were trained on COCO, so check torchvision's documentation and the COCO terms before you reuse them.
+The pretrained weights, torchvision's `SSDLite320_MobileNet_V3_Large_Weights.COCO_V1`, are downloaded at run time and are not committed. They load only after their full sha256 matches the value pinned in `src/peddet_orin/model.py`, and only as tensors. torchvision's code is BSD 3-Clause. The weights were trained on COCO, so check torchvision's documentation and the COCO terms before you reuse them.
 
 The code is licensed under Apache-2.0. See `LICENSE` and `NOTICE`.
 
