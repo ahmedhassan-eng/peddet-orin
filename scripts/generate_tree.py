@@ -36,6 +36,9 @@ NOTE_COLUMN = 37
 
 
 def tracked_files(root: Path = REPO_ROOT) -> list[str]:
+    # Without its own .git, git would answer for whatever repository encloses root, or fail.
+    if not (root / ".git").exists():
+        raise RuntimeError(f"{root.name} has no .git: the tree is generated from a git checkout")
     done = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True, text=True, check=True)
     return done.stdout.splitlines()
 

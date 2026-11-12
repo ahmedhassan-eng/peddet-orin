@@ -7,7 +7,14 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from strict_skips import checkout_skip_reason
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# A release tarball has no .git and a shallow clone lacks the history; both skip with a fixed reason.
+HISTORY_SKIP = checkout_skip_reason(REPO_ROOT, history=True)
+needs_history = pytest.mark.skipif(HISTORY_SKIP is not None, reason=HISTORY_SKIP or "")
 # A run log's commit field, or a 7- to 40-digit hex word after "commit" or "at" in prose.
 LOG_COMMIT = re.compile(r'"commit":\s*"(?P<id>[0-9a-f]{7,40})"')
 PROSE_COMMIT = re.compile(r"\b(?:commit|commits|at)\s+`?(?P<id>[0-9a-f]{7,40})\b`?")
@@ -55,11 +62,13 @@ def not_in_history(found: dict[str, set[str]]) -> list[str]:
                   if not in_history(commit_id))
 
 
+@needs_history
 def test_history_is_complete():
     # A shallow clone lacks the commits the logs cite; CI checks out with fetch-depth 0.
     assert git("rev-parse", "--is-shallow-repository").stdout.strip() == "false"
 
 
+@needs_history
 def test_every_cited_commit_is_in_the_history():
     found = cited_ids(tracked_texts())
     assert any(name.startswith("runs/") for files in found.values() for name in files), "no run log cites a commit"

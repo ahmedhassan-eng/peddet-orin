@@ -1,6 +1,12 @@
 """The README "Repository layout" tree is exactly what scripts/generate_tree.py makes of git ls-files."""
-import generate_tree
+import pytest
 
+import generate_tree
+from strict_skips import checkout_skip_reason
+
+CHECKOUT_SKIP = checkout_skip_reason(generate_tree.REPO_ROOT)
+# Every test here reads git ls-files, which a release tarball (no .git) cannot answer.
+pytestmark = pytest.mark.skipif(CHECKOUT_SKIP is not None, reason=CHECKOUT_SKIP or "")
 README_TEXT = generate_tree.README.read_text()
 
 

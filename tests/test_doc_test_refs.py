@@ -6,9 +6,15 @@ import sys
 from functools import cache
 from pathlib import Path
 
+import pytest
+
+from strict_skips import checkout_skip_reason
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CITED_FILE = re.compile(r"\btests/(?P<file>test_\w+\.py)(?:::(?P<name>test_\w+))?")
 CITED_NAME = re.compile(r"`(?P<name>test_\w+)`")
+# A release tarball has no .git, so git cannot list the tracked documents.
+DOCS_SKIP = checkout_skip_reason(REPO_ROOT)
 
 
 def tracked_documents() -> dict[str, str]:
@@ -54,6 +60,7 @@ def missing(cited: set[tuple[str | None, str | None]], nodes: frozenset[tuple[st
     return sorted(problems)
 
 
+@pytest.mark.skipif(DOCS_SKIP is not None, reason=DOCS_SKIP or "")
 def test_every_cited_test_is_collected():
     cited = citations(tracked_documents())
     assert cited, "no document cites a test"
