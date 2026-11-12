@@ -125,16 +125,16 @@ PDORIN_STRICT_SKIPS=1 python -m pytest -rs
 
 ## Repository layout
 
-`tests/test_readme_layout.py` fails if this tree and the files git tracks disagree.
+`scripts/generate_tree.py --write` generates this tree from `git ls-files`, and `tests/test_readme_tree.py` fails if it differs from what the script generates.
 
-<!-- layout:begin -->
+<!-- tree:start -->
 ```text
 peddet-orin/
 ├── .github/
 │   ├── ISSUE_TEMPLATE/              bug report, feature request and the private security link
-│   ├── PULL_REQUEST_TEMPLATE.md
-│   └── workflows/
-│       └── ci.yml                   ruff and the CPU tests on Python 3.10, 3.11 and 3.12
+│   ├── workflows/
+│   │   └── ci.yml                   ruff and the CPU tests on Python 3.10, 3.11 and 3.12
+│   └── PULL_REQUEST_TEMPLATE.md
 ├── constraints/
 │   └── jetson-orin.txt              every pin for the Jetson venv
 ├── manifests/
@@ -143,8 +143,11 @@ peddet-orin/
 │   └── ci-cpu.txt                   the CPU-only set for CI
 ├── runs/                            one JSON log per measurement; the results table is built from them
 ├── scripts/
+│   ├── check_planted_defects.py     plants each registered defect and checks that its test fails
+│   ├── ci_local.sh                  runs the CI matrix locally, one venv per Python version
 │   ├── fetch_coco.py                fetches COCO 2017 from the official URLs into data/
-│   └── generate_table.py            writes the README results block from runs/
+│   ├── generate_table.py            writes the README results block from runs/
+│   └── generate_tree.py             writes this tree from git ls-files
 ├── src/
 │   └── peddet_orin/                 export, engine builds, evaluation, benchmarks and run logs
 ├── tests/                           CPU tests, GPU and TensorRT tests, and the repository-rule tests
@@ -156,13 +159,13 @@ peddet-orin/
 ├── CONTRIBUTING.md
 ├── LICENSE
 ├── NOTICE
-├── PRD.md                           requirements and their acceptance checks
+├── PRD.md                           requirements, their acceptance checks and the tests that cover them
+├── pyproject.toml
 ├── QUEUE.md                         open and not-shipped work
 ├── README.md
-├── SECURITY.md
-└── pyproject.toml
+└── SECURITY.md
 ```
-<!-- layout:end -->
+<!-- tree:end -->
 
 ## Data, weights and licences
 

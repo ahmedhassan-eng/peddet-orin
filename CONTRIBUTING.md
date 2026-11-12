@@ -34,15 +34,22 @@ GPU path, run the tests on a Jetson as well and say so in the pull request.
 
 The suite also enforces the repository's own rules:
 
-- `tests/test_readme_layout.py`: the README "Repository layout" tree matches the files git tracks. Add new files to
-  it.
-- `tests/test_ci_contract.py`: `.github/workflows/ci.yml` runs exactly the commands the README's CI section lists.
+- `tests/test_readme_tree.py`: the README "Repository layout" tree is what `scripts/generate_tree.py` makes of
+  `git ls-files`. Run `python scripts/generate_tree.py --write` after adding or removing a file.
+- `tests/test_ci_contract.py`: `.github/workflows/ci.yml` runs exactly the commands the README's CI section lists,
+  pins every action by commit SHA, and matches `scripts/ci_local.sh`, which runs the same matrix locally.
 - `tests/test_test_names.py`: no two tests share a name.
 - `tests/test_agents_rule.py`: the commit-message rule in `AGENTS.md` is unchanged, with its declared digest.
 - `tests/test_version_agreement.py`: `pyproject.toml`, `CHANGELOG.md` and `CITATION.cff` name the same version.
-- `tests/test_strict_skips.py`: with `PDORIN_STRICT_SKIPS=1`, as in CI, any skip other than the two GPU and
+- `tests/test_strict_skips.py`: with `PDORIN_STRICT_SKIPS=1`, as in CI, any skip other than the three GPU and
   TensorRT tests fails the run.
 - `tests/test_readme_table.py`: the README results table is exactly what the logs in `runs/` generate.
+- `tests/test_changelog.py`: `CHANGELOG.md` has a dated entry with a release link for every version.
+- `tests/test_doc_test_refs.py`: every test file and test name a tracked document cites exists and is collected.
+- `tests/test_prd_coverage.py`: every requirement in `PRD.md` names a test that runs in CI.
+- `tests/test_commit_ids.py`: every commit id a tracked file cites, such as a run log's, is in the history.
+- `tests/test_planted_defects.py`: every entry in `tests/planted_defects.py` still applies. Run
+  `python scripts/check_planted_defects.py` to plant each defect and check that its test fails.
 
 ## Results
 

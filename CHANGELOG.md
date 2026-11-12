@@ -19,5 +19,12 @@ All notable changes to this project are recorded here. The format follows
 - Tests for the repository's rules: the README layout tree, the CI contract, unique test names, the commit rule
   copied in `AGENTS.md`, version agreement, and strict skips in CI.
 - `CONTRIBUTING.md`, `SECURITY.md`, `CITATION.cff` and issue and pull request templates.
+- A README layout tree generated from `git ls-files` by `scripts/generate_tree.py`, with a test that fails if it
+  drifts.
+- Tests that every version has a changelog entry, every test a document cites is collected, every PRD requirement
+  names a CI test, and every cited commit id is in the history.
+- A planted-defect registry, `tests/planted_defects.py`, naming the test that must catch each defect, and
+  `scripts/check_planted_defects.py`, which plants each one.
+- GitHub Actions pinned by commit SHA, and `scripts/ci_local.sh`, which runs the CI matrix locally.
 
 [0.1.0]: https://github.com/ahmedhassan-eng/peddet-orin/releases/tag/v0.1.0

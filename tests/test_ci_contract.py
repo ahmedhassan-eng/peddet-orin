@@ -106,3 +106,57 @@ def test_dropping_the_strict_skip_variable_is_detected():
     assert text.count(STRICT) == 1
     commands = pytest_commands(workflow_commands(text.replace(STRICT, "")))
     assert not all(command.startswith(STRICT) for command in commands)
+
+
+USES = re.compile(r"^\s*(?:- )?uses:\s*(?P<value>.+?)\s*$")
+PINNED = re.compile(r"^[\w.-]+/[\w.-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+$")
+
+
+def unpinned_actions(text: str) -> list[str]:
+    """Return every ``uses:`` value that is not a full commit SHA with its release tag in a comment."""
+    return [m.group("value") for m in map(USES.match, text.splitlines()) if m and not PINNED.match(m.group("value"))]
+
+
+def test_every_action_is_pinned_by_sha():
+    text = WORKFLOW.read_text()
+    assert len([m for m in map(USES.match, text.splitlines()) if m]) == 2
+    assert unpinned_actions(text) == []
+
+
+def test_an_action_pinned_by_tag_is_detected():
+    text = WORKFLOW.read_text()
+    planted = re.sub(r"actions/checkout@[0-9a-f]{40} # v\S+", "actions/checkout@v4", text)
+    assert planted != text
+    assert unpinned_actions(planted) == ["actions/checkout@v4"]
+
+
+def test_checkout_fetches_the_full_history():
+    # tests/test_commit_ids.py looks every cited commit up in the history, so CI needs all of it.
+    assert "fetch-depth: 0" in WORKFLOW.read_text()
+
+
+LOCAL = REPO_ROOT / "scripts" / "ci_local.sh"
+
+
+def local_matrix(text: str) -> tuple[list[str], list[str]]:
+    """Return the local script's Python versions and its commands between the ci:commands markers."""
+    lines = text.splitlines()
+    versions = next(line for line in lines if line.startswith("VERSIONS=")).split("=", 1)[1].strip('"').split()
+    start = next(i for i, line in enumerate(lines) if line.strip() == "# ci:commands:begin")
+    end = next(i for i, line in enumerate(lines) if line.strip() == "# ci:commands:end")
+    return versions, [line.strip() for line in lines[start + 1 : end] if line.strip()]
+
+
+def test_local_script_mirrors_the_ci_matrix():
+    versions, commands = local_matrix(LOCAL.read_text())
+    _, ci_versions = workflow_platform(WORKFLOW.read_text())
+    assert (versions, commands) == (ci_versions, workflow_commands(WORKFLOW.read_text()))
+
+
+def test_a_local_script_that_drifts_from_ci_is_detected():
+    text = LOCAL.read_text()
+    assert 'VERSIONS="3.10 3.11 3.12"' in text and "    ruff check .\n" in text
+    _, ci_versions = workflow_platform(WORKFLOW.read_text())
+    assert local_matrix(text.replace('VERSIONS="3.10 3.11 3.12"', 'VERSIONS="3.11 3.12"'))[0] != ci_versions
+    dropped = local_matrix(text.replace("    ruff check .\n", ""))[1]
+    assert dropped != workflow_commands(WORKFLOW.read_text())
