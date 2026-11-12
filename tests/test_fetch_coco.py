@@ -52,6 +52,13 @@ def test_the_seeded_selection_is_deterministic_and_depends_on_the_seed():
     assert fetch_coco.select_calibration_names(TRAIN, 2018, COUNT) != first
 
 
+def test_the_calibration_seed_picks_the_published_selection():
+    # The manifest was drawn with seed 2017; this known answer fails if the module's seed changes.
+    assert fetch_coco.select_calibration_names(TRAIN, fetch_coco.CALIBRATION_SEED, COUNT) == [
+        '000000000013.jpg', '000000000021.jpg', '000000000022.jpg', '000000000029.jpg', '000000000033.jpg',
+    ]
+
+
 def test_a_calibration_set_overlapping_val2017_is_rejected(offline, monkeypatch):
     fetch_coco.MANIFEST_PATH.parent.mkdir(parents=True)
     fetch_coco.MANIFEST_PATH.write_text(manifest_text(chosen()))
