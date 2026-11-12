@@ -42,7 +42,11 @@ typing_extensions==4.16.0
 # onnxruntime. These are the versions used on this board.
 onnx==1.23.2
 onnxruntime==1.31.1
-pillow==10.2.0
 pytest==7.4.4
 flatbuffers==25.12.19
 ml_dtypes==0.5.4
+#
+# Not from the board: pillow 12.3.0 replaces 10.2.0, which predates the fix for
+# CVE-2024-28219, and ruff is pinned at the version CI lints with.
+pillow==12.3.0
+ruff==0.17.4

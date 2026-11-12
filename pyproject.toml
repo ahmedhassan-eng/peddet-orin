@@ -9,7 +9,7 @@ description = "Person detection with torchvision SSDLite on a Jetson Orin Nano, 
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 authors = [{ name = "Ahmed Hassan" }]
 keywords = ["Jetson", "orin", "tensorrt", "onnx", "pytorch", "object-detection", "benchmark", "int8", "coco"]
 classifiers = [
@@ -27,8 +27,8 @@ classifiers = [
     "Topic :: System :: Benchmark",
 ]
 dependencies = [
-    "torch>=2.9",
-    "torchvision>=0.24",
+    "torch>=2.9,<2.15",
+    "torchvision>=0.24,<0.30",
     "numpy<2",
     "onnx>=1.16",
     "onnxruntime>=1.18",
@@ -43,7 +43,14 @@ Issues = "https://github.com/ahmedhassan-eng/peddet-orin/issues"
 Changelog = "https://github.com/ahmedhassan-eng/peddet-orin/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-test = ["pytest>=7.4"]
+test = ["pytest>=7.4", "ruff==0.17.4"]
+
+[project.scripts]
+peddet-orin-benchmark = "peddet_orin.benchmark:main"
+peddet-orin-engine-build = "peddet_orin.engine_build:main"
+peddet-orin-evaluate = "peddet_orin.evaluate:main"
+peddet-orin-export = "peddet_orin.export:main"
+peddet-orin-gpu-check = "peddet_orin.gpu_check:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

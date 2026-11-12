@@ -160,3 +160,64 @@ def test_a_local_script_that_drifts_from_ci_is_detected():
     assert local_matrix(text.replace('VERSIONS="3.10 3.11 3.12"', 'VERSIONS="3.11 3.12"'))[0] != ci_versions
     dropped = local_matrix(text.replace("    ruff check .\n", ""))[1]
     assert dropped != workflow_commands(WORKFLOW.read_text())
+
+
+def top_level_block(text: str, key: str) -> list[str]:
+    """Return the lines of a top-level workflow key's block, the key line included."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line == f"{key}:")
+    end = next((i for i in range(start + 1, len(lines)) if lines[i] and not lines[i][0].isspace()), len(lines))
+    return lines[start:end]
+
+
+def trigger_problems(text: str) -> list[str]:
+    """Return what makes a pull request branch run twice: push must be limited to main."""
+    block = [line.strip() for line in top_level_block(text, "on")]
+    problems = []
+    if block != ["on:", "push:", "branches: [main]", "pull_request:"]:
+        problems.append(f"triggers are not push to main plus pull_request: {block}")
+    return problems
+
+
+def test_ci_runs_on_push_to_main_and_on_pull_requests_only():
+    assert trigger_problems(WORKFLOW.read_text()) == []
+
+
+def test_a_push_trigger_on_every_branch_is_detected():
+    text = WORKFLOW.read_text()
+    assert "    branches: [main]\n" in text
+    assert trigger_problems(text.replace("    branches: [main]\n", "")) != []
+
+
+def test_ci_cancels_superseded_runs_and_times_out():
+    text = WORKFLOW.read_text()
+    assert top_level_block(text, "concurrency") == [
+        "concurrency:", "  group: ${{ github.workflow }}-${{ github.ref }}", "  cancel-in-progress: true"]
+    timeouts = re.findall(r"^    timeout-minutes: (\d+)$", text, re.M)
+    assert len(timeouts) == len(re.findall(r"^  [\w-]+:$", "\n".join(top_level_block(text, "jobs")), re.M)) == 1
+    assert 0 < int(timeouts[0]) <= 60
+
+
+AUDIT = re.compile(r"pip install pip-audit==(?P<version>\d+\.\d+\.\d+)$")
+AUDIT_COMMAND = "pip-audit --no-deps --disable-pip -r requirements/ci-cpu.txt"
+
+
+def audit_problems(commands: list[str]) -> list[str]:
+    """Return why the commands do not audit requirements/ci-cpu.txt with a pinned pip-audit."""
+    problems = []
+    if not any(AUDIT.search(command) for command in commands):
+        problems.append("pip-audit is not installed at a pinned version")
+    if not any(command.endswith(AUDIT_COMMAND) for command in commands):
+        problems.append("pip-audit does not audit requirements/ci-cpu.txt")
+    return problems
+
+
+def test_ci_audits_the_cpu_set_with_a_pinned_pip_audit():
+    assert audit_problems(workflow_commands(WORKFLOW.read_text())) == []
+
+
+def test_an_unpinned_pip_audit_is_detected():
+    text = WORKFLOW.read_text()
+    planted = re.sub(r"pip-audit==\S+", "pip-audit", text)
+    assert planted != text
+    assert audit_problems(workflow_commands(planted)) == ["pip-audit is not installed at a pinned version"]
