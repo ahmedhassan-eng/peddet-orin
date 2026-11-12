@@ -16,23 +16,33 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
 from PIL import Image
 
 from peddet_orin import debug, runlog
-from peddet_orin.evaluate import CUDA, IMAGES, PRECISIONS, make_backend
+from peddet_orin.evaluate import (
+    IMAGES,
+    IMAGES_RELATIVE,
+    HelpFormatter,
+    add_common_options,
+    check_engine,
+    load_backend,
+    usage_error,
+)
 from peddet_orin.model import load_detector
 from peddet_orin.postprocess import Postprocessor
 from peddet_orin.preprocess import PIXEL_MAX, preprocess
 
-# Reading or setting the clock state needs root, which this project never uses, so
-# this run cannot say whether something else locked them, and it locks nothing itself.
-CLOCKS_LOCKED_STATUS = runlog.UNREADABLE
+# Nothing in this project tries to read or set the clock state, so the log says so.
+CLOCKS_LOCKED_STATUS = "NOT_PROBED"
 WARMUP_ITERATIONS = 50
 TIMED_ITERATIONS = 1000
+REPEATS = 3
 IMAGE_POOL_SIZE = 200
+TEGRASTATS = "tegrastats"
 BENCHMARK_SEED = 7
 TEGRASTATS_INTERVAL_MS = 200
 BASELINE_SAMPLE_S = 3.0
@@ -56,7 +66,7 @@ class TegrastatsSampler:
     def start(self) -> None:
         try:
             self.process = subprocess.Popen(
-                ["tegrastats", "--interval", str(TEGRASTATS_INTERVAL_MS)],
+                [TEGRASTATS, "--interval", str(TEGRASTATS_INTERVAL_MS)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 text=True,
@@ -78,12 +88,39 @@ class TegrastatsSampler:
             self.thread.join()
 
     def values(self, pattern: re.Pattern[str]) -> list[int]:
-        return [int(match.group(1)) for line in self.lines if (match := pattern.search(line))]
+        return tegrastats_values(self.lines, pattern)
 
 
-def image_pool() -> list[bytes]:
+def tegrastats_values(lines: list[str], pattern: re.Pattern[str]) -> list[int]:
+    """The integer the pattern captures in each tegrastats line that has it."""
+    return [int(match.group(1)) for line in lines if (match := pattern.search(line))]
+
+
+def average_power_w(lines: list[str]) -> float | str:
+    """Mean VDD_IN board input power in watts; tegrastats reports milliwatts."""
+    return _mean_or_unreadable(tegrastats_values(lines, VDD_IN_PATTERN), MW_PER_W)
+
+
+def gpu_busy_pct(lines: list[str]) -> float | str:
+    """Mean GR3D_FREQ load in percent, with or without the @frequency suffix."""
+    return _mean_or_unreadable(tegrastats_values(lines, GPU_BUSY_PATTERN))
+
+
+def system_ram_rise_mib(timed_lines: list[str], baseline_lines: list[str]) -> float | str:
+    """Peak used RAM while timing minus the mean used RAM of the idle baseline, in MiB."""
+    ram = tegrastats_values(timed_lines, RAM_PATTERN)
+    base_ram = tegrastats_values(baseline_lines, RAM_PATTERN)
+    return (max(ram) - float(np.mean(base_ram))) if ram and base_ram else runlog.UNREADABLE
+
+
+def peak_rss_mib() -> float:
+    """This process's peak resident set size; Linux reports ru_maxrss in KiB."""
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / KIB_PER_MIB
+
+
+def image_pool(images_dir: Path = IMAGES) -> list[bytes]:
     """Load the encoded bytes of the first validation images, in file-name order."""
-    return [path.read_bytes() for path in sorted(IMAGES.glob("*.jpg"))[:IMAGE_POOL_SIZE]]
+    return [path.read_bytes() for path in sorted(images_dir.glob("*.jpg"))[:IMAGE_POOL_SIZE]]
 
 
 def _decode(encoded: bytes) -> torch.Tensor:
@@ -116,21 +153,49 @@ def _mean_or_unreadable(values: list[int], scale: float = 1.0) -> float | str:
     return float(np.mean(values) / scale) if values else runlog.UNREADABLE
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--precision", choices=PRECISIONS, required=True)
-    parser.add_argument("--device", default=CUDA, help="torch device for fp32; TensorRT always uses the GPU")
-    parser.add_argument("--iterations", type=int, default=TIMED_ITERATIONS)
-    parser.add_argument("--warmup", type=int, default=WARMUP_ITERATIONS)
-    args = parser.parse_args()
+def _count(minimum: int):
+    """An argparse type for an integer of at least ``minimum``."""
 
-    counts = {"warmup": args.warmup, "timed": args.iterations, "batch": 1}
+    def parse(text: str) -> int:
+        try:
+            value = int(text)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"{text!r} is not an integer") from None
+        if value < minimum:
+            raise argparse.ArgumentTypeError(f"{value} is below the minimum of {minimum}")
+        return value
+
+    return parse
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m peddet_orin.benchmark", description=__doc__.splitlines()[0], formatter_class=HelpFormatter
+    )
+    add_common_options(parser)
+    parser.add_argument("--iterations", type=_count(1), default=TIMED_ITERATIONS, help="timed iterations per repeat")
+    parser.add_argument("--warmup", type=_count(0), default=WARMUP_ITERATIONS, help="untimed iterations before timing")
+    parser.add_argument("--repeats", type=_count(1), default=REPEATS, help="times the timed loop runs after warm-up")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    images_dir = args.data_dir / IMAGES_RELATIVE
+    if not images_dir.is_dir():
+        usage_error(parser.prog, f"image directory {images_dir} is missing; run python scripts/fetch_coco.py val")
+    engine_path = check_engine(parser.prog, args.precision, args.engine)
+    pool = image_pool(images_dir)
+    if not pool:
+        usage_error(parser.prog, f"{images_dir} holds no .jpg images; run python scripts/fetch_coco.py val")
+
+    counts = {"warmup": args.warmup, "timed": args.iterations, "repeats": args.repeats, "batch": 1}
     with runlog.RunLog("benchmark", args.precision, BENCHMARK_SEED, counts) as log:
         order = np.random.default_rng(BENCHMARK_SEED)
-        pool = image_pool()
         detector = load_detector(pretrained=True)
         postprocess = Postprocessor.from_torchvision(detector)
-        backend = make_backend(args.precision, args.device, detector)
+        backend = load_backend(parser.prog, args.precision, args.device, detector, engine_path)
 
         for index in range(args.warmup):
             _iteration(backend, postprocess, pool[index % len(pool)])
@@ -140,40 +205,44 @@ def main() -> int:
         time.sleep(BASELINE_SAMPLE_S)
         baseline.stop()
 
-        picks = order.integers(0, len(pool), size=args.iterations)
+        picks = order.integers(0, len(pool), size=(args.repeats, args.iterations))
+        # The one-minute load average shows whether other CPU work was running as timing began.
+        load_before_timing = os.getloadavg()[0]
         sampler = TegrastatsSampler()
         sampler.start()
-        engine_seconds, total_seconds = [], []
-        for pick in picks:
-            engine, total = _iteration(backend, postprocess, pool[int(pick)])
-            engine_seconds.append(engine)
-            total_seconds.append(total)
+        engine_repeats, total_repeats = [], []
+        for repeat_picks in picks:
+            engine_seconds, total_seconds = [], []
+            for pick in repeat_picks:
+                engine, total = _iteration(backend, postprocess, pool[int(pick)])
+                engine_seconds.append(engine)
+                total_seconds.append(total)
+            engine_repeats.append(engine_seconds)
+            total_repeats.append(total_seconds)
         sampler.stop()
-        # The one-minute load average shows whether other CPU work shared the timed run.
-        one_minute_load = os.getloadavg()[0]
 
-        ram = sampler.values(RAM_PATTERN)
-        base_ram = baseline.values(RAM_PATTERN)
-        power = sampler.values(VDD_IN_PATTERN)
-        debug.log(f"tegrastats samples: {len(power)}")
+        power_samples = len(sampler.values(VDD_IN_PATTERN))
+        debug.log(f"tegrastats samples: {power_samples}")
         log.results.update(
             {
                 "runtime": backend.label,
-                "engine": _summary(engine_seconds),
-                "end_to_end": _summary(total_seconds),
-                "peak_process_rss_mib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / KIB_PER_MIB,
-                "system_ram_rise_mib": (max(ram) - float(np.mean(base_ram))) if ram and base_ram else runlog.UNREADABLE,
-                "avg_power_w": _mean_or_unreadable(power, MW_PER_W),
-                "power_samples": len(power),
-                "gpu_busy_pct_before_timing": _mean_or_unreadable(baseline.values(GPU_BUSY_PATTERN)),
-                "cpu_load_1min": one_minute_load,
-                "clocks_locked": CLOCKS_LOCKED_STATUS,
+                "engine": _summary([sample for repeat in engine_repeats for sample in repeat]),
+                "end_to_end": _summary([sample for repeat in total_repeats for sample in repeat]),
+                "repeats": args.repeats,
+                "engine_p50_ms_per_repeat": [_summary(repeat)["p50_ms"] for repeat in engine_repeats],
+                "end_to_end_p50_ms_per_repeat": [_summary(repeat)["p50_ms"] for repeat in total_repeats],
+                "peak_process_rss_mib": peak_rss_mib(),
+                "system_ram_rise_mib": system_ram_rise_mib(sampler.lines, baseline.lines),
+                "avg_power_w": average_power_w(sampler.lines),
+                "power_samples": power_samples,
                 "power_mode": runlog._command_output(["nvpmodel", "-q"]),
+                "cpu_load_1min_before_timing": load_before_timing,
+                "gpu_busy_pct_before_timing": gpu_busy_pct(baseline.lines),
+                "clocks_locked": CLOCKS_LOCKED_STATUS,
             }
         )
     print(f"{args.precision}: end-to-end p50 {log.results['end_to_end']['p50_ms']:.2f} ms")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
