@@ -235,6 +235,9 @@ def _build_int8_qdq(onnx_path: Path, output: Path, images: list[Path]) -> None:
         weight_type=ort_quantization.QuantType.QInt8,
         per_channel=True,
         calibrate_method=ort_quantization.CalibrationMethod.Entropy,
+        # TensorRT dequantizes activations and weights only, so an int32 bias DequantizeLinear fails to parse, and
+        # it accepts only symmetric INT8, so every zero point must be 0.
+        extra_options={"QuantizeBias": False, "ActivationSymmetric": True, "WeightSymmetric": True},
     )
 
     def configure(config, tensorrt) -> None:

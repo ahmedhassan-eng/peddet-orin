@@ -218,3 +218,12 @@ def test_int8_build_logs_the_manifest_hash_and_route(calibration, tmp_path, monk
     assert log.results["engine_bytes"] == len(b"engine")
     digest = hashlib.sha256(engine_build.MANIFEST_PATH.read_bytes()).hexdigest()
     assert log.results["calibration_manifest_sha256"] == digest
+
+
+def test_the_qdq_fallback_quantizes_symmetrically_without_biases(tmp_path, monkeypatch):
+    # TensorRT cannot parse a DequantizeLinear of an int32 bias, nor a non-zero zero point.
+    seen = {}
+    monkeypatch.setattr(engine_build.ort_quantization, "quantize_static", lambda *a, **k: seen.update(k))
+    monkeypatch.setattr(engine_build, "_build", lambda *a, **k: None)
+    engine_build._build_int8_qdq(tmp_path / "in.onnx", tmp_path / "out.engine", [])
+    assert seen["extra_options"] == {"QuantizeBias": False, "ActivationSymmetric": True, "WeightSymmetric": True}
