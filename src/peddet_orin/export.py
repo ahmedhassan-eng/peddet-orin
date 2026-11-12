@@ -85,16 +85,47 @@ def seeded_batches(seed: int, count: int) -> list[torch.Tensor]:
     return [torch.rand(INPUT_SHAPE, generator=generator) for _ in range(count)]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=DEFAULT_ONNX)
-    args = parser.parse_args()
+def display_path(path: Path) -> str:
+    """Show a path relative to the repository root when it lies under it, else as given."""
+    try:
+        return str(Path(path).resolve().relative_to(runlog.REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="python -m peddet_orin.export",
+        description=__doc__.splitlines()[0],
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_ONNX,
+        help="where to write the ONNX file; parent directories are created",
+    )
+    return parser.parse_args(argv)
+
+
+def export_results(worst: float) -> dict[str, object]:
+    """The results an export log records, as schema version 2 names them."""
+    return {
+        "max_abs_difference": worst,
+        "tolerance": MATCH_TOLERANCE,
+        "opset": OPSET,
+        "input_shape": list(INPUT_SHAPE),
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_arguments(argv)
     with runlog.RunLog("export", "onnx", seed=CHECK_SEED, iterations={"check_batches": CHECK_BATCHES}) as log:
         network = SsdNetwork(load_detector(pretrained=True))
         export(network, args.output)
         worst = assert_matches(network, args.output, seeded_batches(CHECK_SEED, CHECK_BATCHES))
-        log.results.update({"max_abs_difference": worst, "tolerance": MATCH_TOLERANCE, "opset": OPSET})
-    print(f"onnx matches pytorch: max abs difference {worst:.3g}")
+        log.results.update(export_results(worst))
+    print(f"wrote {display_path(args.output)}; onnx matches pytorch: max abs difference {worst:.3g}")
     return 0
 
 

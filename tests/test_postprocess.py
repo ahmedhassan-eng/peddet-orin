@@ -78,6 +78,37 @@ def test_scores_come_back_in_falling_order():
     assert found.boxes.shape[0] == 3
 
 
+@pytest.mark.parametrize(
+    "original_size",
+    [(320,), (320, 320, 3), (0, 320), (320, -1), (320.0, 320), (True, 320), "hw"],
+)
+def test_original_size_must_be_two_positive_ints(original_size):
+    with pytest.raises(ValueError, match="original_size"):
+        make_postprocessor()(zero_regression(), logits_for([PERSON, PERSON, PERSON]), original_size)
+
+
+def test_original_size_accepts_a_torch_size():
+    found = make_postprocessor()(zero_regression(), logits_for([PERSON, 0, 0]), torch.Size(INPUT_SIZE))
+    assert found.boxes.shape[0] == 1
+
+
+def test_regression_with_the_wrong_anchor_count_is_rejected():
+    regression = torch.zeros(1, len(ANCHORS) + 1, 4)
+    logits = torch.zeros(1, len(ANCHORS) + 1, 3)
+    with pytest.raises(ValueError, match="4 anchors, the postprocess has 3"):
+        make_postprocessor()(regression, logits, INPUT_SIZE)
+
+
+def test_logits_with_the_wrong_anchor_count_are_rejected():
+    with pytest.raises(ValueError, match="class logits has 2 anchors"):
+        make_postprocessor()(zero_regression(), torch.zeros(1, 2, 3), INPUT_SIZE)
+
+
+def test_regression_without_four_coordinates_is_rejected():
+    with pytest.raises(ValueError, match=r"shape \(1, anchors, 4\)"):
+        make_postprocessor()(torch.zeros(1, len(ANCHORS), 5), logits_for([PERSON, 0, 0]), INPUT_SIZE)
+
+
 @pytest.fixture(scope="module")
 def detector():
     return lively_detector(SEED)

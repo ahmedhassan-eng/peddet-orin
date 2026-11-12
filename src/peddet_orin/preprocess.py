@@ -41,10 +41,30 @@ def normalise(batch: torch.Tensor) -> torch.Tensor:
     return (batch - IMAGE_MEAN) / IMAGE_STD
 
 
+def check_image(image: torch.Tensor) -> None:
+    """Raise ``ValueError`` unless ``image`` is a CHW RGB float tensor with values in [0, 1].
+
+    An HWC tensor or 0-255 pixels would otherwise pass through and give a wrong
+    batch shape or wrong values, with no error anywhere.
+    """
+    if not isinstance(image, torch.Tensor):
+        raise ValueError(f"expected a torch.Tensor image, got {type(image).__name__}")
+    if image.ndim != 3 or image.shape[0] != 3:
+        raise ValueError(f"expected a CHW image with 3 channels first, got shape {tuple(image.shape)}")
+    if image.shape[1] == 0 or image.shape[2] == 0:
+        raise ValueError(f"expected a non-empty image, got shape {tuple(image.shape)}")
+    if not image.is_floating_point():
+        raise ValueError(f"expected a float image with values in [0, 1], got dtype {image.dtype}")
+    low, high = float(image.min()), float(image.max())
+    if not (low >= 0.0 and high <= 1.0):
+        raise ValueError(f"expected values in [0, 1], got values from {low:g} to {high:g}")
+
+
 def preprocess(image: torch.Tensor) -> torch.Tensor:
-    """Run the complete preprocessing for one decoded image.
+    """Run the complete preprocessing for one decoded image, after checking it.
 
     Normalising before resizing is torchvision's own order. The result is the same
     in exact arithmetic, but matching the order also matches the rounding.
     """
+    check_image(image)
     return resize(normalise(image))

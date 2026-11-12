@@ -1,12 +1,16 @@
-"""PyTorch on CUDA and a TensorRT FP16 engine, against PyTorch on the CPU.
+"""PyTorch on CUDA and TensorRT FP16 and INT8 engines, against PyTorch on the CPU.
 
 These need the Jetson: they skip where there is no CUDA device or no TensorRT, as in CI.
-They use an unweighted, seeded model, so they need no download.
+They use an unweighted, seeded model and synthetic calibration images, so they need no download.
 """
+import hashlib
 import importlib.util
+from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
+from PIL import Image
 
 from helpers import lively_detector
 from peddet_orin.model import SsdNetwork
@@ -71,7 +75,8 @@ def fp16_engine(tmp_path_factory):
     work = tmp_path_factory.mktemp("fp16")
     export(network, work / "network.onnx")
     build_fp16(work / "network.onnx", work / "fp16.engine")
-    return network, TensorRtBackend(work / "fp16.engine")
+    with TensorRtBackend(work / "fp16.engine") as engine:
+        yield network, engine
 
 
 @needs_cuda
@@ -88,3 +93,102 @@ def test_tensorrt_check_fails_on_unnormalised_input(fp16_engine):
     network, engine = fp16_engine
     raw = torch.rand(INPUT_SHAPE, generator=torch.Generator().manual_seed(SEED))
     assert min_cosine(cpu_reference(network, normalise(raw)), engine(raw)) < FP16_MIN_COSINE
+
+
+# INT8 builds use a small, test-only calibration set: the real 500 images are not needed to show each route works.
+INT8_CALIBRATION_IMAGES = 8
+CALIBRATION_IMAGE_SIZE = (400, 300)  # Width, height.
+
+
+class RecordingBuildLog:
+    """Stands in for RunLog during a test build, keeping the results instead of writing under runs/."""
+
+    opened: list["RecordingBuildLog"] = []
+
+    def __init__(self, kind, precision, seed, iterations) -> None:
+        self.kind, self.precision, self.iterations = kind, precision, iterations
+        self.results = {}
+        RecordingBuildLog.opened.append(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exception) -> bool:
+        return False
+
+
+@pytest.fixture
+def int8_inputs(tmp_path, monkeypatch):
+    """Export the seeded network and write 8 calibration JPEGs with a test-only manifest."""
+    from peddet_orin import engine_build
+    from peddet_orin.export import export
+
+    network = SsdNetwork(lively_detector(SEED)).eval()
+    onnx_path = tmp_path / "network.onnx"
+    export(network, onnx_path)
+    calibration = tmp_path / "calibration"
+    calibration.mkdir()
+    generator = np.random.default_rng(SEED)
+    lines = []
+    for index in range(INT8_CALIBRATION_IMAGES):
+        name = f"{index:012d}.jpg"
+        pixels = generator.integers(0, 256, (CALIBRATION_IMAGE_SIZE[1], CALIBRATION_IMAGE_SIZE[0], 3), dtype=np.uint8)
+        Image.fromarray(pixels).save(calibration / name)
+        lines.append(f"{hashlib.sha256((calibration / name).read_bytes()).hexdigest()}  {name}\n")
+    manifest = tmp_path / "calibration.sha256"
+    manifest.write_text("".join(lines))
+    monkeypatch.setattr(engine_build, "MANIFEST_PATH", manifest)
+    monkeypatch.setattr(engine_build, "EXPECTED_CALIBRATION_IMAGES", INT8_CALIBRATION_IMAGES)
+    RecordingBuildLog.opened = []
+    monkeypatch.setattr(engine_build.runlog, "RunLog", RecordingBuildLog)
+    output = tmp_path / "engines" / "int8.engine"
+    arguments = [
+        "--precision", "int8", "--onnx", str(onnx_path), "--output", str(output), "--calibration-dir", str(calibration),
+    ]
+    return network, arguments, output
+
+
+def check_int8_engine_runs(network: SsdNetwork, engine_path: Path) -> None:
+    """The engine loads and gives finite outputs of the network's shapes."""
+    from peddet_orin.backends import TensorRtBackend
+
+    batch = seeded_batch()
+    reference = cpu_reference(network, batch)
+    with TensorRtBackend(engine_path) as engine:
+        outputs = engine(batch)
+    for want, got in zip(reference, outputs, strict=True):
+        assert got.shape == want.shape
+        assert bool(torch.isfinite(got).all())
+
+
+@needs_cuda
+@needs_tensorrt
+def test_tensorrt_int8_entropy_engine_builds_runs_and_logs_its_path(int8_inputs):
+    from peddet_orin import engine_build
+
+    network, arguments, output = int8_inputs
+    assert engine_build.main(arguments) == 0
+    log = RecordingBuildLog.opened[0]
+    assert log.results["int8_path"] == engine_build.PATH_ENTROPY
+    assert log.results["entropy_failure"] == ""
+    assert log.results["engine_bytes"] == output.stat().st_size > 0
+    assert log.iterations == {"calibration_images": INT8_CALIBRATION_IMAGES}
+    check_int8_engine_runs(network, output)
+
+
+@needs_cuda
+@needs_tensorrt
+def test_tensorrt_int8_qdq_fallback_engine_builds_runs_and_logs_its_path(int8_inputs, monkeypatch):
+    from peddet_orin import engine_build
+
+    def entropy_fails(*arguments):
+        raise engine_build.TensorRtBuildError("entropy build failure forced by the test")
+
+    monkeypatch.setattr(engine_build, "_build_int8_entropy", entropy_fails)
+    network, arguments, output = int8_inputs
+    assert engine_build.main(arguments) == 0
+    log = RecordingBuildLog.opened[0]
+    assert log.results["int8_path"] == engine_build.PATH_QDQ
+    assert log.results["entropy_failure"] == "TensorRtBuildError: entropy build failure forced by the test"
+    assert (output.parent / engine_build.QDQ_ONNX_NAME).is_file()
+    check_int8_engine_runs(network, output)

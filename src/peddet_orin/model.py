@@ -3,10 +3,11 @@
 ``SsdNetwork`` holds the backbone and head and nothing else: it takes a normalised
 1x3x320x320 batch and returns the raw box regression and class logits. Anchors,
 decoding, filtering and NMS belong to ``peddet_orin.postprocess``.
+
+No warning is filtered here. PyTorch warns on its first CUDA use that it does not
+support this board's GPU, and that warning stays visible to whoever runs the code.
 """
 from __future__ import annotations
-
-import warnings
 
 import torch
 from torch import nn
@@ -19,8 +20,6 @@ import peddet_orin.debug as debug
 
 BBOX_KEY = "bbox_regression"
 LOGITS_KEY = "cls_logits"
-# Torch warns about compute capability 8.7 on its first CUDA use; only that warning is filtered.
-SM87_WARNING_PATTERN = r"(?s)\s*Found GPU\d+ .*compute capability.*8\.7"
 
 
 def load_detector(pretrained: bool) -> nn.Module:
@@ -32,11 +31,14 @@ def load_detector(pretrained: bool) -> nn.Module:
     return model.eval()
 
 
-def to_device(module: nn.Module, device: str) -> nn.Module:
-    """Move a module, filtering only the compute-capability warning for this board."""
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=SM87_WARNING_PATTERN)
-        return module.to(device)
+def use_strict_fp32() -> tuple[bool, bool]:
+    """Turn TF32 off for cuDNN and matmul, so FP32 runs are FP32; return the flags in effect.
+
+    The returned pair is (cudnn allow_tf32, matmul allow_tf32), read back after setting.
+    """
+    torch.backends.cudnn.allow_tf32 = False
+    torch.backends.cuda.matmul.allow_tf32 = False
+    return bool(torch.backends.cudnn.allow_tf32), bool(torch.backends.cuda.matmul.allow_tf32)
 
 
 class SsdNetwork(nn.Module):

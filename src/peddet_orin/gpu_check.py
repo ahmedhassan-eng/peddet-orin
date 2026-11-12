@@ -1,19 +1,23 @@
 """Decide by running whether the installed PyTorch can really use this GPU.
 
-The PyTorch wheels for this board are built for datacenter compute capabilities and
-carry no slice for the board's own architecture. The driver instead JIT-compiles
-the included PTX on the first kernel launch. Whether that works is a question for
-an experiment, not for ``torch.cuda.get_arch_list()``, so this module runs two small
-operations on the GPU and compares them with the same operations on the CPU:
+PyTorch itself declares this GPU unsupported. On the first CUDA use it warns that
+the device's compute capability is outside what its build supports, that the
+build's sm_80 slice excludes capability 8.7, and that no published build of this
+PyTorch release for its CUDA version supports the device. Neither PyTorch nor the
+driver reports which binary slice, or which PTX, actually runs, so this module
+does not reason from ``torch.cuda.get_arch_list()``. It runs two small operations
+on the GPU and compares them with the same operations on the CPU:
 
 * a floating-point matrix multiply, compared element by element within a tolerance;
 * torchvision's ``nms`` on synthetic boxes, whose kept indices must be identical.
 
-Both results go into a run log, and a GPU kernel that cannot run counts as a
-failed comparison. The exit status is non-zero if the check fails.
+PyTorch's warning is shown unchanged and recorded word for word. Both results go
+into a run log, and a GPU kernel that cannot run counts as a failed comparison.
+The exit status is non-zero if the check fails.
 """
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 import warnings
@@ -22,7 +26,7 @@ import torch
 from torchvision.ops import nms
 
 from peddet_orin import debug, runlog
-from peddet_orin.model import SM87_WARNING_PATTERN
+from peddet_orin.model import use_strict_fp32
 
 CUDA = "cuda"
 CPU = "cpu"
@@ -37,7 +41,9 @@ MIN_BOX_PIXELS = 8.0
 MAX_BOX_PIXELS = 64.0
 NMS_IOU = 0.5
 NOT_RUN = "not run"  # Stands in for a measurement whose operation raised an error.
-SLICE_PATTERN = re.compile(r"sm_(\d)(\d+)$")
+# A slice names the capability as one integer, major * 10 + minor: sm_87 is 8.7, sm_100 is 10.0.
+SLICE_PATTERN = re.compile(r"sm_(\d+)$")
+CAPABILITY_BASE = 10
 NO_COMPATIBLE_SLICE = "none"
 
 
@@ -72,6 +78,12 @@ def nms_comparison(generator: torch.Generator) -> dict[str, int | bool]:
     }
 
 
+def slice_capability(arch: str) -> tuple[int, int] | None:
+    """Return the (major, minor) capability a slice name such as sm_100 stands for."""
+    match = SLICE_PATTERN.match(arch)
+    return divmod(int(match.group(1)), CAPABILITY_BASE) if match else None
+
+
 def compatible_slice(arch_list: list[str], major: int, minor: int) -> str:
     """Return the newest slice a device of this capability can load, by CUDA's rule.
 
@@ -81,10 +93,24 @@ def compatible_slice(arch_list: list[str], major: int, minor: int) -> str:
     """
     candidates = []
     for arch in arch_list:
-        match = SLICE_PATTERN.match(arch)
-        if match and int(match.group(1)) == major and int(match.group(2)) <= minor:
-            candidates.append((int(match.group(2)), arch))
+        capability = slice_capability(arch)
+        if capability is not None and capability[0] == major and capability[1] <= minor:
+            candidates.append((capability[1], arch))
     return max(candidates)[1] if candidates else NO_COMPATIBLE_SLICE
+
+
+def first_cuda_use() -> str:
+    """Initialise CUDA and return the text of the warnings PyTorch emits doing so.
+
+    The warnings are recorded, not filtered, and shown again unchanged, so whoever
+    runs the check still sees exactly what PyTorch said. "" means it said nothing.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        torch.cuda.init()
+    for warning in caught:
+        warnings.showwarning(warning.message, warning.category, warning.filename, warning.lineno)
+    return "\n".join(str(warning.message) for warning in caught)
 
 
 def attempt(operation, generator: torch.Generator) -> tuple[object, str]:
@@ -100,20 +126,28 @@ def attempt(operation, generator: torch.Generator) -> tuple[object, str]:
         return None, str(error).splitlines()[0]
 
 
-def main() -> int:
+def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="python -m peddet_orin.gpu_check",
+        description=__doc__.splitlines()[0],
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parse_arguments(argv)
     counts = {"matrix_size": MATRIX_SIZE, "nms_boxes": BOX_COUNT}
     with runlog.RunLog("gpu_check", "fp32", CHECK_SEED, counts) as log:
         generator = torch.Generator().manual_seed(CHECK_SEED)
-        difference, comparison, matmul_error, nms_error = None, None, "", ""
-        with warnings.catch_warnings():
-            # The first CUDA use warns about this board's compute capability. That
-            # single message is expected here and every other warning stays visible.
-            warnings.filterwarnings("ignore", message=SM87_WARNING_PATTERN)
-            available = torch.cuda.is_available()
-            if available:
-                with debug.profile("gpu check"):
-                    difference, matmul_error = attempt(matmul_difference, generator)
-                    comparison, nms_error = attempt(nms_comparison, generator)
+        difference, comparison, matmul_error, nms_error, torch_warning = None, None, "", "", ""
+        cudnn_allow_tf32, matmul_allow_tf32 = use_strict_fp32()
+        available = torch.cuda.is_available()
+        if available:
+            torch_warning = first_cuda_use()
+            with debug.profile("gpu check"):
+                difference, matmul_error = attempt(matmul_difference, generator)
+                comparison, nms_error = attempt(nms_comparison, generator)
         matmul_ok = difference is not None and difference <= MATMUL_TOLERANCE
         nms_ok = comparison is not None and bool(comparison["nms_identical"])
         usable = matmul_ok and nms_ok
@@ -133,6 +167,9 @@ def main() -> int:
                 "nms_matches": nms_ok,
                 "nms_error": nms_error,
                 "gpu_torch_usable": usable,
+                "torch_warning": torch_warning,
+                "cudnn_allow_tf32": cudnn_allow_tf32,
+                "matmul_allow_tf32": matmul_allow_tf32,
             }
         )
     print(f"gpu torch usable: {usable}")
