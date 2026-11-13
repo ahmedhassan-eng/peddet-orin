@@ -38,7 +38,7 @@ The venv uses `--system-site-packages` because TensorRT 10.16.2.10 comes from th
 
 The package runs from this source checkout, not from an installed wheel. Its commands find the checkout two levels above the package, or the directory `PDORIN_ROOT` names, and refuse to start anywhere else. `python -m peddet_orin` lists the commands; each is also installed as a `peddet-orin-<command>` script.
 
-Run the tests. They need no network. On the Jetson, the GPU and TensorRT tests in `tests/test_gpu.py` run too, so the suite takes about five minutes while it builds TensorRT engines:
+Run the tests. They need no network. On the Jetson, the GPU and TensorRT tests in `tests/test_gpu.py` run too, so the suite takes about fifteen minutes while it builds TensorRT engines:
 
 ```sh
 python -m pytest -rs
@@ -87,9 +87,18 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 <!-- results:begin -->
 | Device and precision | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | End-to-end FPS | Peak process RSS (MiB) | Avg power VDD_IN (W) | Person AP@[.5:.95] | Person AP50 | INT8 path |
 |---|---|---|---|---|---|---|---|---|---|
-| n/a FP32 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |
-| n/a FP16 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |
-| n/a INT8 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| GPU, PyTorch FP32 | 29.9 / 30.9 / 32.8 | 88.6 / 103.1 / 116.4 | 33.2 | 11.3 | 1253 | 7.7 | 28.01 | 49.50 | - |
+| GPU, TensorRT FP16 | 3.9 / 4.2 / 6.4 | 75.7 / 100.2 / 135.9 | 247.7 | 12.9 | 1303 | 8.7 | 28.01 | 49.48 | - |
+| GPU, TensorRT INT8 | 3.7 / 3.8 / 4.5 | 79.1 / 99.3 / 124.2 | 268.4 | 12.6 | 1086 | 8.4 | 26.74 | 48.14 | IInt8EntropyCalibrator2 |
+
+- INT8 person AP differs from FP16 by -1.27 points.
+- FP32 benchmark: power mode `NV Power Mode: MAXN_SUPER 2`, clocks locked: NOT_PROBED, one-minute CPU load before timing: 2.1, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- FP32 p50 across repeats: engine 29.86-29.90 ms over 3 repeats, end-to-end 87.58-90.59 ms over 3 repeats.
+- FP16 benchmark: power mode `NV Power Mode: MAXN_SUPER 2`, clocks locked: NOT_PROBED, one-minute CPU load before timing: 1.5, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- FP16 p50 across repeats: engine 3.88-4.01 ms over 3 repeats, end-to-end 70.00-85.21 ms over 3 repeats.
+- INT8 benchmark: power mode `NV Power Mode: MAXN_SUPER 2`, clocks locked: NOT_PROBED, one-minute CPU load before timing: 3.7, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- INT8 p50 across repeats: engine 3.66-3.73 ms over 3 repeats, end-to-end 76.34-84.17 ms over 3 repeats.
+- PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
 <!-- results:end -->
 
 ### Provenance
@@ -101,9 +110,11 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 - The measurements ran one at a time, at normal priority, while no other GPU or benchmark job ran on the board.
 - `tests/test_readme_table.py` fails if the block above differs from what `scripts/generate_table.py` makes of the logs.
 
-The FP32 row runs PyTorch on the GPU with TF32 turned off for cuDNN and matmul, so it is FP32 throughout. PyTorch warns on first CUDA use that its published 2.14.1+cu130 wheels do not support this board's compute capability, 8.7; the notes quote that warning, and the code does not hide it. Which kernel image the driver runs is not reported. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable: it compares a matmul and NMS against the CPU, and `tests/test_gpu.py` compares a full forward pass.
+The FP32 row runs PyTorch on the GPU with TF32 turned off for cuDNN and matmul, so it is FP32 throughout. PyTorch warns on first CUDA use that its published 2.14.1+cu130 wheels do not support this board's compute capability, 8.7; the notes quote the warning's first line, the `gpu_check` log holds all of it, and the code does not hide it. Which kernel image the driver runs is not reported. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable: it compares a matmul and NMS against the CPU, and `tests/test_gpu.py` compares a full forward pass.
 
 Peak process RSS does not fully capture memory allocated on the device. System RAM rise, the highest system-wide RAM during timing minus the mean just before, is in the logs but not in the table: it includes any other activity on the board and does not reproduce between runs.
+
+In this run the INT8 engine is faster than the FP16 one, but its end-to-end median is slower, and the per-repeat ranges in the notes overlap. End-to-end time is mostly image decoding, preprocessing and postprocessing on the CPU, so the engine is a small share of it. INT8 also keeps more boxes above the score threshold on val2017 (the `detections` count in the eval logs), which gives the postprocess more work. No profile here separates that from run-to-run variation.
 
 ## Limitations
 
@@ -151,6 +162,7 @@ peddet-orin/
 │   └── calibration_train2017.sha256  the 500 calibration images and their sha256 hashes
 ├── requirements/
 │   └── ci-cpu.txt                   the CPU-only set for CI
+├── runs/                            one JSON log per measurement; the results table is built from them
 ├── scripts/
 │   ├── check_planted_defects.py     plants each registered defect and checks that its test fails
 │   ├── ci_local.sh                  runs the CI matrix locally, one venv per Python version
