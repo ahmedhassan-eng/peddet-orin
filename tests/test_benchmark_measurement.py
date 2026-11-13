@@ -2,8 +2,11 @@
 """Benchmark statistics, tegrastats parsing and the result record, checked on CPU with known answers."""
 
 import itertools
+import os
 import resource
+import time
 import types
+from pathlib import Path
 
 import pytest
 import torch
@@ -39,7 +42,8 @@ RESULT_KEYS = {
     "power_mode",
     "cpu_load_1min_before_timing",
     "gpu_busy_pct_before_timing",
-    "clocks_locked",
+    "gpu_clock",
+    "cpu_clocks",
 }
 SUMMARY_KEYS = {"p50_ms", "p90_ms", "p99_ms", "fps"}
 
@@ -90,6 +94,121 @@ class FakeBackend:
         return self.box_regression, self.class_logits
 
 
+GPU_FILES = ("GPU_GOVERNOR_FILE", "GPU_CUR_FREQ_FILE", "GPU_MIN_FREQ_FILE", "GPU_MAX_FREQ_FILE")
+
+
+def fake_clocks(tmp_path, gpu=(None, None, None, None), cpus=None) -> dict:
+    """Stand-in sysfs files under tmp_path; None leaves a file missing. Returns the names to patch."""
+    root = tmp_path / "clocks"
+    root.mkdir(exist_ok=True)
+    patched = {}
+    for name, value in zip(GPU_FILES, gpu, strict=True):
+        path = root / name.lower()
+        if value is not None:
+            path.write_text(f"{value}\n")
+        patched[name] = str(path)
+    policies = []
+    for policy, values in (cpus or {}).items():
+        files = []
+        for kind, value in zip(("governor", "cur", "max"), values, strict=True):
+            path = root / f"{policy}_{kind}"
+            if value is not None:
+                path.write_text(f"{value}\n")
+            files.append(str(path))
+        policies.append((policy, *files))
+    patched["CPU_POLICIES"] = tuple(policies)
+    return patched
+
+
+def _patch(monkeypatch, patched):
+    for name, value in patched.items():
+        monkeypatch.setattr(benchmark, name, value)
+
+
+BOARD = {
+    "gpu": ("performance", 1020000000, 306000000, 1020000000),
+    "cpus": {"policy0": ("schedutil", 1728000, 1728000), "policy4": ("schedutil", 729600, 1728000)},
+}
+
+
+def test_clock_records_count_samples_at_max_per_clock(tmp_path, monkeypatch):
+    _patch(monkeypatch, fake_clocks(tmp_path, BOARD["gpu"], BOARD["cpus"]))
+    sampler = benchmark.ClockSampler(benchmark.clock_files())
+    sampler.read_once()
+    Path(benchmark.GPU_CUR_FREQ_FILE).write_text("624000000\n")
+    sampler.read_once()
+    gpu, cpus = benchmark.clock_records(sampler)
+    assert gpu == {
+        "governor": "performance",
+        "max_hz": 1020000000,
+        "min_hz": 306000000,
+        "cur_hz_counts": {"1020000000": 1, "624000000": 1},
+        "samples": 2,
+        "unreadable_samples": 0,
+        "at_max_samples": 1,
+    }
+    assert cpus["policy0"]["at_max_samples"] == 2 and cpus["policy0"]["max_khz"] == 1728000
+    assert cpus["policy4"]["at_max_samples"] == 0 and cpus["policy4"]["cur_khz_counts"] == {"729600": 2}
+    assert runlog.RESULT_CHECKS["benchmark"]["gpu_clock"](gpu)
+    assert runlog.RESULT_CHECKS["benchmark"]["cpu_clocks"](cpus)
+
+
+def test_clock_records_missing_files_are_unreadable(tmp_path, monkeypatch):
+    _patch(monkeypatch, fake_clocks(tmp_path, cpus={"policy0": (None, None, None)}))
+    sampler = benchmark.ClockSampler(benchmark.clock_files())
+    sampler.start()
+    sampler.stop()
+    gpu, cpus = benchmark.clock_records(sampler)
+    for record, unit in ((gpu, "hz"), (cpus["policy0"], "khz")):
+        assert record["governor"] == record[f"max_{unit}"] == runlog.UNREADABLE
+        assert record[f"cur_{unit}_counts"] == {} and record["unreadable_samples"] == record["samples"] >= 1
+        assert record["at_max_samples"] == runlog.UNREADABLE
+    assert runlog.RESULT_CHECKS["benchmark"]["gpu_clock"](gpu)
+    assert runlog.RESULT_CHECKS["benchmark"]["cpu_clocks"](cpus)
+
+
+def test_clock_reader_process_samples_every_file_until_stopped(tmp_path, monkeypatch):
+    """The reader runs in its own process and keeps sampling while the caller only waits."""
+    _patch(monkeypatch, fake_clocks(tmp_path, BOARD["gpu"], BOARD["cpus"]))
+    monkeypatch.setattr(benchmark, "TEGRASTATS_INTERVAL_MS", 20)
+    sampler = benchmark.ClockSampler(benchmark.clock_files())
+    sampler.start()
+    assert sampler.process is not None and sampler.process.pid != os.getpid()
+    time.sleep(1.0)
+    sampler.stop()
+    assert len(sampler.samples) == 3 and all(len(samples) >= 5 for samples in sampler.samples)
+    assert set(sampler.samples[0]) == {1020000000} and set(sampler.samples[2]) == {729600}
+    assert sampler.unreadable == [0, 0, 0]
+
+
+def test_clock_reader_lines_are_parsed_and_short_lines_dropped():
+    sampler = benchmark.ClockSampler(["a", "b"])
+    sampler.add_lines(["1020000000 1728000", "UNREADABLE 1728000", "624000000", ""])
+    assert sampler.samples == [[1020000000], [1728000, 1728000]] and sampler.unreadable == [1, 0]
+
+
+def test_clock_paths_are_the_ten_sysfs_files():
+    """The source names exactly these ten absolute paths, and no other form of them."""
+    assert benchmark.GPU_GOVERNOR_FILE == "/sys/class/devfreq/17000000.gpu/governor"
+    assert benchmark.GPU_CUR_FREQ_FILE == "/sys/class/devfreq/17000000.gpu/cur_freq"
+    assert benchmark.GPU_MIN_FREQ_FILE == "/sys/class/devfreq/17000000.gpu/min_freq"
+    assert benchmark.GPU_MAX_FREQ_FILE == "/sys/class/devfreq/17000000.gpu/max_freq"
+    assert benchmark.CPU_POLICIES == (
+        (
+            "policy0",
+            "/sys/devices/system/cpu/cpufreq/policy0/scaling_governor",
+            "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq",
+            "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq",
+        ),
+        (
+            "policy4",
+            "/sys/devices/system/cpu/cpufreq/policy4/scaling_governor",
+            "/sys/devices/system/cpu/cpufreq/policy4/scaling_cur_freq",
+            "/sys/devices/system/cpu/cpufreq/policy4/scaling_max_freq",
+        ),
+    )
+
+
 @pytest.fixture
 def cpu_benchmark(tmp_path, monkeypatch):
     """Run benchmark.main on CPU with tiny images, no tegrastats and no log file; return the results."""
@@ -108,6 +227,8 @@ def cpu_benchmark(tmp_path, monkeypatch):
     monkeypatch.setattr(runlog, "_command_output", lambda arguments: "MODE TEST")
     monkeypatch.setattr(benchmark, "TEGRASTATS", "peddet-orin-absent-tegrastats")
     monkeypatch.setattr(benchmark, "BASELINE_SAMPLE_S", 0.0)
+    # Never read the host's own devfreq node in a test: point all four files into tmp_path.
+    _patch(monkeypatch, fake_clocks(tmp_path, BOARD["gpu"], BOARD["cpus"]))
     monkeypatch.setattr(benchmark, "load_detector", lambda pretrained: load_detector(pretrained=False))
     monkeypatch.setattr(
         benchmark, "load_backend", lambda prog, precision, device, detector, engine: FakeBackend(detector)
@@ -131,7 +252,11 @@ def test_benchmark_result_record_has_the_schema_keys(cpu_benchmark):
         assert len(results[key]) == 2
         assert all(isinstance(value, float) for value in results[key])
     assert results["runtime"] == "fake-cpu"
-    assert results["clocks_locked"] == "NOT_PROBED"
+    clock = results["gpu_clock"]
+    assert clock["governor"] == "performance" and (clock["min_hz"], clock["max_hz"]) == (306000000, 1020000000)
+    assert clock["at_max_samples"] == clock["samples"] >= 1 and clock["unreadable_samples"] == 0
+    assert set(results["cpu_clocks"]) == {"policy0", "policy4"}
+    assert results["cpu_clocks"]["policy4"]["at_max_samples"] == 0
     assert isinstance(results["cpu_load_1min_before_timing"], float)
     assert isinstance(results["peak_process_rss_mib"], float)
     assert results["power_samples"] == 0

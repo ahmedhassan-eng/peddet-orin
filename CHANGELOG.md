@@ -13,6 +13,8 @@ All notable changes to this project are recorded here. The format follows
 - ONNX export, TensorRT engine builds with entropy-calibrated INT8, COCO val2017 person evaluation and batch-1
   benchmarks, each writing a JSON run log under `runs/`.
 - A README results table generated from those logs, with a test that fails if it drifts.
+- Each benchmark log records the governor and maximum of the GPU's devfreq clock and of each CPU frequency
+  policy, and their clocks sampled every 200 ms during timing, read-only.
 - `constraints/jetson-orin.txt`, which pins the Jetson venv, and `requirements/ci-cpu.txt`, the CPU-only set for CI.
 - CI on ubuntu-latest for Python 3.10, 3.11 and 3.12, running ruff and the CPU tests.
 - GPU and TensorRT tests, which skip where there is no CUDA device or no TensorRT.

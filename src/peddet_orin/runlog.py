@@ -86,7 +86,6 @@ def resolve_root(environ: Mapping[str, str] | None = None, module_file: str | Pa
 REPO_ROOT = resolve_root()
 RUNS_DIR = REPO_ROOT / "runs"
 UNREADABLE = "UNREADABLE"
-NOT_PROBED = "NOT_PROBED"
 SCHEMA_VERSION = 2
 SUBPROCESS_TIMEOUT_S = 20
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
@@ -360,6 +359,37 @@ def _is_number_list(value: Any) -> bool:
     return isinstance(value, list) and all(_is_number(item) for item in value)
 
 
+def _is_reading(value: Any) -> bool:
+    return (_is_integer(value) and value > 0) or value == UNREADABLE
+
+
+def _is_count(value: Any) -> bool:
+    return _is_integer(value) and value >= 0
+
+
+def _is_clock(value: Any, unit: str, extra: tuple[str, ...] = ()) -> bool:
+    """One clock's record: governor, maximum, counts per clock seen, and the sample tallies."""
+    keys = ("governor", f"max_{unit}", f"cur_{unit}_counts", "samples", "unreadable_samples", "at_max_samples", *extra)
+    if not isinstance(value, dict) or set(value) != set(keys):
+        return False
+    counts = value[f"cur_{unit}_counts"]
+    return (
+        _is_string(value["governor"])
+        and _is_reading(value[f"max_{unit}"])
+        and all(_is_reading(value[key]) for key in extra)
+        and isinstance(counts, dict)
+        and all(key.isdigit() and _is_integer(count) and count > 0 for key, count in counts.items())
+        and _is_count(value["samples"])
+        and _is_count(value["unreadable_samples"])
+        and value["samples"] == sum(counts.values()) + value["unreadable_samples"]
+        and (_is_count(value["at_max_samples"]) or value["at_max_samples"] == UNREADABLE)
+    )
+
+
+def _is_cpu_clocks(value: Any) -> bool:
+    return isinstance(value, dict) and bool(value) and all(_is_clock(record, "khz") for record in value.values())
+
+
 # The keys each kind of log carries in ``results``, and the test each value must pass.
 RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
     "eval": {
@@ -383,7 +413,9 @@ RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
         "power_mode": _is_string,
         "cpu_load_1min_before_timing": _is_number,
         "gpu_busy_pct_before_timing": lambda value: _is_number(value) or value == UNREADABLE,
-        "clocks_locked": lambda value: value == NOT_PROBED,
+        # Read from sysfs during timing; a host without a file records UNREADABLE for it.
+        "gpu_clock": lambda value: _is_clock(value, "hz", ("min_hz",)),
+        "cpu_clocks": _is_cpu_clocks,
     },
     "build": {
         "engine_bytes": lambda value: _is_integer(value) and value > 0,

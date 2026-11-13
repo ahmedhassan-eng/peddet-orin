@@ -15,6 +15,7 @@ import re
 import resource
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -38,8 +39,27 @@ from peddet_orin.model import load_detector
 from peddet_orin.postprocess import Postprocessor
 from peddet_orin.preprocess import PIXEL_MAX, preprocess
 
-# Nothing in this project tries to read or set the clock state, so the log says so.
-CLOCKS_LOCKED_STATUS = "NOT_PROBED"
+# The clocks are read from sysfs, read-only; nothing here sets them. Each file is named in full,
+# so the absolute paths in the source are exactly these ten.
+GPU_GOVERNOR_FILE = "/sys/class/devfreq/17000000.gpu/governor"
+GPU_CUR_FREQ_FILE = "/sys/class/devfreq/17000000.gpu/cur_freq"
+GPU_MIN_FREQ_FILE = "/sys/class/devfreq/17000000.gpu/min_freq"
+GPU_MAX_FREQ_FILE = "/sys/class/devfreq/17000000.gpu/max_freq"
+# Each CPU frequency policy as (name, governor file, current-clock file, maximum file); cpufreq counts in kHz.
+CPU_POLICIES: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "policy0",
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_governor",
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq",
+        "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq",
+    ),
+    (
+        "policy4",
+        "/sys/devices/system/cpu/cpufreq/policy4/scaling_governor",
+        "/sys/devices/system/cpu/cpufreq/policy4/scaling_cur_freq",
+        "/sys/devices/system/cpu/cpufreq/policy4/scaling_max_freq",
+    ),
+)
 WARMUP_ITERATIONS = 50
 TIMED_ITERATIONS = 1000
 REPEATS = 3
@@ -91,6 +111,127 @@ class TegrastatsSampler:
 
     def values(self, pattern: re.Pattern[str]) -> list[int]:
         return tegrastats_values(self.lines, pattern)
+
+
+# The clocks are sampled by a separate small process, so the timed process does no extra work.
+# Each interval it prints one line with a reading per file, or UNREADABLE, until it is terminated.
+CLOCK_READER = """
+import sys, time
+interval, paths = float(sys.argv[1]), sys.argv[2:]
+def read(path):
+    try:
+        with open(path) as handle:
+            text = handle.read().strip()
+    except OSError:
+        text = ""
+    return text if text.isdigit() else "UNREADABLE"
+while True:
+    print(" ".join(read(path) for path in paths), flush=True)
+    time.sleep(interval)
+"""
+
+
+class ClockSampler:
+    """Sample several clock files from a separate process, between ``start`` and ``stop``."""
+
+    def __init__(self, cur_files: list[str]) -> None:
+        self.cur_files = list(cur_files)
+        self.samples: list[list[int]] = [[] for _ in self.cur_files]
+        self.unreadable = [0 for _ in self.cur_files]
+        self.process: subprocess.Popen | None = None
+        self.output = None
+
+    def start(self) -> None:
+        self.output = tempfile.TemporaryFile(mode="w+")
+        interval = str(TEGRASTATS_INTERVAL_MS / MS_PER_S)
+        try:
+            self.process = subprocess.Popen(
+                [sys.executable, "-I", "-c", CLOCK_READER, interval, *self.cur_files],
+                stdout=self.output,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            self.process = None
+
+    def stop(self) -> None:
+        if self.process is not None:
+            self.process.terminate()
+            self.process.wait()
+        if self.output is not None:
+            self.output.seek(0)
+            self.add_lines(self.output.read().splitlines())
+            self.output.close()
+            self.output = None
+        if not any(self.samples) and not any(self.unreadable):
+            self.read_once()
+
+    def add_lines(self, lines: list[str]) -> None:
+        """Take each whole line; a line cut short when the reader was stopped is dropped."""
+        for line in lines:
+            fields = line.split()
+            if len(fields) != len(self.cur_files):
+                continue
+            for index, field in enumerate(fields):
+                if field.isdigit():
+                    self.samples[index].append(int(field))
+                else:
+                    self.unreadable[index] += 1
+
+    def read_once(self) -> None:
+        for index, path in enumerate(self.cur_files):
+            value = read_int(path)
+            if value == runlog.UNREADABLE:
+                self.unreadable[index] += 1
+            else:
+                self.samples[index].append(value)
+
+
+def read_text(path: str) -> str:
+    """A sysfs file's stripped text, or ``UNREADABLE``."""
+    try:
+        text = Path(path).read_text().strip()
+    except OSError:
+        return runlog.UNREADABLE
+    return text or runlog.UNREADABLE
+
+
+def read_int(path: str) -> int | str:
+    """A sysfs file's integer value, or ``UNREADABLE``."""
+    text = read_text(path)
+    return int(text) if text.isdigit() else runlog.UNREADABLE
+
+
+def clock_record(governor_file: str, max_file: str, samples: list[int], unreadable: int, unit: str) -> dict:
+    """The governor, the maximum, how often each clock was seen, and how many samples were at the maximum."""
+    ceiling = read_int(max_file)
+    counts: dict[str, int] = {}
+    for value in samples:
+        counts[str(value)] = counts.get(str(value), 0) + 1
+    at_max = sum(value == ceiling for value in samples) if isinstance(ceiling, int) else runlog.UNREADABLE
+    return {
+        "governor": read_text(governor_file),
+        f"max_{unit}": ceiling,
+        f"cur_{unit}_counts": counts,
+        "samples": len(samples) + unreadable,
+        "unreadable_samples": unreadable,
+        "at_max_samples": at_max,
+    }
+
+
+def clock_files() -> list[str]:
+    """The current-clock files the reader samples: the GPU's first, then each CPU policy's."""
+    return [GPU_CUR_FREQ_FILE, *(cur for _, _, cur, _ in CPU_POLICIES)]
+
+
+def clock_records(sampler: ClockSampler) -> tuple[dict, dict]:
+    """The GPU's record, with its devfreq floor, and one record per CPU policy."""
+    gpu = clock_record(GPU_GOVERNOR_FILE, GPU_MAX_FREQ_FILE, sampler.samples[0], sampler.unreadable[0], "hz")
+    gpu["min_hz"] = read_int(GPU_MIN_FREQ_FILE)
+    cpus = {
+        name: clock_record(governor, ceiling, sampler.samples[index], sampler.unreadable[index], "khz")
+        for index, (name, governor, _, ceiling) in enumerate(CPU_POLICIES, start=1)
+    }
+    return gpu, cpus
 
 
 def tegrastats_values(lines: list[str], pattern: re.Pattern[str]) -> list[int]:
@@ -212,6 +353,8 @@ def main(argv: list[str] | None = None) -> int:
         load_before_timing = os.getloadavg()[0]
         sampler = TegrastatsSampler()
         sampler.start()
+        clock = ClockSampler(clock_files())
+        clock.start()
         engine_repeats, total_repeats = [], []
         for repeat_picks in picks:
             engine_seconds, total_seconds = [], []
@@ -221,8 +364,10 @@ def main(argv: list[str] | None = None) -> int:
                 total_seconds.append(total)
             engine_repeats.append(engine_seconds)
             total_repeats.append(total_seconds)
+        clock.stop()
         sampler.stop()
         release_backend(backend)
+        gpu_clock, cpu_clocks = clock_records(clock)
 
         power_samples = len(sampler.values(VDD_IN_PATTERN))
         debug.log(f"tegrastats samples: {power_samples}")
@@ -241,7 +386,8 @@ def main(argv: list[str] | None = None) -> int:
                 "power_mode": runlog._command_output(["nvpmodel", "-q"]),
                 "cpu_load_1min_before_timing": load_before_timing,
                 "gpu_busy_pct_before_timing": gpu_busy_pct(baseline.lines),
-                "clocks_locked": CLOCKS_LOCKED_STATUS,
+                "gpu_clock": gpu_clock,
+                "cpu_clocks": cpu_clocks,
             }
         )
     print(f"{args.precision}: end-to-end p50 {log.results['end_to_end']['p50_ms']:.2f} ms")

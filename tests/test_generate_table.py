@@ -88,6 +88,35 @@ def test_each_benchmark_row_has_a_note_with_its_repeat_ranges(tmp_path):
     assert "one-minute CPU load before timing: 0.4" in block
 
 
+def test_benchmark_note_gives_each_clock_governor_and_samples_at_max(tmp_path):
+    gpu = {
+        "governor": "performance",
+        "max_hz": 1020000000,
+        "min_hz": 306000000,
+        "cur_hz_counts": {"1020000000": 298, "624000000": 2},
+        "samples": 300,
+        "unreadable_samples": 0,
+        "at_max_samples": 298,
+    }
+    cpu = {
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "cur_khz_counts": {"1728000": 300},
+        "samples": 300,
+        "unreadable_samples": 0,
+        "at_max_samples": 300,
+    }
+    results = {"gpu_clock": gpu, "cpu_clocks": {"policy4": cpu, "policy0": cpu}}
+    write_logs(tmp_path, [make_log("benchmark", "fp16", results=results)])
+    block = generate_table.build_block(tmp_path)
+    assert (
+        "GPU clock governor `performance`, at max 1020 MHz in 298 of 300 samples; CPU clocks policy0 governor "
+        "`schedutil`, at max 1728 MHz in 300 of 300 samples; policy4 governor `schedutil`, at max 1728 MHz in 300 "
+        "of 300 samples, "
+    ) in block
+    assert "locked" not in block and "pinned" not in block
+
+
 def int8_drop_block(tmp_path, fp16_ap, int8_ap):
     write_logs(tmp_path, [make_log("eval", "fp16", results={"ap": fp16_ap}),
                           make_log("eval", "int8", results={"ap": int8_ap})])

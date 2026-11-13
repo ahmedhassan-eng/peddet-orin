@@ -24,6 +24,8 @@ PRECISIONS = ("fp32", "fp16", "int8")
 PRECISION_NAMES = {"fp32": "FP32", "fp16": "FP16", "int8": "INT8"}
 INT8_DROP_LIMIT_POINTS = 2.0
 POINTS = 100.0
+HZ_PER_MHZ = 1_000_000
+KHZ_PER_MHZ = 1_000
 MISSING = "n/a"
 UNREADABLE = "UNREADABLE"
 # Each row's first cell names its device and its precision, e.g. "GPU, PyTorch FP32".
@@ -115,6 +117,20 @@ def _row(chosen: dict, precision: str) -> str:
     return "| " + " | ".join(cells) + " |"
 
 
+def _at_max(clock: dict, unit: str, per_mhz: int) -> str:
+    """The governor, and how many timed samples were at the maximum, as counts."""
+    ceiling = clock[f"max_{unit}"]
+    top = f"{ceiling / per_mhz:.0f} MHz" if isinstance(ceiling, int) else str(ceiling)
+    return f"governor `{clock['governor']}`, at max {top} in {clock['at_max_samples']} of {clock['samples']} samples"
+
+
+def _clocks(results: dict) -> str:
+    cpus = "; ".join(
+        f"{name} {_at_max(clock, 'khz', KHZ_PER_MHZ)}" for name, clock in sorted(results["cpu_clocks"].items())
+    )
+    return f"GPU clock {_at_max(results['gpu_clock'], 'hz', HZ_PER_MHZ)}; CPU clocks {cpus}"
+
+
 def _spread(values: list[float]) -> str:
     return f"{min(values):.2f}-{max(values):.2f} ms over {len(values)} repeats"
 
@@ -146,7 +162,7 @@ def _notes(chosen: dict) -> list[str]:
             name = PRECISION_NAMES[precision]
             notes.append(
                 f"{name} benchmark: power mode `{mode}`, "
-                f"clocks locked: {results['clocks_locked']}, "
+                f"{_clocks(results)}, "
                 f"one-minute CPU load before timing: {_number(results['cpu_load_1min_before_timing'], 1)}, "
                 f"GPU busy before timing: {_percent(results['gpu_busy_pct_before_timing'])}, "
                 f"other GPU processes: {benchmark['other_gpu_processes']}."

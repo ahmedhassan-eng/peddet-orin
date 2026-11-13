@@ -105,7 +105,7 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 
 - Each row is one run per precision, on one board. A benchmark pools three timed repeats of its loop; there is no averaging across runs.
 - Every log records its commit, whether the tree was dirty, the start and end times, the Jetson Linux release string, and the Python, PyTorch, torchvision, CUDA, TensorRT, ONNX, ONNX Runtime and peddet-orin versions. The table uses only clean logs, all from one commit.
-- The power mode in the notes is what `nvpmodel -q` reported. The clocks were not locked, since that needs root, and nothing reads their state, so it is recorded as `NOT_PROBED`. Timings therefore include any clock scaling.
+- The power mode in the notes is what `nvpmodel -q` reported. `jetson_clocks` was not run, since it needs root. During timing a separate process samples the GPU's devfreq clock and each CPU frequency policy's clock every 200 ms; the notes give each governor and how many samples were at that clock's maximum. Memory clocks are not read.
 - The one-minute load average in the notes is read just before timing starts, so it shows what else was running then. The number of other GPU processes could not be read, and is recorded as `UNREADABLE`.
 - The measurements ran one at a time, at normal priority, while no other GPU or benchmark job ran on the board.
 - `tests/test_readme_table.py` fails if the block above differs from what `scripts/generate_table.py` makes of the logs.
@@ -122,7 +122,7 @@ In this run the INT8 engine is faster than the FP16 one, but its end-to-end medi
 - The export uses PyTorch's TorchScript-based ONNX exporter, which PyTorch has deprecated; `pyproject.toml` bounds torch below 2.15 for that reason.
 - CI runs on x86_64 CPUs only. The aarch64 build, the GPU tests and TensorRT run only on the Jetson, by hand, before a release.
 - Batch size 1 only.
-- Clocks are not locked, and other work on the board is not excluded, so latencies can vary between runs.
+- `jetson_clocks` is not run, memory clocks are not read, a tegrastats reader thread runs in the timed process, and other work on the board is not excluded, so latencies can vary between runs.
 - Power is the average of `tegrastats` VDD_IN readings during timing. It is the whole board's input power, not the GPU's alone.
 - INT8 is calibrated on 500 seeded train2017 images. A different calibration set gives a different INT8 accuracy.
 - Person-only fine-tuning was tried and not shipped. See `QUEUE.md`.
