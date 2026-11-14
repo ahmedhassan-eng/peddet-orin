@@ -21,6 +21,7 @@ All notable changes to this project are recorded here. The format follows
 - Tests for the repository's rules: the README layout tree, the CI contract, unique test names, the commit rule
   copied in `AGENTS.md`, version agreement, and strict skips in CI.
 - `CONTRIBUTING.md`, `SECURITY.md`, `CITATION.cff` and issue and pull request templates.
+- `CODE_OF_CONDUCT.md`, the Contributor Covenant 2.1 unchanged except for its contact line.
 - A README layout tree generated from `git ls-files` by `scripts/generate_tree.py`, with a test that fails if it
   drifts.
 - Tests that every version has a changelog entry, every test a document cites is collected, every PRD requirement

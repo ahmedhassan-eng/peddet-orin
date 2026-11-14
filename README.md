@@ -1,6 +1,6 @@
 # peddet-orin
 
-Person detection on a Jetson Orin Nano Super with torchvision's SSDLite320 MobileNetV3-Large and its COCO weights, measured at three precisions: FP32 in PyTorch, and FP16 and INT8 in TensorRT. The benchmark reports accuracy on COCO 2017 val, latency, throughput, memory and power. Every number below comes from a JSON log in `runs/`, and a test fails if the table and the logs disagree.
+Person detection on a Jetson Orin Nano Super with torchvision's SSDLite320 MobileNetV3-Large and its COCO weights, measured at three precisions: FP32 in PyTorch, and FP16 and INT8 in TensorRT. The benchmark reports accuracy on COCO 2017 val, latency, frames per second, memory and power. Every number below comes from a JSON log in `runs/`, and a test fails if the table and the logs disagree.
 
 ## Hardware and software
 
@@ -53,7 +53,7 @@ python -m peddet_orin.engine_build --precision fp16
 
 ## Reproduce the results
 
-After the quickstart, fetch the data over HTTPS, check the GPU, then build and measure. `nvpmodel` and `tegrastats` must be on `PATH`; a log records `UNREADABLE` for anything it cannot read. Run the measurements from a clean tree, one at a time, with nothing else using the GPU.
+After the quickstart, fetch the data over HTTPS, check the GPU, then build and measure. `nvpmodel` and `tegrastats` must be on `PATH`; `nvpmodel` lives in the system sbin directory, which a user's `PATH` may leave out. A log records `UNREADABLE` for anything it cannot read, so a `power_mode` of `UNREADABLE` means `nvpmodel` was not found. Run the measurements from a clean tree, one at a time, with nothing else using the GPU.
 
 ```sh
 python scripts/fetch_coco.py annotations
@@ -78,11 +78,11 @@ python scripts/generate_table.py --write
 
 Each command writes a JSON log to `runs/`, and the last one rewrites the results table from the newest clean logs, which must all come from one commit. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
 
-To check a re-measure against the committed numbers, write its logs to another directory, for example a fresh clone's `runs/`, and compare: `python scripts/compare_logs.py <that runs dir>`. It applies the tolerances of `PRD.md` R-11 and prints one line per metric. Set `DEBUG=1` to turn on diagnostic logging and profiling.
+To check a re-measure against the committed numbers, write its logs to another directory, for example a fresh clone's `runs/`, and compare: `python scripts/compare_logs.py <that runs dir>`. It applies the tolerances of `PRD.md` R-11 and prints one line per metric. R-11 is a target. It has been checked once: the earlier run at `ac10495`, whose logs `7664f72` committed, against the published run at `17a1ee2`. Every metric is within its tolerance except FP32 average power, 7.72 W against 8.63 W, -10.6% against a 10% limit. The one-minute load average during the GPU jobs was 1.5-4.9 in the earlier run and 2.4-6.4 in the published one. The cause of the power difference is not established, and the tolerance has not been widened. Set `DEBUG=1` to turn on diagnostic logging and profiling.
 
 ## Results
 
-Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. All precisions use the same postprocess. Each benchmark pools three timed repeats of its loop, and the notes give the range of the per-repeat medians. Accuracy is person AP on the 5000 COCO val2017 images, from pycocotools with `catIds=[1]`.
+Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. FPS is 1 / mean latency over the serial batch-1 iterations, not a sustained throughput with several requests in flight. All precisions use the same postprocess. Each benchmark pools three timed repeats of its loop, and the notes give the range of the per-repeat medians. Accuracy is person AP on the 5000 COCO val2017 images, from pycocotools with `catIds=[1]`.
 
 <!-- results:begin -->
 | Device and precision | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | End-to-end FPS | Peak process RSS (MiB) | Avg power VDD_IN (W) | Person AP@[.5:.95] | Person AP50 | INT8 path |
@@ -114,7 +114,7 @@ The FP32 row runs PyTorch on the GPU with TF32 turned off for cuDNN and matmul, 
 
 Peak process RSS does not fully capture memory allocated on the device. System RAM rise, the highest system-wide RAM during timing minus the mean just before, is in the logs but not in the table: it includes any other activity on the board and does not reproduce between runs.
 
-In this run the INT8 engine is faster than the FP16 one, but its end-to-end median is slower, and the per-repeat ranges in the notes overlap. End-to-end time is mostly image decoding, preprocessing and postprocessing on the CPU, so the engine is a small share of it. INT8 also keeps more boxes above the score threshold on val2017 (the `detections` count in the eval logs), which gives the postprocess more work. No profile here separates that from run-to-run variation.
+In this run the INT8 engine is faster than the FP16 one, but its end-to-end median is slower, and the per-repeat ranges in the notes overlap. End-to-end time is mostly image decoding, preprocessing and postprocessing on the CPU, so the engine is a small share of it. INT8 also yields more person detections after NMS on val2017, the `detections` count in the eval logs. Whether that gives the postprocess more work during the benchmark is a hypothesis: no profile here separates it from run-to-run variation.
 
 ## Limitations
 
@@ -178,6 +178,7 @@ peddet-orin/
 ├── AGENTS.md                        rules for changes, with the shared commit-message rule
 ├── CHANGELOG.md
 ├── CITATION.cff
+├── CODE_OF_CONDUCT.md
 ├── CONTRIBUTING.md
 ├── LICENSE
 ├── NOTICE
@@ -217,4 +218,4 @@ Built with AI coding agents under the direction of [Ahmed Hassan](https://github
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and, for vulnerabilities, [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), the [code of conduct](CODE_OF_CONDUCT.md) and, for vulnerabilities, [SECURITY.md](SECURITY.md).

@@ -5,6 +5,7 @@ published number traceable to a run log.
 
 ## Before you start
 
+- Follow the [code of conduct](CODE_OF_CONDUCT.md).
 - Report a vulnerability privately, as [SECURITY.md](SECURITY.md) describes, not in an issue.
 - Open an issue before a large change, so that the approach can be agreed first.
 
@@ -34,7 +35,7 @@ python -m pytest -rs
 
 The GPU and TensorRT tests in `tests/test_gpu.py` skip without a CUDA device or TensorRT. CI has neither, so they
 run only on a Jetson. If your change touches the GPU path, run them there and say so in the pull request. On the
-Jetson the whole suite takes about five minutes, because it builds TensorRT engines.
+Jetson the whole suite takes about fifteen minutes, because it builds TensorRT engines.
 
 The suite also enforces the repository's own rules:
 

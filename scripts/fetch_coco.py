@@ -94,8 +94,7 @@ def _fetch_archive(url: str, expected_md5: str, marker: str) -> None:
     archive = DATA_DIR / url.rsplit("/", 1)[1]
     actual = _stream_to(url, archive, ("md5",))["md5"]
     if actual != expected_md5:
-        archive.unlink()
-        raise RuntimeError(f"md5 mismatch for {url}: got {actual}, expected {expected_md5}")
+        raise RuntimeError(f"md5 mismatch for {archive}: got {actual}, expected {expected_md5}; left in place")
     # ZipFile.extractall strips absolute prefixes and ".." members, so extraction
     # stays inside DATA_DIR even for a malformed archive.
     with zipfile.ZipFile(archive) as bundle:

@@ -115,6 +115,20 @@ def test_a_hash_mismatch_keeps_the_file_and_names_it(offline, capsys):
     assert mine.read_bytes() == b"the user's own edited copy"
 
 
+def test_an_archive_md5_mismatch_keeps_the_archive_and_names_it(tmp_path, monkeypatch, capsys):
+    def fake_stream(url, destination, digests):
+        destination.write_bytes(b"not the published archive")
+        return {"md5": "0" * 32}
+
+    monkeypatch.setattr(fetch_coco, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(fetch_coco, "_stream_to", fake_stream)
+    assert fetch_coco.main(["annotations"]) == 1
+    archive = fetch_coco.DATA_DIR / fetch_coco.ANNOTATIONS_ZIP_URL.rsplit("/", 1)[1]
+    error = capsys.readouterr().err.strip()
+    assert "\n" not in error and "md5 mismatch" in error and str(archive) in error and "left in place" in error
+    assert archive.read_bytes() == b"not the published archive"
+
+
 def test_every_download_url_is_https():
     urls = [value for name, value in vars(fetch_coco).items() if name.endswith(("_URL", "_URL_PREFIX"))]
     assert len(urls) == 4

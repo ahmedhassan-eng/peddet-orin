@@ -33,7 +33,7 @@ dependencies = [
     "onnx>=1.16",
     "onnxruntime>=1.18",
     "pycocotools>=2.0.8",
-    "pillow>=10",
+    "pillow>=10.3",
 ]
 
 [project.urls]
