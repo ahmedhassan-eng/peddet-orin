@@ -36,6 +36,6 @@ def test_package_version_agrees_with_pyproject():
 
 def test_a_bumped_pyproject_alone_is_detected():
     pyproject, changelog, citation = current()
-    assert 'version = "0.1.0"' in pyproject
-    found = versions(pyproject.replace('version = "0.1.0"', 'version = "0.1.1"'), changelog, citation)
+    assert 'version = "0.1.1"' in pyproject
+    found = versions(pyproject.replace('version = "0.1.1"', 'version = "0.1.2"'), changelog, citation)
     assert len(set(found.values())) == 2

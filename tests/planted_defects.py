@@ -67,14 +67,14 @@ DEFECTS = [
     {
         "id": "version-disagrees",
         "file": "CITATION.cff",
-        "old": "version: 0.1.0",
+        "old": "version: 0.1.1",
         "new": "version: 0.2.0",
         "catches": "tests/test_version_agreement.py::test_versions_agree",
     },
     {
         "id": "changelog-entry-missing",
         "file": "CHANGELOG.md",
-        "old": "## [0.1.0] - ",
+        "old": "## [0.1.1] - ",
         "new": "## [0.0.9] - ",
         "catches": "tests/test_changelog.py::test_every_version_has_a_changelog_entry",
     },

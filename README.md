@@ -107,6 +107,7 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 
 ### Provenance
 
+- The table was measured at commit `17a1ee2` with package version 0.1.0. Version 0.1.1 changes no file under `src/`, so the measured code is the released code.
 - Each row is one run per precision, on one board. A benchmark pools three timed repeats of its loop; there is no averaging across runs.
 - Every log records its commit, whether the tree was dirty, the start and end times, the Jetson Linux release string, and the Python, PyTorch, torchvision, CUDA, TensorRT, ONNX, ONNX Runtime and peddet-orin versions. The table uses only clean logs, all from one commit.
 - The power mode in the notes is what `nvpmodel -q` reported. `jetson_clocks` was not run, since it needs root. During timing a separate process samples the GPU's devfreq clock and each CPU frequency policy's clock every 200 ms; the notes give each governor and how many samples were at that clock's maximum. Memory clocks are not read.
@@ -131,6 +132,7 @@ Whether that gives the postprocess more work during the benchmark is a hypothesi
 - CI runs on x86_64 CPUs only. The aarch64 build, the GPU tests and TensorRT run only on the Jetson, by hand, before a release.
 - Batch size 1 only.
 - `jetson_clocks` is not run, memory clocks are not read, a tegrastats reader thread runs in the timed process, and other work on the board is not excluded, so latencies can vary between runs.
+- Swap use was not recorded for the published run or the further runs: the benchmark keeps no `tegrastats` SWAP reading, and the QUIET gate does not read memory. The system RAM rise in each benchmark log is reported per run and not judged, and no check for a leak across runs was made.
 - Power is the average of `tegrastats` VDD_IN readings during timing. It is the whole board's input power, not the GPU's alone.
 - INT8 is calibrated on 500 seeded train2017 images. A different calibration set gives a different INT8 accuracy.
 - Person-only fine-tuning was tried and not shipped. See `QUEUE.md`.
@@ -214,7 +216,7 @@ If you use this software or its results, please cite it. `CITATION.cff` holds th
 @software{hassan_peddet_orin_2026,
   author  = {Hassan, Ahmed},
   title   = {peddet-orin: person detection on the Jetson Orin in FP32, FP16 and INT8},
-  version = {0.1.0},
+  version = {0.1.1},
   year    = {2026},
   url     = {https://github.com/ahmedhassan-eng/peddet-orin}
 }

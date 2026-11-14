@@ -4,6 +4,28 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-11-15
+
+### Added
+
+- `CODE_OF_CONDUCT.md`, the Contributor Covenant 2.1 unchanged except for its contact line, which points at the
+  repository's private vulnerability reporting.
+- Generated README text for the INT8 against FP16 comparison and for the check of `PRD.md` R-11 against further
+  runs under `runs-repeat/`, so every number in it comes from the logs.
+
+### Fixed
+
+- `scripts/fetch_coco.py` keeps a COCO archive whose MD5 does not match and names it in the error. 0.1.0 deleted
+  it, against its own docstring and the 0.1.0 Security note.
+- The README defines FPS as 1 / mean latency over serial batch-1 iterations, says where `nvpmodel` lives, and
+  marks INT8's effect on postprocess time as a hypothesis.
+- `CONTRIBUTING.md` gives the Jetson suite's time as about fifteen minutes.
+- `pyproject.toml` requires pillow 10.3 or later, the first release with the fix for CVE-2024-28219.
+
+### Notes
+
+- No file under `src/` changes. The results table is the 0.1.0 measurement at commit `17a1ee2`.
+
 ## [0.1.0] - 2026-11-14
 
 ### Added
@@ -21,7 +43,6 @@ All notable changes to this project are recorded here. The format follows
 - Tests for the repository's rules: the README layout tree, the CI contract, unique test names, the commit rule
   copied in `AGENTS.md`, version agreement, and strict skips in CI.
 - `CONTRIBUTING.md`, `SECURITY.md`, `CITATION.cff` and issue and pull request templates.
-- `CODE_OF_CONDUCT.md`, the Contributor Covenant 2.1 unchanged except for its contact line.
 - A README layout tree generated from `git ls-files` by `scripts/generate_tree.py`, with a test that fails if it
   drifts.
 - Tests that every version has a changelog entry, every test a document cites is collected, every PRD requirement
@@ -55,4 +76,5 @@ All notable changes to this project are recorded here. The format follows
   unsupported; the warning is recorded and shown, not filtered.
 - The package runs from a source checkout, or the one `PDORIN_ROOT` names, on Python 3.10 to 3.12.
 
+[0.1.1]: https://github.com/ahmedhassan-eng/peddet-orin/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ahmedhassan-eng/peddet-orin/releases/tag/v0.1.0
