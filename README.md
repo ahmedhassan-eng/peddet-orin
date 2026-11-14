@@ -87,17 +87,17 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 <!-- results:begin -->
 | Device and precision | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | End-to-end FPS | Peak process RSS (MiB) | Avg power VDD_IN (W) | Person AP@[.5:.95] | Person AP50 | INT8 path |
 |---|---|---|---|---|---|---|---|---|---|
-| GPU, PyTorch FP32 | 29.9 / 30.9 / 32.8 | 88.6 / 103.1 / 116.4 | 33.2 | 11.3 | 1253 | 7.7 | 28.01 | 49.50 | - |
-| GPU, TensorRT FP16 | 3.9 / 4.2 / 6.4 | 75.7 / 100.2 / 135.9 | 247.7 | 12.9 | 1303 | 8.7 | 28.01 | 49.48 | - |
-| GPU, TensorRT INT8 | 3.7 / 3.8 / 4.5 | 79.1 / 99.3 / 124.2 | 268.4 | 12.6 | 1086 | 8.4 | 26.74 | 48.14 | IInt8EntropyCalibrator2 |
+| GPU, PyTorch FP32 | 30.3 / 33.2 / 37.2 | 96.6 / 119.8 / 147.9 | 32.2 | 10.2 | 1271 | 8.6 | 28.01 | 49.50 | - |
+| GPU, TensorRT FP16 | 3.9 / 4.2 / 6.2 | 75.1 / 102.3 / 146.7 | 250.6 | 12.9 | 1305 | 8.8 | 28.00 | 49.48 | - |
+| GPU, TensorRT INT8 | 3.7 / 3.9 / 5.4 | 78.3 / 101.7 / 137.9 | 265.0 | 12.5 | 1075 | 8.7 | 26.83 | 48.15 | IInt8EntropyCalibrator2 |
 
-- INT8 person AP differs from FP16 by -1.27 points.
-- FP32 benchmark: power mode `NV Power Mode: MAXN_SUPER 2`, clocks locked: NOT_PROBED, one-minute CPU load before timing: 2.1, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- FP32 p50 across repeats: engine 29.86-29.90 ms over 3 repeats, end-to-end 87.58-90.59 ms over 3 repeats.
-- FP16 benchmark: power mode `NV Power Mode: MAXN_SUPER 2`, clocks locked: NOT_PROBED, one-minute CPU load before timing: 1.5, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- FP16 p50 across repeats: engine 3.88-4.01 ms over 3 repeats, end-to-end 70.00-85.21 ms over 3 repeats.
-- INT8 benchmark: power mode `NV Power Mode: MAXN_SUPER 2`, clocks locked: NOT_PROBED, one-minute CPU load before timing: 3.7, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- INT8 p50 across repeats: engine 3.66-3.73 ms over 3 repeats, end-to-end 76.34-84.17 ms over 3 repeats.
+- INT8 person AP differs from FP16 by -1.17 points.
+- FP32 benchmark: power mode `NV Power Mode: MAXN_SUPER 2`, GPU clock governor `performance`, at max 1020 MHz in 1467 of 1467 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 1317 of 1467 samples; policy4 governor `schedutil`, at max 1728 MHz in 1058 of 1467 samples, one-minute CPU load before timing: 3.9, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- FP32 p50 across repeats: engine 30.05-31.29 ms over 3 repeats, end-to-end 93.43-103.34 ms over 3 repeats.
+- FP16 benchmark: power mode `NV Power Mode: MAXN_SUPER 2`, GPU clock governor `performance`, at max 1020 MHz in 1165 of 1165 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 1121 of 1165 samples; policy4 governor `schedutil`, at max 1728 MHz in 959 of 1165 samples, one-minute CPU load before timing: 4.4, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- FP16 p50 across repeats: engine 3.84-3.98 ms over 3 repeats, end-to-end 69.35-86.09 ms over 3 repeats.
+- INT8 benchmark: power mode `NV Power Mode: MAXN_SUPER 2`, GPU clock governor `performance`, at max 1020 MHz in 1202 of 1202 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 1159 of 1202 samples; policy4 governor `schedutil`, at max 1728 MHz in 972 of 1202 samples, one-minute CPU load before timing: 5.5, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- INT8 p50 across repeats: engine 3.66-3.74 ms over 3 repeats, end-to-end 73.59-86.84 ms over 3 repeats.
 - PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
 <!-- results:end -->
 
