@@ -78,7 +78,11 @@ python scripts/generate_table.py --write
 
 Each command writes a JSON log to `runs/`, and the last one rewrites the results table from the newest clean logs, which must all come from one commit. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
 
-To check a re-measure against the committed numbers, write its logs to another directory, for example a fresh clone's `runs/`, and compare: `python scripts/compare_logs.py <that runs dir>`. It applies the tolerances of `PRD.md` R-11 and prints one line per metric. R-11 is a target. It has been checked once: the earlier run at `ac10495`, whose logs `7664f72` committed, against the published run at `17a1ee2`. Every metric is within its tolerance except FP32 average power, 7.72 W against 8.63 W, -10.6% against a 10% limit. The one-minute load average during the GPU jobs was 1.5-4.9 in the earlier run and 2.4-6.4 in the published one. The cause of the power difference is not established, and the tolerance has not been widened. Set `DEBUG=1` to turn on diagnostic logging and profiling.
+To check a re-measure against the committed numbers, write its logs to another directory, for example a fresh clone's `runs/`, and compare: `python scripts/compare_logs.py <that runs dir>`. It applies the tolerances of `PRD.md` R-11 and prints one line per metric. Set `DEBUG=1` to turn on diagnostic logging and profiling.
+
+<!-- repeats:begin -->
+No further runs are committed under `runs-repeat/`, so R-11 has not been checked.
+<!-- repeats:end -->
 
 ## Results
 
@@ -114,7 +118,11 @@ The FP32 row runs PyTorch on the GPU with TF32 turned off for cuDNN and matmul, 
 
 Peak process RSS does not fully capture memory allocated on the device. System RAM rise, the highest system-wide RAM during timing minus the mean just before, is in the logs but not in the table: it includes any other activity on the board and does not reproduce between runs.
 
-In this run the INT8 engine is faster than the FP16 one, but its end-to-end median is slower, and the per-repeat ranges in the notes overlap. End-to-end time is mostly image decoding, preprocessing and postprocessing on the CPU, so the engine is a small share of it. INT8 also yields more person detections after NMS on val2017, the `detections` count in the eval logs. Whether that gives the postprocess more work during the benchmark is a hypothesis: no profile here separates it from run-to-run variation.
+<!-- int8:begin -->
+In this run the INT8 engine p50 is lower than FP16's, 3.69 against 3.88 ms, and its end-to-end p50 is higher than FP16's, 78.33 against 75.13 ms; the per-repeat end-to-end ranges in the notes overlap. The FP16 engine p50 is 5% of its end-to-end p50; the rest is image decoding, preprocessing and postprocessing on the CPU. INT8 yields more person detections after NMS on val2017 than FP16, 398824 against 365085, the `detections` count in the eval logs.
+<!-- int8:end -->
+
+Whether that gives the postprocess more work during the benchmark is a hypothesis: no profile here separates it from run-to-run variation.
 
 ## Limitations
 
