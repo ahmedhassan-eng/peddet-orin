@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """CHANGELOG.md has a dated, non-empty entry with a release link for every version."""
+import hashlib
 import re
 from pathlib import Path
 
@@ -57,3 +58,20 @@ def test_an_empty_entry_is_detected():
     link = LINK.search(changelog).group()
     planted = changelog[: heading.end()] + "\n\n" + link + "\n"
     assert f"empty entry: {version}" in changelog_problems(planted, version)
+
+
+# The bytes of the 0.1.0 section at 8f3a50bd73887a0207bcde81bbbd4ee1df352202, the commit tag v0.1.0 names: from its
+# heading up to the next heading or the release links. A released section is never edited afterwards.
+RELEASED_0_1_0_SHA256 = "17f73f526145aa4a8334f78e238220480e28c576a28468d3377e4f369629e04f"
+SECTION_END = re.compile(r"^(## \[|\[\d+\.\d+\.\d+\]: )", re.M)
+
+
+def section(changelog: str, version: str) -> str:
+    """Return one version's section, from its heading up to the next heading or the release links."""
+    start = changelog.index(f"## [{version}]")
+    return changelog[start : SECTION_END.search(changelog, start + 1).start()]
+
+
+def test_the_0_1_0_section_equals_the_one_at_the_tag():
+    released = section((REPO_ROOT / "CHANGELOG.md").read_text(), "0.1.0")
+    assert hashlib.sha256(released.encode()).hexdigest() == RELEASED_0_1_0_SHA256

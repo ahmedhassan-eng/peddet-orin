@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """scripts/fetch_coco.py on CPU, with every download replaced by a local stand-in."""
 import hashlib
+import io
 import re
 
 import pytest
@@ -127,6 +128,38 @@ def test_an_archive_md5_mismatch_keeps_the_archive_and_names_it(tmp_path, monkey
     error = capsys.readouterr().err.strip()
     assert "\n" not in error and "md5 mismatch" in error and str(archive) in error and "left in place" in error
     assert archive.read_bytes() == b"not the published archive"
+
+
+def fake_urlopen(payload: bytes | None):
+    """A stand-in for urllib.request.urlopen that serves ``payload``, or fails if it is None."""
+
+    def urlopen(url, timeout):
+        if payload is None:
+            raise OSError("connection refused")
+        return io.BytesIO(payload)
+
+    return urlopen
+
+
+def test_a_second_run_replaces_a_kept_archive_once_the_new_download_completes(tmp_path, monkeypatch):
+    archive = tmp_path / "annotations_trainval2017.zip"
+    archive.write_bytes(b"the archive a failed md5 check kept")
+    monkeypatch.setattr(fetch_coco.urllib.request, "urlopen", fake_urlopen(b"the new download"))
+    digests = fetch_coco._stream_to("https://images.cocodataset.org/a.zip", archive, ("md5",))
+    assert archive.read_bytes() == b"the new download"
+    assert digests == {"md5": hashlib.md5(b"the new download").hexdigest()}
+    assert sorted(path.name for path in tmp_path.iterdir()) == [archive.name]
+
+
+def test_a_second_run_whose_download_fails_leaves_the_kept_archive_as_it_is(tmp_path, monkeypatch):
+    archive = tmp_path / "annotations_trainval2017.zip"
+    archive.write_bytes(b"the archive a failed md5 check kept")
+    monkeypatch.setattr(fetch_coco.urllib.request, "urlopen", fake_urlopen(None))
+    monkeypatch.setattr(fetch_coco.time, "sleep", lambda seconds: None)
+    with pytest.raises(RuntimeError, match="giving up"):
+        fetch_coco._stream_to("https://images.cocodataset.org/a.zip", archive, ("md5",))
+    assert archive.read_bytes() == b"the archive a failed md5 check kept"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [archive.name]
 
 
 def test_every_download_url_is_https():

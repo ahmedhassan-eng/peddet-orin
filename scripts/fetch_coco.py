@@ -63,7 +63,9 @@ def _stream_to(url: str, destination: Path, digests: tuple[str, ...]) -> dict[st
     """Download ``url`` to ``destination`` atomically, returning the hex digests.
 
     The file is written beside its destination and renamed only once complete, so
-    an interrupted run can never leave a truncated file that looks finished.
+    an interrupted run can never leave a truncated file that looks finished. If the
+    destination already exists, for example an archive a failed MD5 check kept, it
+    is left as it is until a new download completes, and then replaced by it.
     """
     if not url.startswith(HTTPS_PREFIX):
         raise ValueError(f"refusing a download that is not HTTPS: {url}")
