@@ -131,6 +131,14 @@ def test_every_package_pinned_in_both_files_has_the_same_version():
     assert pin_differences(ci, orin) == []
 
 
+def test_every_package_ci_pins_is_pinned_for_the_board_too():
+    ci = applicable_pins(CI_PINS, JETSON_PYTHON)
+    orin = applicable_pins(JETSON_PINS, JETSON_PYTHON)
+    assert sorted(set(ci) - set(orin)) == []
+    reduced = {name: version for name, version in orin.items() if name != "jinja2"}
+    assert sorted(set(ci) - set(reduced)) == ["jinja2"]
+
+
 def test_a_package_pinned_differently_in_the_two_files_is_detected():
     ci = applicable_pins(CI_PINS, JETSON_PYTHON)
     orin = {**applicable_pins(JETSON_PINS, JETSON_PYTHON), "filelock": "3.32.0", "torch": "2.13.0+cu130"}

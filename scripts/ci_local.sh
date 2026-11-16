@@ -29,7 +29,10 @@ for version in $VERSIONS; do
     python -m pip install --no-deps -e .
     python -m venv --clear .cache/pip-audit
     .cache/pip-audit/bin/python -m pip install pip-audit==2.10.1
-    .cache/pip-audit/bin/pip-audit --no-deps --disable-pip -r requirements/ci-cpu.txt
+    sed -E 's/^([A-Za-z0-9_.-]+==[^+ ;]+)[+][A-Za-z0-9.]+/\1/' requirements/ci-cpu.txt > .cache/pip-audit/ci-cpu.txt
+    sed -E 's/^([A-Za-z0-9_.-]+==[^+ ;]+)[+][A-Za-z0-9.]+/\1/' constraints/jetson-orin.txt > .cache/pip-audit/jetson-orin.txt
+    .cache/pip-audit/bin/pip-audit --strict --no-deps --disable-pip -r .cache/pip-audit/ci-cpu.txt
+    .cache/pip-audit/bin/pip-audit --strict --no-deps --disable-pip -r .cache/pip-audit/jetson-orin.txt
     ruff check .
     ruff format --check .
     PDORIN_STRICT_SKIPS=1 python -m pytest -rs

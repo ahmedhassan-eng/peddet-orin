@@ -24,7 +24,7 @@ security advisory.
 - The run logs' path hygiene: `src/peddet_orin/runlog.py` replaces any absolute path outside its allowlist with
   `<path>` before it writes a log.
 - The network guard in `tests/network_guard.py`, which keeps the tests offline.
-- The CI workflow in `.github/workflows/ci.yml`, which audits the pinned CPU set with `pip-audit`.
+- The CI workflow in `.github/workflows/ci.yml`, which audits both pin files with `pip-audit --strict`.
 
 ## Out of scope
 

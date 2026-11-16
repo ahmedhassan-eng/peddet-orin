@@ -223,21 +223,42 @@ def test_ci_cancels_superseded_runs_and_times_out():
 
 
 AUDIT = re.compile(r"pip install pip-audit==(?P<version>\d+\.\d+\.\d+)$")
-AUDIT_COMMAND = "pip-audit --no-deps --disable-pip -r requirements/ci-cpu.txt"
+# Each pin file is audited strictly, so a package pip-audit cannot find fails the run. The copies strip PyTorch's
+# local version suffix (+cpu, +cu130), which PyPI does not know, so torch and torchvision are audited as their public
+# releases.
+PUBLIC_COPY = "sed -E 's/^([A-Za-z0-9_.-]+==[^+ ;]+)[+][A-Za-z0-9.]+/\\1/' {source} > .cache/pip-audit/{name}"
+AUDIT_COMMAND = "pip-audit --strict --no-deps --disable-pip -r .cache/pip-audit/{name}"
+AUDITED = {"requirements/ci-cpu.txt": "ci-cpu.txt", "constraints/jetson-orin.txt": "jetson-orin.txt"}
 
 
 def audit_problems(commands: list[str]) -> list[str]:
-    """Return why the commands do not audit requirements/ci-cpu.txt with a pinned pip-audit."""
+    """Return why the commands do not strictly audit both pin files with a pinned pip-audit."""
     problems = []
     if not any(AUDIT.search(command) for command in commands):
         problems.append("pip-audit is not installed at a pinned version")
-    if not any(command.endswith(AUDIT_COMMAND) for command in commands):
-        problems.append("pip-audit does not audit requirements/ci-cpu.txt")
+    for source, name in AUDITED.items():
+        copied = PUBLIC_COPY.format(source=source, name=name) in commands
+        audited = any(command.endswith(AUDIT_COMMAND.format(name=name)) for command in commands)
+        if not (copied and audited):
+            problems.append(f"pip-audit does not strictly audit {source}")
     return problems
 
 
 def test_ci_audits_the_cpu_set_with_a_pinned_pip_audit():
     assert audit_problems(workflow_commands(WORKFLOW.read_text())) == []
+
+
+def test_an_audit_that_is_not_strict_or_skips_a_file_is_detected():
+    text = WORKFLOW.read_text()
+    lenient = text.replace("pip-audit --strict ", "pip-audit ")
+    assert audit_problems(workflow_commands(lenient)) == [
+        "pip-audit does not strictly audit requirements/ci-cpu.txt",
+        "pip-audit does not strictly audit constraints/jetson-orin.txt",
+    ]
+    one_file = "\n".join(line for line in text.splitlines() if "jetson-orin.txt" not in line)
+    assert audit_problems(workflow_commands(one_file)) == [
+        "pip-audit does not strictly audit constraints/jetson-orin.txt"
+    ]
 
 
 def test_an_unpinned_pip_audit_is_detected():
