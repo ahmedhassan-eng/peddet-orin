@@ -164,3 +164,9 @@ def test_the_gpu_check_note_quotes_the_warning_and_states_tf32(tmp_path):
 def test_the_gpu_check_note_says_when_there_was_no_warning(tmp_path):
     write_logs(tmp_path, [make_log("gpu_check")])
     assert "PyTorch emitted no unsupported-GPU warning at first CUDA use." in generate_table.build_block(tmp_path)
+
+
+def test_a_relative_runs_path_to_the_repository_runs_still_uses_the_judged_runs(monkeypatch):
+    monkeypatch.chdir(generate_table.REPO_ROOT)
+    assert generate_table._resolve_repeats(generate_table.Path("runs"), None) == generate_table.REPEATS_DIR
+    assert generate_table._resolve_repeats(generate_table.Path("./runs/"), None) == generate_table.REPEATS_DIR

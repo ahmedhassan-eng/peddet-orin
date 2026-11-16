@@ -1,14 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Generate the README results block from the JSON logs under ``runs/``.
+"""Generate the README's results block, and its INT8 and repeat-run blocks, from the committed JSON logs.
 
-The block sits between two HTML comment markers in the README. ``--write`` replaces
-it, and two smaller generated blocks: the INT8 comparison and the repeat-run check of
-PRD R-11 against the further runs under ``runs-repeat/``. A test calls
-``readme_matches`` so that the README cannot drift from the logs.
-For each precision and log kind, the newest clean log by end time supplies the
-numbers: a log made from a dirty tree is skipped, with a line on stderr. Every log
-that feeds the block must come from one commit, and each row's evaluation and
-benchmark must name the same runtime; otherwise the script exits non-zero.
+Each block sits between two HTML comment markers in the README, and ``--write`` replaces them; without it the
+results block is printed. A test calls ``readme_matches`` so that the README cannot drift from the logs.
+With judged runs under ``runs-repeat/``, each cell is the median over them; the earlier run in ``runs/`` is shown
+apart and not judged. Without them, the newest clean log of each kind and precision in ``runs/`` supplies the
+cells. A log made from a dirty tree is skipped, with a line on stderr. The logs that feed the table must come from
+one commit, and each row's evaluation and benchmark must name the same runtime; otherwise the script exits non-zero.
 """
 
 from __future__ import annotations
@@ -23,9 +21,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = REPO_ROOT / "runs"
-# Further full runs at the release code, one directory of logs per run, used only for the R-11 check.
+# Further full runs, one directory of logs per run: the judged ones feed the table's medians and the R-11 check.
 REPEATS_DIR = REPO_ROOT / "runs-repeat"
-# The sampler that wrote the runs' memory, swap and temperature files; each file's first line names its sha256.
 # The sha256 of the host's sampler script, as every judged sampler file records it in its first line.
 SYSMON_SHA256 = "aa30652bf11859de67420a4e6b64f53cc9348254f03b8a5dea424b94ed2a93ce"
 README = REPO_ROOT / "README.md"
@@ -278,7 +275,7 @@ def median_chosen(runs: list[dict]) -> dict:
 
 def _resolve_repeats(runs_dir: Path, repeats_dir: Path | None) -> Path | None:
     """The repo's own runs-repeat/ goes with its own runs/; any other runs directory has no repeats unless named."""
-    if repeats_dir is None and runs_dir == RUNS_DIR:
+    if repeats_dir is None and Path(runs_dir).resolve() == RUNS_DIR.resolve():
         return REPEATS_DIR
     return repeats_dir
 
