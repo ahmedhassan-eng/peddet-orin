@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Test support: an SSDLite with no downloaded weights but meaningful outputs."""
+
 import torch
 from torch import nn
 

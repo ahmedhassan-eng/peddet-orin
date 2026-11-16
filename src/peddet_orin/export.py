@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Export the network to ONNX and check it against PyTorch under ONNX Runtime on CPU."""
+
 from __future__ import annotations
 
 import argparse

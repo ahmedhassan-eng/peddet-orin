@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """AGENTS.md states the commit-message rule, and every commit keeps its checkable parts: no trailer, and no
 subject that ends with a period."""
+
 import subprocess
 from pathlib import Path
 
@@ -20,8 +21,14 @@ needs_history = pytest.mark.skipif(HISTORY_SKIP is not None, reason=HISTORY_SKIP
 
 def trailers(message: str) -> list[str]:
     """The trailers git itself parses from a commit message."""
-    done = subprocess.run(["git", "interpret-trailers", "--parse"], input=message, capture_output=True, text=True,
-                          check=True, cwd=REPO_ROOT)
+    done = subprocess.run(
+        ["git", "interpret-trailers", "--parse"],
+        input=message,
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=REPO_ROOT,
+    )
     return done.stdout.splitlines()
 
 
@@ -33,8 +40,9 @@ def message_problems(commit: str, message: str) -> list[str]:
 
 
 def history() -> list[tuple[str, str]]:
-    done = subprocess.run(["git", "log", "--format=%h%x00%B%x00"], cwd=REPO_ROOT, capture_output=True, text=True,
-                          check=True)
+    done = subprocess.run(
+        ["git", "log", "--format=%h%x00%B%x00"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+    )
     fields = done.stdout.split("\0")
     return [(fields[i].strip(), fields[i + 1]) for i in range(0, len(fields) - 1, 2)]
 

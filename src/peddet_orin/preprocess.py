@@ -8,6 +8,7 @@ the same operations are done here, once, for every precision.
 Normalisation is a separate function because the ONNX-against-PyTorch check has
 to be able to skip it and observe the failure.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

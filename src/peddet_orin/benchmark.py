@@ -6,6 +6,7 @@ and postprocesses. Engine-only latency is the inference step alone, including th
 copies to and from device memory. End-to-end latency is the whole iteration.
 Warm-up passes come first and are excluded, which also absorbs the first-call JIT.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -396,6 +397,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     print(f"{args.precision}: end-to-end p50 {log.results['end_to_end']['p50_ms']:.2f} ms")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -10,6 +10,7 @@ Two kinds of skip are expected:
   reasons in CHECKOUT_REASONS, and only outside CI. CI checks out the full history, so
   there a checkout skip still fails the run.
 """
+
 from __future__ import annotations
 
 import os
@@ -53,8 +54,9 @@ def checkout_skip_reason(root: Path, history: bool = False) -> str | None:
     if not (root / ".git").exists():
         return NO_GIT_REASON
     if history:
-        done = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=root,
-                              capture_output=True, text=True, check=False)
+        done = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"], cwd=root, capture_output=True, text=True, check=False
+        )
         if done.stdout.strip() == "true":
             return SHALLOW_REASON
     return None

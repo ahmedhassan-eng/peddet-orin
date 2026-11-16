@@ -11,6 +11,7 @@ Every attempt is also remembered, so a test or fixture that swallows the excepti
 still fails: the phase (setup, call or teardown) in which it happened is reported as
 failed.
 """
+
 from __future__ import annotations
 
 import socket

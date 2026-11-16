@@ -16,6 +16,7 @@ PyTorch's warning is shown unchanged and recorded word for word. Both results go
 into a run log, and a GPU kernel that cannot run counts as a failed comparison.
 The exit status is non-zero if the check fails.
 """
+
 from __future__ import annotations
 
 import argparse

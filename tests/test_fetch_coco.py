@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """scripts/fetch_coco.py on CPU, with every download replaced by a local stand-in."""
+
 import hashlib
 import io
 import re
@@ -37,8 +38,9 @@ def offline(tmp_path, monkeypatch):
     monkeypatch.setattr(fetch_coco, "MANIFEST_PATH", tmp_path / "manifests" / "calibration.sha256")
     monkeypatch.setattr(fetch_coco, "CALIBRATION_COUNT", COUNT)
     monkeypatch.setattr(fetch_coco, "_stream_to", fake_stream)
-    monkeypatch.setattr(fetch_coco, "_image_names",
-                        lambda name: list(VAL) if name == fetch_coco.VAL_IMAGE_LIST else list(TRAIN))
+    monkeypatch.setattr(
+        fetch_coco, "_image_names", lambda name: list(VAL) if name == fetch_coco.VAL_IMAGE_LIST else list(TRAIN)
+    )
     return downloads
 
 
@@ -56,15 +58,20 @@ def test_the_seeded_selection_is_deterministic_and_depends_on_the_seed():
 def test_the_calibration_seed_picks_the_published_selection():
     # The manifest was drawn with seed 2017; this known answer fails if the module's seed changes.
     assert fetch_coco.select_calibration_names(TRAIN, fetch_coco.CALIBRATION_SEED, COUNT) == [
-        '000000000013.jpg', '000000000021.jpg', '000000000022.jpg', '000000000029.jpg', '000000000033.jpg',
+        "000000000013.jpg",
+        "000000000021.jpg",
+        "000000000022.jpg",
+        "000000000029.jpg",
+        "000000000033.jpg",
     ]
 
 
 def test_a_calibration_set_overlapping_val2017_is_rejected(offline, monkeypatch):
     fetch_coco.MANIFEST_PATH.parent.mkdir(parents=True)
     fetch_coco.MANIFEST_PATH.write_text(manifest_text(chosen()))
-    monkeypatch.setattr(fetch_coco, "_image_names",
-                        lambda name: chosen()[:1] if name == fetch_coco.VAL_IMAGE_LIST else list(TRAIN))
+    monkeypatch.setattr(
+        fetch_coco, "_image_names", lambda name: chosen()[:1] if name == fetch_coco.VAL_IMAGE_LIST else list(TRAIN)
+    )
     with pytest.raises(RuntimeError, match="overlaps val2017 in 1 files"):
         fetch_coco.fetch_calibration()
     assert offline == []

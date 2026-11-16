@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """pyproject.toml, CHANGELOG.md, CITATION.cff and peddet_orin.__version__ name the same version."""
+
 import re
 from pathlib import Path
 
@@ -12,8 +13,11 @@ CITATION = re.compile(r"^version: (?P<version>\S+)$", re.M)
 def versions(pyproject: str, changelog: str, citation: str) -> dict[str, str | None]:
     """Return each file's version; the changelog's is its newest released heading."""
     found = {}
-    for name, pattern, text in (("pyproject", PYPROJECT, pyproject), ("changelog", CHANGELOG, changelog),
-                                ("citation", CITATION, citation)):
+    for name, pattern, text in (
+        ("pyproject", PYPROJECT, pyproject),
+        ("changelog", CHANGELOG, changelog),
+        ("citation", CITATION, citation),
+    ):
         match = pattern.search(text)
         found[name] = match.group("version") if match else None
     return found

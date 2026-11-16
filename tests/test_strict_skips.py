@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Under PDORIN_STRICT_SKIPS=1, only the named GPU and TensorRT tests may skip."""
+
 from pathlib import Path
 
 import pytest
@@ -100,8 +101,9 @@ def test_a_checkout_skip_passes_a_strict_run_outside_ci(pytester, monkeypatch, c
 
 @pytest.mark.parametrize("constant", ["NO_GIT_REASON", "SHALLOW_REASON"])
 def test_a_checkout_skip_fails_a_strict_run_in_ci(pytester, monkeypatch, constant):
-    result = _planted_run(pytester, monkeypatch, strict=True, source=CHECKOUT_PLANTED.format(constant=constant),
-                          ci=True)
+    result = _planted_run(
+        pytester, monkeypatch, strict=True, source=CHECKOUT_PLANTED.format(constant=constant), ci=True
+    )
     assert result.ret != 0
     result.stdout.fnmatch_lines(["*unexpected skips: test_planted_checkout_skip*"])
 
@@ -113,8 +115,14 @@ def test_a_skip_whose_reason_only_resembles_a_checkout_reason_fails(pytester, mo
 
 
 def test_checkout_reasons_are_expected_only_outside_ci():
-    skipped = [("test_history_is_complete", SHALLOW_REASON), ("test_readme_tree_equals_generated_tree", NO_GIT_REASON),
-               ("test_other", "some other reason")]
+    skipped = [
+        ("test_history_is_complete", SHALLOW_REASON),
+        ("test_readme_tree_equals_generated_tree", NO_GIT_REASON),
+        ("test_other", "some other reason"),
+    ]
     assert unexpected_skips(skipped, ci=False) == ["test_other"]
-    assert unexpected_skips(skipped, ci=True) == ["test_history_is_complete", "test_other",
-                                                  "test_readme_tree_equals_generated_tree"]
+    assert unexpected_skips(skipped, ci=True) == [
+        "test_history_is_complete",
+        "test_other",
+        "test_readme_tree_equals_generated_tree",
+    ]

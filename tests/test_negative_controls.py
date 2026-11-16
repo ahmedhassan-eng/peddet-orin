@@ -5,6 +5,7 @@ A test file counts as covered when a registry entry names one of its tests, and 
 test when NEGATIVE_TESTS below names one of its tests that plants or feeds a bad input and checks that it is
 refused. Every test file has one or the other.
 """
+
 import re
 from pathlib import Path
 

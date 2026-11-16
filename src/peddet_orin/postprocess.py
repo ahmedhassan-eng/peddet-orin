@@ -10,6 +10,7 @@ The anchors and the box coder are torchvision's own objects, taken from an SSDLi
 model built without weights. The thresholds are read from that same model, which
 keeps this module from carrying a second copy of torchvision's configuration.
 """
+
 from __future__ import annotations
 
 import numbers
@@ -99,7 +100,7 @@ class Postprocessor:
     ) -> Detections:
         """Decode one image's outputs; ``original_size`` is (height, width)."""
         self.check_inputs(box_regression, class_logits, original_size)
-        boxes =self.box_coder.decode_single(box_regression[0], self.anchors)
+        boxes = self.box_coder.decode_single(box_regression[0], self.anchors)
         boxes = box_ops.clip_boxes_to_image(boxes, INPUT_SIZE)
         scores = torch.softmax(class_logits[0], dim=LOGITS_DIM)
 

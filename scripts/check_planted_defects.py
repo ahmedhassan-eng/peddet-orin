@@ -5,6 +5,7 @@ For every entry in tests/planted_defects.py: the test must pass in the clean clo
 planted. Entries that need a GPU run only where CUDA is available. Prints one PLANT line per entry, then
 "PLANTED DONE PASS" or "PLANTED DONE FAIL". Usage: python scripts/check_planted_defects.py
 """
+
 import os
 import shutil
 import subprocess
@@ -19,8 +20,14 @@ from planted_defects import DEFECTS  # noqa: E402
 
 def run_test(clone: Path, node: str) -> int:
     env = {key: value for key, value in os.environ.items() if key != "PDORIN_STRICT_SKIPS"}
-    done = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", node],
-                          cwd=clone, capture_output=True, text=True, env=env, check=False)
+    done = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", node],
+        cwd=clone,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
     return done.returncode
 
 

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The shared postprocess, on synthetic tensors whose answers are known."""
+
 import pytest
 import torch
 from torchvision.models.detection._utils import BoxCoder
@@ -19,9 +20,7 @@ SEED = 99
 PERSON = 1
 OTHER = 2
 # The first two anchors overlap with IoU far above the threshold; the third is apart.
-ANCHORS = torch.tensor(
-    [[10.0, 10.0, 110.0, 110.0], [12.0, 12.0, 112.0, 112.0], [200.0, 200.0, 300.0, 300.0]]
-)
+ANCHORS = torch.tensor([[10.0, 10.0, 110.0, 110.0], [12.0, 12.0, 112.0, 112.0], [200.0, 200.0, 300.0, 300.0]])
 
 
 def make_postprocessor(nms: float = NMS_THRESHOLD) -> Postprocessor:

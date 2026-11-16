@@ -10,6 +10,7 @@ numbers: a log made from a dirty tree is skipped, with a line on stderr. Every l
 that feeds the block must come from one commit, and each row's evaluation and
 benchmark must name the same runtime; otherwise the script exits non-zero.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -334,8 +335,10 @@ def _benchmarks(chosen: dict) -> list[dict]:
 
 def _maxima(results: dict) -> tuple:
     """A benchmark's GPU maximum clock and each CPU policy's, as its clock record gives them."""
-    return (results["gpu_clock"]["max_hz"],
-            tuple(sorted((name, clock["max_khz"]) for name, clock in results["cpu_clocks"].items())))
+    return (
+        results["gpu_clock"]["max_hz"],
+        tuple(sorted((name, clock["max_khz"]) for name, clock in results["cpu_clocks"].items())),
+    )
 
 
 def power_mode_sentence(runs: list[tuple[str, dict]], earlier: dict) -> str:
@@ -366,12 +369,17 @@ def power_mode_sentence(runs: list[tuple[str, dict]], earlier: dict) -> str:
 def int8_ap_sentence(runs: list[tuple[str, dict]], earlier: dict) -> str:
     """INT8 person AP in the judged runs and in the earlier run; each run builds its own INT8 engine."""
     judged = sorted({f"{chosen[('eval', 'int8')]['results']['ap'] * POINTS:.2f}" for _, chosen in runs})
-    shown = (f"{judged[0]} in each of the {len(runs)} judged runs" if len(judged) == 1
-             else f"{judged[0]}-{judged[-1]} across the {len(runs)} judged runs")
+    shown = (
+        f"{judged[0]} in each of the {len(runs)} judged runs"
+        if len(judged) == 1
+        else f"{judged[0]}-{judged[-1]} across the {len(runs)} judged runs"
+    )
     before = earlier.get(("eval", "int8"))
     then = f" and {before['results']['ap'] * POINTS:.2f} in the earlier run" if before else ""
-    return (f"INT8 person AP is {shown}{then}; each run builds its own INT8 engine, so each score comes from a "
-            "separate build.")
+    return (
+        f"INT8 person AP is {shown}{then}; each run builds its own INT8 engine, so each score comes from a "
+        "separate build."
+    )
 
 
 def provenance(runs: list[tuple[str, dict]]) -> tuple[str, str]:
@@ -520,9 +528,11 @@ def system_record(run_dir: Path) -> dict[str, dict]:
         rows = _samples(files[0]) if len(files) == 1 else []
         if not rows:
             continue
+
         def number(row: dict, key: str) -> int | None:
             value = row.get(key, "")
             return int(value) if value.isdigit() else None
+
         first, last = rows[0], rows[-1]
         start, end = number(first, "pswpout"), number(last, "pswpout")
         memory = [value for row in rows if (value := number(row, "mem_available_kb")) is not None]
@@ -560,8 +570,10 @@ def ram_lines(runs: list[Path]) -> list[str]:
     rows, lowest, swapped, unread = [], [], [], []
     for path in runs:
         for job, memory, delta in job_memory(path):
-            rows.append(f"| {path.name} | {job} | {MISSING if memory is None else memory} "
-                        f"| {MISSING if delta is None else delta} |")
+            rows.append(
+                f"| {path.name} | {job} | {MISSING if memory is None else memory} "
+                f"| {MISSING if delta is None else delta} |"
+            )
             if memory is None or delta is None:
                 unread.append(f"{path.name} {job}")
                 continue
@@ -582,8 +594,10 @@ def ram_lines(runs: list[Path]) -> list[str]:
     elif swapped:
         verdict = "; ".join(swapped) + "."
     else:
-        verdict = (f"RAM was not a constraint in {names}: the lowest available memory during any job was "
-                   f"{min(lowest)} MiB, and 0 pages were swapped out.")
+        verdict = (
+            f"RAM was not a constraint in {names}: the lowest available memory during any job was "
+            f"{min(lowest)} MiB, and 0 pages were swapped out."
+        )
     return [
         "",
         "Each judged run's GPU jobs, from the samples taken during each job, from its start to its end:",
@@ -727,8 +741,9 @@ def host_state(run_dir: Path | None, chosen: dict) -> str:
         passed = bool(gates) and all(verdicts == ["PASS"] for verdicts in gates.values())
         state = "quieted, every QUIET gate passed" if passed else "not quieted, a QUIET gate did not pass"
         record = system_record(run_dir) if passed and is_recorded(run_dir) else None
-        unsampled = [PRECISION_NAMES[precision] for precision in PRECISIONS if record is not None
-                     and precision not in record]
+        unsampled = [
+            PRECISION_NAMES[precision] for precision in PRECISIONS if record is not None and precision not in record
+        ]
         if unsampled:
             state = f"not quieted, no single sysmon file with samples for the {', '.join(unsampled)} benchmark job"
         elif record is not None and not _swap_clean(record):
@@ -780,7 +795,8 @@ def _system_lines(runs: list[Path]) -> list[str]:
         if sample is None:
             continue
         zones = ", ".join(
-            f"{key[: -len('_mc')]} {int(value) / 1000:.1f}" for key, value in sample.items()
+            f"{key[: -len('_mc')]} {int(value) / 1000:.1f}"
+            for key, value in sample.items()
             if key.endswith("_mc") and value.isdigit()
         )
         memory = sample.get("mem_available_kb", "")
@@ -875,8 +891,13 @@ def build_repeat_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
                 values = [other for other in others if other is not None]
                 cells = " | ".join(f"{other:.2f}" if other is not None else "missing" for other in others)
                 shown = " | ".join(
-                    _deviation(compare_logs, metric, precision, value,
-                               read(chosen[(kind, precision)]["results"]) if (kind, precision) in chosen else None)
+                    _deviation(
+                        compare_logs,
+                        metric,
+                        precision,
+                        value,
+                        read(chosen[(kind, precision)]["results"]) if (kind, precision) in chosen else None,
+                    )
                     for _, chosen in apart
                 )
                 lines.append(
@@ -920,9 +941,7 @@ def readme_matches(text: str, runs_dir: Path = RUNS_DIR, repeats_dir: Path | Non
     """
     readme_block(text)
     return all(
-        readme_block(text, markers) == make(runs_dir, repeats_dir)
-        for markers, make in BLOCKS
-        if markers[0] in text
+        readme_block(text, markers) == make(runs_dir, repeats_dir) for markers, make in BLOCKS if markers[0] in text
     )
 
 

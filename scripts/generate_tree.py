@@ -3,6 +3,7 @@
 
 Run with --write to update README.md in place; with no flag it prints the tree.
 """
+
 import argparse
 import subprocess
 from pathlib import Path
@@ -76,7 +77,7 @@ def build_tree(files: list[str]) -> str:
         kids = _children(shown, parent)
         for index, path in enumerate(kids):
             last = index == len(kids) - 1
-            name = path[len(parent):]
+            name = path[len(parent) :]
             entry = f"{guides}{'└── ' if last else '├── '}{name}"
             note = DESCRIPTIONS.get(path)
             if note:

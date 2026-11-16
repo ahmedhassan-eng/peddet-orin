@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The GPU check's verdict, CLI and log fields, on the CPU with CUDA calls faked."""
+
 import warnings
 
 import pytest

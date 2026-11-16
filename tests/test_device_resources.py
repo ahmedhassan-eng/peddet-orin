@@ -4,6 +4,7 @@
 The fake runtime keeps "device memory" in host byte arrays, so a copy in and a copy
 out show exactly which bytes the real cudaMemcpy would have been given.
 """
+
 import ctypes
 import sys
 import types

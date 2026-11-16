@@ -5,6 +5,7 @@ A release tarball (``git archive HEAD``) has no .git, and ``git clone --depth 1`
 Each test builds such a tree from this checkout's tracked files in tmp_path and runs the
 repository-rule tests there in a fresh pytest process under PDORIN_STRICT_SKIPS=1.
 """
+
 import os
 import shutil
 import subprocess
@@ -19,12 +20,24 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SKIP = checkout_skip_reason(REPO_ROOT)
 pytestmark = pytest.mark.skipif(SOURCE_SKIP is not None, reason=SOURCE_SKIP or "")
 # The noreply address the project commits with; nothing here is pushed anywhere.
-IDENTITY = ("-c", "user.name=peddet-orin tests", "-c", "user.email=1659721+ahmedhassan-eng@users.noreply.github.com",
-            "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main")
+IDENTITY = (
+    "-c",
+    "user.name=peddet-orin tests",
+    "-c",
+    "user.email=1659721+ahmedhassan-eng@users.noreply.github.com",
+    "-c",
+    "commit.gpgsign=false",
+    "-c",
+    "init.defaultBranch=main",
+)
 # test_a_commit_id_that_is_not_in_the_history_is_detected needs no checkout, so it passes in every tree.
 HISTORY_TESTS = ["tests/test_commit_ids.py"]
-LISTING_TESTS = [*HISTORY_TESTS, "tests/test_readme_tree.py", "tests/test_planted_defects.py",
-                 "tests/test_doc_test_refs.py::test_every_cited_test_is_collected"]
+LISTING_TESTS = [
+    *HISTORY_TESTS,
+    "tests/test_readme_tree.py",
+    "tests/test_planted_defects.py",
+    "tests/test_doc_test_refs.py::test_every_cited_test_is_collected",
+]
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -61,8 +74,14 @@ def run_subset(tree: Path, tests: list[str], ci: bool) -> subprocess.CompletedPr
     env["PDORIN_STRICT_SKIPS"] = "1"
     if ci:
         env["CI"] = "true"
-    return subprocess.run([sys.executable, "-m", "pytest", "-q", "-rs", "-p", "no:cacheprovider", *tests],
-                          cwd=tree, capture_output=True, text=True, env=env, check=False)
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-rs", "-p", "no:cacheprovider", *tests],
+        cwd=tree,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
 
 
 def skip_lines(output: str) -> list[str]:

@@ -4,6 +4,7 @@
 A cited id that is not in the history points at work nobody can check out, such as an unpushed or rewritten
 commit. Action SHAs in the workflow name commits of other repositories and are checked in test_ci_contract.py.
 """
+
 import re
 import subprocess
 from pathlib import Path
@@ -21,8 +22,12 @@ LOG_COMMIT = re.compile(r'"commit":\s*"(?P<id>[0-9a-f]{7,40})"')
 PROSE_COMMIT = re.compile(r"\b(?:commit|commits|at)\s+`?(?P<id>[0-9a-f]{7,40})\b`?")
 # The workflow pins other repositories' commits, the manifest holds sha256 hashes, and these two test files plant
 # ids that are not in the history on purpose.
-SKIP = {".github/workflows/ci.yml", "manifests/calibration_train2017.sha256", "tests/test_commit_ids.py",
-        "tests/planted_defects.py"}
+SKIP = {
+    ".github/workflows/ci.yml",
+    "manifests/calibration_train2017.sha256",
+    "tests/test_commit_ids.py",
+    "tests/planted_defects.py",
+}
 
 
 def git(*args: str) -> subprocess.CompletedProcess:
@@ -59,8 +64,9 @@ def tracked_texts() -> dict[str, str]:
 
 
 def not_in_history(found: dict[str, set[str]]) -> list[str]:
-    return sorted(f"{commit_id} in {', '.join(sorted(files))}" for commit_id, files in found.items()
-                  if not in_history(commit_id))
+    return sorted(
+        f"{commit_id} in {', '.join(sorted(files))}" for commit_id, files in found.items() if not in_history(commit_id)
+    )
 
 
 @needs_history
@@ -77,8 +83,10 @@ def test_every_cited_commit_is_in_the_history():
 
 
 def test_a_commit_id_that_is_not_in_the_history_is_detected():
-    planted = {"runs/planted.json": '{"commit": "0123456789abcdef0123456789abcdef01234567"}',
-               "NOTES.md": "Measured at commit 1a2b3c4d."}
+    planted = {
+        "runs/planted.json": '{"commit": "0123456789abcdef0123456789abcdef01234567"}',
+        "NOTES.md": "Measured at commit 1a2b3c4d.",
+    }
     assert not_in_history(cited_ids(planted)) == [
         "0123456789abcdef0123456789abcdef01234567 in runs/planted.json",
         "1a2b3c4d in NOTES.md",

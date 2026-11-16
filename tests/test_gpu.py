@@ -4,6 +4,7 @@
 These need the Jetson: they skip where there is no CUDA device or no TensorRT, as in CI.
 They use an unweighted, seeded model and synthetic calibration images, so they need no download.
 """
+
 import hashlib
 import importlib.util
 from pathlib import Path
@@ -144,7 +145,14 @@ def int8_inputs(tmp_path, monkeypatch):
     monkeypatch.setattr(engine_build.runlog, "RunLog", RecordingBuildLog)
     output = tmp_path / "engines" / "int8.engine"
     arguments = [
-        "--precision", "int8", "--onnx", str(onnx_path), "--output", str(output), "--calibration-dir", str(calibration),
+        "--precision",
+        "int8",
+        "--onnx",
+        str(onnx_path),
+        "--output",
+        str(output),
+        "--calibration-dir",
+        str(calibration),
     ]
     return network, arguments, output
 

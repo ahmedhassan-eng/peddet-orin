@@ -131,8 +131,8 @@ DEFECTS = [
     {
         "id": "eval-bbox-xyxy",
         "file": "src/peddet_orin/evaluate.py",
-        "old": "\"bbox\": [x1, y1, x2 - x1, y2 - y1]",
-        "new": "\"bbox\": [x1, y1, x2, y2]",
+        "old": '"bbox": [x1, y1, x2 - x1, y2 - y1]',
+        "new": '"bbox": [x1, y1, x2, y2]',
         "catches": "tests/test_evaluate_scoring.py::test_evaluate_writes_detection_boxes_as_xywh",
     },
     {
@@ -173,8 +173,8 @@ DEFECTS = [
     {
         "id": "runlog-dirty-ignores-readme",
         "file": "src/peddet_orin/runlog.py",
-        "old": "DIRTY_EXCLUDES = (\":!runs\",)",
-        "new": "DIRTY_EXCLUDES = (\":!runs\", \":!README.md\")",
+        "old": 'DIRTY_EXCLUDES = (":!runs",)',
+        "new": 'DIRTY_EXCLUDES = (":!runs", ":!README.md")',
         "catches": "tests/test_run_logs.py::test_a_hand_edited_readme_makes_the_tree_dirty",
     },
     {
@@ -201,15 +201,15 @@ DEFECTS = [
     {
         "id": "ram-sentence-highest-job",
         "file": "scripts/generate_table.py",
-        "old": "f\"{min(lowest)} MiB, and 0 pages were swapped out.\")",
-        "new": "f\"{max(lowest)} MiB, and 0 pages were swapped out.\")",
+        "old": 'f"{min(lowest)} MiB, and 0 pages were swapped out."\n',
+        "new": 'f"{max(lowest)} MiB, and 0 pages were swapped out."\n',
         "catches": "tests/test_readme_table.py::test_the_ram_sentence_gives_the_lowest_job_or_each_swap_out",
     },
     {
         "id": "resize-nearest",
         "file": "src/peddet_orin/preprocess.py",
-        "old": "mode=\"bilinear\", align_corners=False",
-        "new": "mode=\"nearest\"",
+        "old": 'mode="bilinear", align_corners=False',
+        "new": 'mode="nearest"',
         "catches": "tests/test_postprocess.py::test_pipeline_equals_torchvision_detector",
     },
     {
@@ -264,8 +264,8 @@ DEFECTS = [
     {
         "id": "compare-skips-missing-log",
         "file": "scripts/compare_logs.py",
-        "old": "                failures += 1\n                lines.append(f\"COMPARE {kind} {precision} log",
-        "new": "                lines.append(f\"COMPARE {kind} {precision} log",
+        "old": '                failures += 1\n                lines.append(f"COMPARE {kind} {precision} log',
+        "new": '                lines.append(f"COMPARE {kind} {precision} log',
         "catches": "tests/test_compare_logs.py::test_an_incomplete_new_set_fails",
     },
     {

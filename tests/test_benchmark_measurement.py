@@ -279,6 +279,7 @@ def test_benchmark_pools_repeats_and_reads_load_and_power_mode_before_timing(cpu
         return (1.25, 1.0, 1.0)
 
     monkeypatch.setattr(benchmark, "_iteration", fake_iteration)
+
     def fake_power_mode(arguments):
         events.append("power_mode")
         return "MODE TEST"

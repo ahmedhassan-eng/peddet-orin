@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Every test file and test name that a tracked document cites exists and is collected by pytest."""
+
 import os
 import re
 import subprocess
@@ -40,11 +41,15 @@ def collected() -> frozenset[tuple[str, str]]:
     env = {key: value for key, value in os.environ.items() if key != "PDORIN_STRICT_SKIPS"}
     done = subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"],
-        cwd=REPO_ROOT, capture_output=True, text=True, env=env, check=False,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
     )
     assert done.returncode == 0, done.stdout + done.stderr
     nodes = [line for line in done.stdout.splitlines() if line.startswith("tests/") and "::" in line]
-    return frozenset((node.split("::")[0][len("tests/"):], node.split("::")[-1].split("[")[0]) for node in nodes)
+    return frozenset((node.split("::")[0][len("tests/") :], node.split("::")[-1].split("[")[0]) for node in nodes)
 
 
 def missing(cited: set[tuple[str | None, str | None]], nodes: frozenset[tuple[str, str]]) -> list[str]:

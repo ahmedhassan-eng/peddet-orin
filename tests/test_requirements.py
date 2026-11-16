@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """CPU checks of the PRD requirements that the committed run logs and manifests must meet."""
+
 import hashlib
 import json
 import re
@@ -50,8 +51,9 @@ def test_r5_a_calibration_hash_mismatch_is_rejected(tmp_path, monkeypatch):
     monkeypatch.setattr(fetch_coco, "DATA_DIR", tmp_path)
     monkeypatch.setattr(fetch_coco, "MANIFEST_PATH", manifest)
     monkeypatch.setattr(fetch_coco, "CALIBRATION_COUNT", 1)
-    monkeypatch.setattr(fetch_coco, "_image_names", lambda name: [] if name == fetch_coco.VAL_IMAGE_LIST
-                        else ["000000000001.jpg"])
+    monkeypatch.setattr(
+        fetch_coco, "_image_names", lambda name: [] if name == fetch_coco.VAL_IMAGE_LIST else ["000000000001.jpg"]
+    )
     with pytest.raises(RuntimeError, match="sha256 mismatch"):
         fetch_coco.fetch_calibration()
 

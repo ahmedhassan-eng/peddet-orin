@@ -13,6 +13,7 @@ Metrics in ``REPORTED_ONLY`` end in ``REPORTED`` instead: they are shown, not ju
 clean new log prints one ``COMPARE <kind> <precision> log published=- new=missing delta=n/a tol=- OUT`` line.
 The last line is ``COMPARE DONE PASS`` (exit 0) or ``COMPARE DONE FAIL <n>`` (exit 1), where n counts the OUT lines.
 """
+
 from __future__ import annotations
 
 import argparse

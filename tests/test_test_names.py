@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """No two tests in the suite share a name, so a report line always points at one test."""
+
 import ast
 from collections import Counter
 from pathlib import Path

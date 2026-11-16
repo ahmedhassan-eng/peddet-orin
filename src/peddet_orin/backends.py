@@ -4,6 +4,7 @@
 Each backend takes a normalised CPU batch and returns CPU tensors, so evaluation
 and benchmarks treat every precision identically. ``label`` names what ran.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

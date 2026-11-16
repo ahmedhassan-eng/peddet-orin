@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Every PRD requirement names at least one test that CI collects and runs without skipping."""
+
 import re
 from pathlib import Path
 

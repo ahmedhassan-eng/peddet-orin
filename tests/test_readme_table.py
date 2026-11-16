@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The README results block must be exactly what the logs generate."""
+
 import json
 import re
 
@@ -104,27 +105,37 @@ def test_both_quiet_line_forms_are_read_and_the_earlier_one_is_noted(tmp_path):
     (tmp_path / "run3" / "quiet.txt").write_text(QUIET_PASSED)
     _sysmon(tmp_path / "run3")
     block = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
-    assert "- run1: quieted, every QUIET gate passed, recorded before the memory, swap and temperature reads " \
+    assert (
+        "- run1: quieted, every QUIET gate passed, recorded before the memory, swap and temperature reads "
         "(its gate lines predate the count of allowed timers);" in block
-    assert "- run2: quieted, every QUIET gate passed, recorded before the memory, swap and temperature " \
-        "reads;" in block
+    )
+    assert "- run2: quieted, every QUIET gate passed, recorded before the memory, swap and temperature reads;" in block
 
 
 def test_the_gate_terms_and_each_runs_values_come_from_the_passing_lines(tmp_path):
     for name, memory in (("run3", "6100000"), ("run4", "6200000")):
         _copy_runs(generate_table.RUNS_DIR, tmp_path / name)
-        (tmp_path / name / "quiet.txt").write_text(QUIET_PASSED.replace("mem_available_kb=6000000",
-                                                                         f"mem_available_kb={memory}"))
+        (tmp_path / name / "quiet.txt").write_text(
+            QUIET_PASSED.replace("mem_available_kb=6000000", f"mem_available_kb={memory}")
+        )
         _sysmon(tmp_path / name)
     block = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
-    assert "0 kB of swap used, 0 pages swapped out during the settle; 3 scheduled jobs allowed by name; load1 below " \
+    assert (
+        "0 kB of swap used, 0 pages swapped out during the settle; 3 scheduled jobs allowed by name; load1 below "
         "1.0; available memory at least 5859375 kB." in block
+    )
     assert "| run4 | bench_int8 | 1 | 0.80 | 6200000 |" in block and "| run3 | start | 1 | 0.80 | 6100000 |" in block
     assert "long-running sessions" not in block and "5 s of CPU" not in block
 
 
-@pytest.mark.parametrize("change", [("swap_used_kb=0", "swap_used_kb=256"), ("mem_min_kb=5859375", "mem_min_kb=1"),
-                                    ("busy_services=0", "busy_services=1")])
+@pytest.mark.parametrize(
+    "change",
+    [
+        ("swap_used_kb=0", "swap_used_kb=256"),
+        ("mem_min_kb=5859375", "mem_min_kb=1"),
+        ("busy_services=0", "busy_services=1"),
+    ],
+)
 def test_a_passing_line_that_contradicts_a_term_stops_the_generator(tmp_path, change):
     for name in ("run3", "run4"):
         _copy_runs(generate_table.RUNS_DIR, tmp_path / name)
@@ -172,8 +183,10 @@ def test_energy_per_frame_is_power_over_the_end_to_end_rate(tmp_path):
 
 def test_the_energy_median_is_the_median_of_each_runs_figure(tmp_path):
     # Per run: 6/10 = 0.6, 7/30 = 0.233 and 9/14 = 0.643, median 0.6; the medians' ratio, 7/14 = 0.5, is not it.
-    runs = [_benchmark_dir(tmp_path / f"run{n}", power, fps) for n, (power, fps) in enumerate(
-        [(6.0, 10.0), (7.0, 30.0), (9.0, 14.0)])]
+    runs = [
+        _benchmark_dir(tmp_path / f"run{n}", power, fps)
+        for n, (power, fps) in enumerate([(6.0, 10.0), (7.0, 30.0), (9.0, 14.0)])
+    ]
     medians = generate_table.median_chosen(runs)
     assert medians[("benchmark", "fp16")]["results"][generate_table.ENERGY] == pytest.approx(0.6)
 
@@ -237,8 +250,10 @@ def test_each_run_shows_its_first_sample(tmp_path):
     _sysmon(tmp_path / "run3")
     block = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
     assert "| run3 | FP16 | 0 | 0 | 3000 |" in block
-    assert "- run3 first sample, 2026-01-01T00:00:00Z: available memory 4000 MiB, swap used 0 kB, temperatures (C) " \
+    assert (
+        "- run3 first sample, 2026-01-01T00:00:00Z: available memory 4000 MiB, swap used 0 kB, temperatures (C) "
         "cpu-thermal 45.0, gpu-thermal 44.0." in block
+    )
 
 
 def test_a_sysmon_file_from_another_sampler_is_refused(tmp_path):
@@ -305,8 +320,9 @@ def test_the_commit_and_package_version_come_from_the_judged_logs(tmp_path):
         _set_version(tmp_path / name, "9.8.7")
     commit = generate_table.select(generate_table.load_logs(tmp_path / "run1"))[("eval", "fp16")]["commit"]
     block = generate_table.build_block(generate_table.RUNS_DIR, tmp_path)
-    assert f"The judged runs were made at commit `{commit[:7]}` with package version 9.8.7, as their logs record." \
-        in block
+    assert (
+        f"The judged runs were made at commit `{commit[:7]}` with package version 9.8.7, as their logs record." in block
+    )
     _set_version(tmp_path / "run2", "9.8.8")
     with pytest.raises(generate_table.TableError, match="1 commits and 2 package versions"):
         generate_table.build_block(generate_table.RUNS_DIR, tmp_path)
@@ -342,22 +358,46 @@ def test_the_overlap_is_judged_per_run_and_said_so(tmp_path):
     for name in ("run1", "run2"):
         _copy_runs(generate_table.RUNS_DIR, tmp_path / name)
         (tmp_path / name / "quiet.txt").write_text(QUIET_PASSED)
-        _edit_logs(tmp_path / name, "benchmark", "fp16",
-                   lambda results: results.update(end_to_end_p50_ms_per_repeat=[60.0, 61.0, 62.0]))
-    _edit_logs(tmp_path / "run1", "benchmark", "int8",
-               lambda results: results.update(end_to_end_p50_ms_per_repeat=[61.5, 63.0, 64.0]))
-    _edit_logs(tmp_path / "run2", "benchmark", "int8",
-               lambda results: results.update(end_to_end_p50_ms_per_repeat=[63.0, 64.0, 65.0]))
+        _edit_logs(
+            tmp_path / name,
+            "benchmark",
+            "fp16",
+            lambda results: results.update(end_to_end_p50_ms_per_repeat=[60.0, 61.0, 62.0]),
+        )
+    _edit_logs(
+        tmp_path / "run1",
+        "benchmark",
+        "int8",
+        lambda results: results.update(end_to_end_p50_ms_per_repeat=[61.5, 63.0, 64.0]),
+    )
+    _edit_logs(
+        tmp_path / "run2",
+        "benchmark",
+        "int8",
+        lambda results: results.update(end_to_end_p50_ms_per_repeat=[63.0, 64.0, 65.0]),
+    )
     block = generate_table.build_int8_block(generate_table.RUNS_DIR, tmp_path)
     assert "FP16's and INT8's per-repeat end-to-end ranges in the notes overlap in 1 of the 2 runs." in block
-    _edit_logs(tmp_path / "run2", "benchmark", "int8",
-               lambda results: results.update(end_to_end_p50_ms_per_repeat=[61.0, 64.0, 65.0]))
+    _edit_logs(
+        tmp_path / "run2",
+        "benchmark",
+        "int8",
+        lambda results: results.update(end_to_end_p50_ms_per_repeat=[61.0, 64.0, 65.0]),
+    )
     block = generate_table.build_int8_block(generate_table.RUNS_DIR, tmp_path)
     assert "ranges in the notes overlap in each of the 2 runs." in block
-    _edit_logs(tmp_path / "run1", "benchmark", "int8",
-               lambda results: results.update(end_to_end_p50_ms_per_repeat=[63.0, 64.0, 65.0]))
-    _edit_logs(tmp_path / "run2", "benchmark", "int8",
-               lambda results: results.update(end_to_end_p50_ms_per_repeat=[63.0, 64.0, 65.0]))
+    _edit_logs(
+        tmp_path / "run1",
+        "benchmark",
+        "int8",
+        lambda results: results.update(end_to_end_p50_ms_per_repeat=[63.0, 64.0, 65.0]),
+    )
+    _edit_logs(
+        tmp_path / "run2",
+        "benchmark",
+        "int8",
+        lambda results: results.update(end_to_end_p50_ms_per_repeat=[63.0, 64.0, 65.0]),
+    )
     block = generate_table.build_int8_block(generate_table.RUNS_DIR, tmp_path)
     assert "ranges in the notes do not overlap in any of the 2 runs." in block
 
@@ -398,8 +438,10 @@ def _job_sysmon(run, job, memory_kb, pswpout):
     sha = generate_table.SYSMON_SHA256
     lines = [f"SYSMON sha256={sha} interval_s=1"]
     for second, (memory, count) in enumerate(zip(memory_kb, pswpout, strict=True)):
-        lines.append(f"SYS 2026-01-01T00:00:0{second}Z mem_available_kb={memory} swap_used_kb=0 pswpin=5 "
-                     f"pswpout={count} cpu-thermal_mc=45000")
+        lines.append(
+            f"SYS 2026-01-01T00:00:0{second}Z mem_available_kb={memory} swap_used_kb=0 pswpin=5 "
+            f"pswpout={count} cpu-thermal_mc=45000"
+        )
     (folder / f"{run.name.replace('run', 'r')}-{job}.txt").write_text("\n".join(lines) + "\n")
 
 
@@ -413,8 +455,11 @@ def _ram_runs(tmp_path, build_pswpout=(7, 7, 7)):
 
 
 def _job_rows(block):
-    return {tuple(line.split(" | ")[:2]): line.split(" | ")[2:] for line in block.splitlines()
-            if line.startswith("| run") and line.count(" | ") == 3}
+    return {
+        tuple(line.split(" | ")[:2]): line.split(" | ")[2:]
+        for line in block.splitlines()
+        if line.startswith("| run") and line.count(" | ") == 3
+    }
 
 
 def test_each_jobs_lowest_memory_is_the_lowest_of_the_samples_during_it(tmp_path):
@@ -436,8 +481,10 @@ def test_each_jobs_swap_outs_are_its_pswpout_delta(tmp_path):
 def test_the_ram_sentence_gives_the_lowest_job_or_each_swap_out(tmp_path):
     _ram_runs(tmp_path)
     block = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
-    assert block.endswith("RAM was not a constraint in runs 3-5: the lowest available memory during any job was "
-                          "3000 MiB, and 0 pages were swapped out.")
+    assert block.endswith(
+        "RAM was not a constraint in runs 3-5: the lowest available memory during any job was "
+        "3000 MiB, and 0 pages were swapped out."
+    )
     _job_sysmon(tmp_path / "run4", "build_int8", (5242880, 4194304, 5000000), (7, 9, 12))
     block = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
     assert block.endswith("run4 build_int8 swapped out 5 pages.") and "RAM was not a constraint" not in block
@@ -509,8 +556,10 @@ def test_the_int8_ap_sentence_names_each_runs_own_engine(tmp_path):
     _repeat_runs(tmp_path)
     _edit_logs(tmp_path / "run4", "eval", "int8", lambda results: results.update(ap=0.2690))
     block = generate_table.build_block(generate_table.RUNS_DIR, tmp_path)
-    assert "INT8 person AP is 26.83-26.90 across the 2 judged runs and 26.83 in the earlier run; each run builds its " \
+    assert (
+        "INT8 person AP is 26.83-26.90 across the 2 judged runs and 26.83 in the earlier run; each run builds its "
         "own INT8 engine, so each score comes from a separate build." in block
+    )
 
 
 def test_the_changelog_names_the_commits_the_logs_record():

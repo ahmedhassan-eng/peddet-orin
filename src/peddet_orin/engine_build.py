@@ -8,6 +8,7 @@ data, and the calibration images are checked against the committed sha256
 manifest before any build starts. The route taken is recorded in the run log and
 appears in the published table.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -286,8 +287,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         "--calibration-dir",
         type=Path,
         default=CALIBRATION_DIR,
-        help="directory holding exactly the INT8 calibration images listed in "
-        "manifests/calibration_train2017.sha256",
+        help="directory holding exactly the INT8 calibration images listed in manifests/calibration_train2017.sha256",
     )
     return parser.parse_args(argv)
 

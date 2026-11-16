@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """scripts/generate_table.py: which logs it picks, what it refuses, and what the block says."""
+
 import json
 
 import generate_table
@@ -64,8 +65,13 @@ def test_an_older_log_from_another_commit_does_not_count(tmp_path):
 
 
 def test_an_eval_and_benchmark_runtime_mismatch_exits_nonzero(tmp_path, capsys):
-    write_logs(tmp_path, [make_log("eval", "fp32", results={"runtime": "pytorch-cpu"}),
-                          make_log("benchmark", "fp32", results={"runtime": "pytorch-cuda"})])
+    write_logs(
+        tmp_path,
+        [
+            make_log("eval", "fp32", results={"runtime": "pytorch-cpu"}),
+            make_log("benchmark", "fp32", results={"runtime": "pytorch-cuda"}),
+        ],
+    )
     assert generate_table.main(["--runs", str(tmp_path)]) == 1
     error = capsys.readouterr().err
     assert error.count("\n") == 1 and "FP32" in error and "pytorch-cpu" in error and "pytorch-cuda" in error
@@ -83,8 +89,9 @@ def test_each_benchmark_row_has_a_note_with_its_repeat_ranges(tmp_path):
     write_logs(tmp_path, [make_log("benchmark", precision) for precision in ("fp16", "int8")])
     block = generate_table.build_block(tmp_path)
     for name in ("FP16", "INT8"):
-        assert (f"- {name} p50 across repeats: engine 3.90-4.10 ms over 3 repeats, "
-                "end-to-end 8.80-9.30 ms over 3 repeats.") in block
+        assert (
+            f"- {name} p50 across repeats: engine 3.90-4.10 ms over 3 repeats, end-to-end 8.80-9.30 ms over 3 repeats."
+        ) in block
     assert "one-minute CPU load before timing: 0.4" in block
 
 
@@ -118,8 +125,9 @@ def test_benchmark_note_gives_each_clock_governor_and_samples_at_max(tmp_path):
 
 
 def int8_drop_block(tmp_path, fp16_ap, int8_ap):
-    write_logs(tmp_path, [make_log("eval", "fp16", results={"ap": fp16_ap}),
-                          make_log("eval", "int8", results={"ap": int8_ap})])
+    write_logs(
+        tmp_path, [make_log("eval", "fp16", results={"ap": fp16_ap}), make_log("eval", "int8", results={"ap": int8_ap})]
+    )
     return generate_table.build_block(tmp_path)
 
 
@@ -136,11 +144,19 @@ def test_an_int8_drop_just_over_two_points_is_called_out(tmp_path):
 
 def test_the_gpu_check_note_quotes_the_warning_and_states_tf32(tmp_path):
     warning = "Found GPU0 Orin which is of compute capability 8.7.\nMinimum and Maximum cuda capability ..."
-    write_logs(tmp_path, [make_log("gpu_check", results={"torch_warning": warning, "cudnn_allow_tf32": False,
-                                                         "matmul_allow_tf32": True})])
+    write_logs(
+        tmp_path,
+        [
+            make_log(
+                "gpu_check", results={"torch_warning": warning, "cudnn_allow_tf32": False, "matmul_allow_tf32": True}
+            )
+        ],
+    )
     block = generate_table.build_block(tmp_path)
-    assert ('PyTorch emitted an unsupported-GPU warning at first CUDA use: '
-            '"Found GPU0 Orin which is of compute capability 8.7."') in block
+    assert (
+        "PyTorch emitted an unsupported-GPU warning at first CUDA use: "
+        '"Found GPU0 Orin which is of compute capability 8.7."'
+    ) in block
     assert "Minimum and Maximum" not in block and "binary-compatibility" not in block
     assert "cudnn.allow_tf32 False and cuda.matmul.allow_tf32 True" in block
 

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The engine build's input checks, CLI and fallback rule, on the CPU without TensorRT."""
+
 import hashlib
 import warnings
 
@@ -211,8 +212,16 @@ def test_int8_build_logs_the_manifest_hash_and_route(calibration, tmp_path, monk
     monkeypatch.setattr(engine_build, "_build_int8_entropy", fake_entropy)
     onnx_path = tmp_path / "network.onnx"
     onnx_path.write_bytes(b"onnx")
-    arguments = ["--precision", "int8", "--onnx", str(onnx_path), "--output", str(output),
-                 "--calibration-dir", str(calibration)]
+    arguments = [
+        "--precision",
+        "int8",
+        "--onnx",
+        str(onnx_path),
+        "--output",
+        str(output),
+        "--calibration-dir",
+        str(calibration),
+    ]
     assert engine_build.main(arguments) == 0
     log = RecordingLog.opened[0]
     assert log.iterations == {"calibration_images": IMAGE_COUNT}

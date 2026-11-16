@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The CI workflow runs exactly what the README says it runs, on the platforms it names."""
+
 import re
 from pathlib import Path
 
@@ -193,7 +194,10 @@ def test_a_push_trigger_on_every_branch_is_detected():
 def test_ci_cancels_superseded_runs_and_times_out():
     text = WORKFLOW.read_text()
     assert top_level_block(text, "concurrency") == [
-        "concurrency:", "  group: ${{ github.workflow }}-${{ github.ref }}", "  cancel-in-progress: true"]
+        "concurrency:",
+        "  group: ${{ github.workflow }}-${{ github.ref }}",
+        "  cancel-in-progress: true",
+    ]
     timeouts = re.findall(r"^    timeout-minutes: (\d+)$", text, re.M)
     assert len(timeouts) == len(re.findall(r"^  [\w-]+:$", "\n".join(top_level_block(text, "jobs")), re.M)) == 1
     assert 0 < int(timeouts[0]) <= 60

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The README "Repository layout" tree is exactly what scripts/generate_tree.py makes of git ls-files."""
+
 import pytest
 
 import generate_tree

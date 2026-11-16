@@ -14,6 +14,7 @@ whose ``pyproject.toml`` is peddet-orin's. With neither, importing this module
 prints one error line and exits with status 2: logs, data and artifacts belong
 to a checkout, never to the interpreter's installation tree.
 """
+
 from __future__ import annotations
 
 import json
@@ -202,7 +203,11 @@ def _git(*arguments: str) -> str:
     """Return a git command's stripped stdout in the repository root, or "" if it fails."""
     try:
         done = subprocess.run(
-            ["git", *arguments], cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+            ["git", *arguments],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
             timeout=SUBPROCESS_TIMEOUT_S,
         )
     except (OSError, subprocess.SubprocessError):

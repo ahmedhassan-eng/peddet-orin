@@ -4,6 +4,7 @@
 Production paths call these freely: with ``PDORIN_DEBUG`` unset, ``log`` returns at once
 and ``profile`` measures nothing, so timed code is not perturbed by diagnostics.
 """
+
 from __future__ import annotations
 
 import os

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """ONNX Runtime on CPU against PyTorch, using an unweighted model and a fixed seed."""
+
 import onnx
 import pytest
 import torch
@@ -31,8 +32,19 @@ COCO_CLASSES = 91  # Background plus torchvision's 90 COCO category slots.
 EXPECTED_OUTPUT_SHAPES = {"bbox_regression": [1, ANCHORS, 4], "cls_logits": [1, ANCHORS, COCO_CLASSES]}
 # Every operator the exported network uses. Decoding, NMS or TopK in the graph would add to this set.
 EXPECTED_OPERATORS = {
-    "Add", "Clip", "Concat", "Constant", "Conv", "GlobalAveragePool", "HardSigmoid",
-    "HardSwish", "Identity", "Mul", "Relu", "Reshape", "Transpose",
+    "Add",
+    "Clip",
+    "Concat",
+    "Constant",
+    "Conv",
+    "GlobalAveragePool",
+    "HardSigmoid",
+    "HardSwish",
+    "Identity",
+    "Mul",
+    "Relu",
+    "Reshape",
+    "Transpose",
 }
 
 

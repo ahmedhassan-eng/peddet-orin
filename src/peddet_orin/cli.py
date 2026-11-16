@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The command-line pieces evaluate and benchmark share: data and engine paths, common options, the one-line
 usage error, and the backend for each precision."""
+
 from __future__ import annotations
 
 import argparse

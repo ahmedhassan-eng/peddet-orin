@@ -4,6 +4,7 @@
 The subcommands are found by reading each module's source for a ``__main__`` guard,
 without importing it, so this touches neither CUDA nor TensorRT.
 """
+
 from __future__ import annotations
 
 import pkgutil

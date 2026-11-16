@@ -197,8 +197,9 @@ def loaded_after(code: str) -> set[str]:
     """Run ``code`` in a fresh interpreter and return the top-level module names it left loaded."""
     environment = {**os.environ, "PYTHONPATH": os.pathsep.join([str(SRC_DIR), os.environ.get("PYTHONPATH", "")])}
     report = "\nimport sys\nprint(' '.join(sorted({name.split('.')[0] for name in sys.modules})))"
-    done = subprocess.run([sys.executable, "-c", code + report], capture_output=True, text=True, env=environment,
-                          timeout=300, check=True)
+    done = subprocess.run(
+        [sys.executable, "-c", code + report], capture_output=True, text=True, env=environment, timeout=300, check=True
+    )
     return set(done.stdout.split())
 
 

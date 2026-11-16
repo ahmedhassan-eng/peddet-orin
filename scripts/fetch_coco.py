@@ -19,6 +19,7 @@ those objects. A file that fails its check is never deleted from ``data/``: the
 fetch stops with an error naming it. Nothing fetched here is committed: everything
 lands under ``data/``, which is git-ignored.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -174,9 +175,13 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("val", help="the val2017 image archive, which every accuracy run needs")
     commands.add_parser("train", help="the full train2017 image archive (18 GB); calibration does not need it")
     calibration = commands.add_parser(
-        "calibration", help=f"the {CALIBRATION_COUNT} seeded train2017 calibration images, verified by sha256")
-    calibration.add_argument("--write-manifest", action="store_true",
-                             help="when the manifest is missing, record the fetched images' hashes as a new one")
+        "calibration", help=f"the {CALIBRATION_COUNT} seeded train2017 calibration images, verified by sha256"
+    )
+    calibration.add_argument(
+        "--write-manifest",
+        action="store_true",
+        help="when the manifest is missing, record the fetched images' hashes as a new one",
+    )
     return parser
 
 

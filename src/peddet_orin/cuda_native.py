@@ -8,6 +8,7 @@ TensorRT work independent of whether the installed PyTorch can use the GPU.
 Buffers and streams are released by ``free()`` and ``destroy()``, by leaving a
 ``with`` block, or, as a last resort, when they are garbage collected.
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -87,9 +88,7 @@ class DeviceBuffer:
             raise ValueError(f"expected an array of dtype {self.dtype}, got dtype {array.dtype}")
         contiguous = np.ascontiguousarray(array, dtype=self.dtype)
         if contiguous.nbytes != self.size:
-            raise ValueError(
-                f"expected {self.size} bytes for shape {self.shape} {self.dtype}, got {contiguous.nbytes}"
-            )
+            raise ValueError(f"expected {self.size} bytes for shape {self.shape} {self.dtype}, got {contiguous.nbytes}")
         source = contiguous.ctypes.data_as(ctypes.c_void_p)
         _check(_runtime().cudaMemcpy(self.address, source, self.size, MEMCPY_HOST_TO_DEVICE), "cudaMemcpy")
 

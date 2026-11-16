@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """The shape of run logs: required fields, types, per-kind results, path hygiene, and writing them."""
+
 import copy
 import json
 import subprocess
@@ -128,8 +129,11 @@ def test_a_benchmark_without_tegrastats_records_power_and_ram_as_unreadable():
 
 
 def test_a_valid_int8_build_log_is_accepted():
-    results = {"int8_path": "IInt8EntropyCalibrator2", "entropy_failure": "",
-               "calibration_manifest_sha256": MANIFEST_SHA256}
+    results = {
+        "int8_path": "IInt8EntropyCalibrator2",
+        "entropy_failure": "",
+        "calibration_manifest_sha256": MANIFEST_SHA256,
+    }
     log = make_log("build", "int8", results=results)
     assert runlog.validate_log(log) == []
 
@@ -280,8 +284,10 @@ def test_each_required_result_is_enforced(kind):
 
 @pytest.mark.parametrize(
     "results",
-    [{"calibration_manifest_sha256": "-", "int8_path": "entropy"}, {"int8_path": "-", "calibration_manifest_sha256":
-                                                                    MANIFEST_SHA256}],
+    [
+        {"calibration_manifest_sha256": "-", "int8_path": "entropy"},
+        {"int8_path": "-", "calibration_manifest_sha256": MANIFEST_SHA256},
+    ],
     ids=["no-manifest-hash", "no-route"],
 )
 def test_a_bad_int8_build_log_is_rejected(results):
@@ -386,8 +392,13 @@ def test_runlog_fails_on_entry_without_a_commit(fake_repo, monkeypatch):
 
 def test_relative_command_makes_repository_paths_relative(monkeypatch, tmp_path):
     monkeypatch.setattr(runlog, "REPO_ROOT", tmp_path)
-    arguments = ["python -m peddet_orin.export", "--out", str(tmp_path / "artifacts" / "a.onnx"),
-                 f"--onnx={tmp_path / 'b.onnx'}", str(tmp_path)]
+    arguments = [
+        "python -m peddet_orin.export",
+        "--out",
+        str(tmp_path / "artifacts" / "a.onnx"),
+        f"--onnx={tmp_path / 'b.onnx'}",
+        str(tmp_path),
+    ]
     assert runlog.relative_command(arguments) == "python -m peddet_orin.export --out artifacts/a.onnx --onnx=b.onnx ."
 
 

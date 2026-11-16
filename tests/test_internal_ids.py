@@ -5,6 +5,7 @@ Those ids name messages nobody outside can read, so a file citing one points at 
 letter, a hyphen and four digits, with an optional second role letter and hyphen between the two. The planted ids
 below are built from parts, so this file does not match itself.
 """
+
 import re
 import subprocess
 from pathlib import Path

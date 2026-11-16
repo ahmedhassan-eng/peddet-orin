@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The repository root: PDORIN_ROOT, else the source checkout; else resolve_root raises a one-line RuntimeError,
 and importing the package prints that line and exits 2."""
+
 import shutil
 import subprocess
 import sys
@@ -35,8 +36,9 @@ def run_installed(site: Path, code: str, root: Path | None) -> subprocess.Comple
     if root is not None:
         environment["PDORIN_ROOT"] = str(root)
     script = f"import sys; sys.path.insert(0, {str(site)!r}); {code}"
-    return subprocess.run([sys.executable, "-I", "-S", "-c", script], env=environment, capture_output=True,
-                          text=True, timeout=60)
+    return subprocess.run(
+        [sys.executable, "-I", "-S", "-c", script], env=environment, capture_output=True, text=True, timeout=60
+    )
 
 
 def test_pdorin_root_naming_a_checkout_is_used(tmp_path):
@@ -99,10 +101,15 @@ def test_an_installed_copy_with_a_bad_pdorin_root_refuses_to_import(tmp_path):
 
 
 def test_a_command_with_a_bad_pdorin_root_prints_one_line_and_no_traceback(tmp_path):
-    environment = {"PYTHONPATH": str(PACKAGE_DIR.parent), "CUDA_VISIBLE_DEVICES": "", "PATH": "",
-                   "PDORIN_ROOT": str(tmp_path / "empty")}
-    done = subprocess.run([sys.executable, "-m", "peddet_orin.export"], capture_output=True, text=True, timeout=120,
-                          env=environment)
+    environment = {
+        "PYTHONPATH": str(PACKAGE_DIR.parent),
+        "CUDA_VISIBLE_DEVICES": "",
+        "PATH": "",
+        "PDORIN_ROOT": str(tmp_path / "empty"),
+    }
+    done = subprocess.run(
+        [sys.executable, "-m", "peddet_orin.export"], capture_output=True, text=True, timeout=120, env=environment
+    )
     assert done.returncode == 2 and "Traceback" not in done.stderr
     assert done.stderr.count("\n") == 1 and "PDORIN_ROOT" in done.stderr
 
@@ -118,12 +125,19 @@ def test_package_version_falls_back_to_the_checkout_pyproject(monkeypatch, tmp_p
 
 def test_python_m_peddet_orin_prints_the_version_and_the_subcommands():
     source = str(PACKAGE_DIR.parent)
-    done = subprocess.run([sys.executable, "-m", "peddet_orin"], capture_output=True, text=True, timeout=60,
-                          env={"PYTHONPATH": source, "CUDA_VISIBLE_DEVICES": "", "PATH": ""})
+    done = subprocess.run(
+        [sys.executable, "-m", "peddet_orin"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={"PYTHONPATH": source, "CUDA_VISIBLE_DEVICES": "", "PATH": ""},
+    )
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
         f"peddet-orin {peddet_orin.__version__}",
         "subcommands:",
-        *(f"  python -m peddet_orin.{name}" for name in ("benchmark", "engine_build", "evaluate", "export",
-                                                         "gpu_check")),
+        *(
+            f"  python -m peddet_orin.{name}"
+            for name in ("benchmark", "engine_build", "evaluate", "export", "gpu_check")
+        ),
     ]

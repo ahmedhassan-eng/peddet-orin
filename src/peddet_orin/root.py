@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Find the repository root, with no side effect on import: ``PDORIN_ROOT`` if set, else the checkout above the
 package. ``runlog`` resolves it once and refuses to start without one; the package's version lookup only reads it."""
+
 from __future__ import annotations
 
 import os

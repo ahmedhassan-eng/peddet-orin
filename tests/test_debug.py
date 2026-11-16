@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Diagnostics are on only when PDORIN_DEBUG holds a true value; a bare DEBUG turns nothing on."""
+
 from peddet_orin import debug
 
 

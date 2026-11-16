@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """scripts/compare_logs.py: a re-measure against the published table, metric by metric."""
+
 import json
 
 import compare_logs
@@ -25,8 +26,12 @@ def complete(eval_results=None, benchmark_results=None, skip=()):
             results = {"ap": 0.3000, "ap50": 0.5000, **eval_results.get(precision, {})}
             logs.append(make_log("eval", precision, results=results))
         if ("benchmark", precision) not in skip:
-            results = {"engine": latency(4.0), "end_to_end": latency(10.0), "avg_power_w": 8.0,
-                       **benchmark_results.get(precision, {})}
+            results = {
+                "engine": latency(4.0),
+                "end_to_end": latency(10.0),
+                "avg_power_w": 8.0,
+                **benchmark_results.get(precision, {}),
+            }
             logs.append(make_log("benchmark", precision, results=results))
     return logs
 
@@ -58,11 +63,20 @@ def test_the_tolerances_are_one_dict_with_the_stated_values():
 
 
 def test_a_re_measure_within_every_tolerance_passes(tmp_path):
-    status, lines = run(tmp_path, complete(
-        {"fp16": {"ap": 0.3010, "ap50": 0.4990}, "int8": {"ap": 0.2950}},
-        {"fp16": {"engine": latency(4.4), "end_to_end": latency(8.5), "avg_power_w": 7.2,
-                  "system_ram_rise_mib": 900.0}},
-    ))
+    status, lines = run(
+        tmp_path,
+        complete(
+            {"fp16": {"ap": 0.3010, "ap50": 0.4990}, "int8": {"ap": 0.2950}},
+            {
+                "fp16": {
+                    "engine": latency(4.4),
+                    "end_to_end": latency(8.5),
+                    "avg_power_w": 7.2,
+                    "system_ram_rise_mib": 900.0,
+                }
+            },
+        ),
+    )
     assert status == 0 and lines[-1] == "COMPARE DONE PASS"
     assert line(lines, "eval", "fp16", "ap") == "COMPARE eval fp16 ap published=30.00 new=30.10 delta=+0.10 tol=0.10 OK"
     assert line(lines, "eval", "int8", "ap").endswith("delta=-0.50 tol=0.50 OK")
@@ -75,14 +89,21 @@ def test_a_re_measure_within_every_tolerance_passes(tmp_path):
 
 
 def test_each_metric_out_of_tolerance_fails(tmp_path):
-    status, lines = run(tmp_path, complete(
-        {"fp16": {"ap": 0.3011}, "int8": {"ap50": 0.4940}},
-        {"fp16": {"engine": latency(4.41), "end_to_end": latency(11.6), "avg_power_w": 8.9}},
-    ))
+    status, lines = run(
+        tmp_path,
+        complete(
+            {"fp16": {"ap": 0.3011}, "int8": {"ap50": 0.4940}},
+            {"fp16": {"engine": latency(4.41), "end_to_end": latency(11.6), "avg_power_w": 8.9}},
+        ),
+    )
     assert status == 1 and lines[-1] == "COMPARE DONE FAIL 5"
-    for kind, precision, metric in [("eval", "fp16", "ap"), ("eval", "int8", "ap50"),
-                                    ("benchmark", "fp16", "engine_p50_ms"),
-                                    ("benchmark", "fp16", "end_to_end_p50_ms"), ("benchmark", "fp16", "avg_power_w")]:
+    for kind, precision, metric in [
+        ("eval", "fp16", "ap"),
+        ("eval", "int8", "ap50"),
+        ("benchmark", "fp16", "engine_p50_ms"),
+        ("benchmark", "fp16", "end_to_end_p50_ms"),
+        ("benchmark", "fp16", "avg_power_w"),
+    ]:
         assert line(lines, kind, precision, metric).endswith(" OUT"), metric
 
 
@@ -95,11 +116,14 @@ def test_a_log_with_no_published_counterpart_is_out(tmp_path):
 
 
 def test_the_newest_clean_new_log_is_the_one_compared(tmp_path):
-    status, lines = run(tmp_path, [
-        make_log("eval", "fp16", results={"ap": 0.2000}, end_utc="2026-01-01T00:09:00Z"),
-        *complete(),
-        make_log("eval", "fp16", results={"ap": 0.1000}, end_utc="2026-01-01T00:11:00Z", dirty=True),
-    ])
+    status, lines = run(
+        tmp_path,
+        [
+            make_log("eval", "fp16", results={"ap": 0.2000}, end_utc="2026-01-01T00:09:00Z"),
+            *complete(),
+            make_log("eval", "fp16", results={"ap": 0.1000}, end_utc="2026-01-01T00:11:00Z", dirty=True),
+        ],
+    )
     assert status == 0 and line(lines, "eval", "fp16", "ap").endswith("new=30.00 delta=+0.00 tol=0.10 OK")
 
 
