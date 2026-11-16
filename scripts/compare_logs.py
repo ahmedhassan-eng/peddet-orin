@@ -12,7 +12,11 @@ runtime and iteration counts as the reference. Each metric prints one line:
 
     COMPARE <kind> <precision> <metric> published=.. new=.. delta=.. tol=.. OK|OUT
 
-Metrics in ``REPORTED_ONLY`` end in ``REPORTED`` instead: they are shown, not judged. A kind and precision with no
+Metrics in ``REPORTED_ONLY`` end in ``REPORTED`` instead: they are shown, not judged. So does every line for a
+precision the reference predates, TensorRT FP32 today, until the reference has it. The deployment-style benchmark
+(``benchmark_deploy``) is never judged: when the new logs carry it, each precision prints one REPORTED line per
+metric in ``DEPLOY_METRICS``, preceded by a REPORTED line when its newest log is dirty (then no metrics), or has
+another commit or another setup than the newest main benchmark of its precision. A kind and precision with no
 new log prints one ``COMPARE <kind> <precision> log published=- new=missing delta=n/a tol=- OUT`` line; a dirty
 newest log, a different runtime or iteration count, or new logs from more than one commit print their own OUT line.
 The last line is ``COMPARE DONE PASS`` (exit 0) or ``COMPARE DONE FAIL <n>`` (exit 1), where n counts the OUT lines.
@@ -138,7 +142,8 @@ def compare(new_dir: Path, published_logs: dict | None = None, committed: set[tu
     if len(new_logs) < len(found):
         print(f"compare_logs: leaving out {len(found) - len(new_logs)} committed logs", file=sys.stderr)
     lines, failures = [], 0
-    commits = sorted({log["commit"] for log in new_logs if log["kind"] in KINDS})
+    # Every kind counts here, the build, deployment-style and other logs included: a re-measure is one commit.
+    commits = sorted({log["commit"] for log in new_logs})
     if len(commits) > 1:
         failures += 1
         lines.append(f"COMPARE - - commit published=- new={','.join(c[:7] for c in commits)} delta=n/a tol=- OUT")
@@ -182,12 +187,27 @@ def compare(new_dir: Path, published_logs: dict | None = None, committed: set[tu
 
 
 def deploy_lines(new_logs: list[dict], published_logs: dict) -> list[str]:
-    """One REPORTED line per deployment-style metric, for each precision the new logs carry it for."""
+    """One REPORTED line per deployment-style metric, for each precision the new logs carry it for. A dirty newest
+    deploy log gives one REPORTED line instead; one from another commit or with another setup than the newest main
+    benchmark of its precision gives a REPORTED line saying so before its metrics. None of them is judged."""
     lines = []
     for precision in generate_table.TABLE_PRECISIONS:
         new = _newest(new_logs, DEPLOY_KIND, precision)
         if new is None:
             continue
+        if new.get("dirty") is not False:
+            lines.append(f"COMPARE {DEPLOY_KIND} {precision} log published=- new=dirty delta=n/a tol=- REPORTED")
+            continue
+        main = _newest(new_logs, "benchmark", precision)
+        if main is None:
+            lines.append(f"COMPARE {DEPLOY_KIND} {precision} main published=- new=missing delta=n/a tol=- REPORTED")
+        else:
+            if main.get("commit") != new.get("commit"):
+                shown = f"main={main.get('commit', '-')[:7]} new={new.get('commit', '-')[:7]}"
+                lines.append(f"COMPARE {DEPLOY_KIND} {precision} commit {shown} delta=n/a tol=- REPORTED")
+            if _setup(main) != _setup(new):
+                shown = f"main={_setup(main)} new={_setup(new)}"
+                lines.append(f"COMPARE {DEPLOY_KIND} {precision} setup {shown} delta=n/a tol=- REPORTED")
         published = published_logs.get((DEPLOY_KIND, precision))
         for metric, read in DEPLOY_METRICS:
             new_value = read(new["results"])

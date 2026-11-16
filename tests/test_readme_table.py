@@ -647,14 +647,27 @@ DEPLOY_SETTINGS = {
 }
 
 
-def _add_deploy(run_dir, precisions=generate_table.TABLE_PRECISIONS, scale=0.9):
-    """Each precision's benchmark log, end-to-end times scaled, as a deployment-style log."""
+STANDARD_SETTINGS = {key: value for key, value in DEPLOY_SETTINGS.items() if key != "kept_labels"}
+STANDARD_SETTINGS["score_threshold"] = 0.001
+
+
+def _add_deploy(run_dir, precisions=generate_table.TABLE_PRECISIONS, scale=0.9, change=None):
+    """Each precision's benchmark log, end-to-end times scaled, as a deployment-style log; the main benchmark log
+    gains the standard settings and a postprocess stage of 2.0 ms, the deploy log one of 0.5 ms. ``change`` edits
+    each deploy log before it is written."""
     for precision in precisions:
         (source,) = sorted(run_dir.glob(f"benchmark_{precision}_*.json"))
-        log = json.loads(source.read_text())
+        main = json.loads(source.read_text())
+        main["results"]["postprocess_settings"] = STANDARD_SETTINGS
+        main["results"]["stages"] = {"postprocess": {"p50_ms": 2.0}}
+        source.write_text(json.dumps(main))
+        log = json.loads(json.dumps(main))
         log["kind"] = "benchmark_deploy"
         log["results"]["end_to_end"] = {key: value * scale for key, value in log["results"]["end_to_end"].items()}
-        log["results"]["postprocess_settings"] = DEPLOY_SETTINGS
+        log["results"]["postprocess_settings"] = dict(DEPLOY_SETTINGS)
+        log["results"]["stages"] = {"postprocess": {"p50_ms": 0.5}}
+        if change is not None:
+            change(log)
         (run_dir / source.name.replace("benchmark_", "benchmark_deploy_")).write_text(json.dumps(log))
 
 
@@ -709,3 +722,71 @@ def test_deploy_logs_in_only_some_judged_runs_stop_the_generator(tmp_path):
     _add_deploy(tmp_path / "run1", precisions=["fp32-trt"])
     with pytest.raises(generate_table.TableError, match="deployment-style benchmark logs are in 1 of the 2 judged"):
         generate_table.build_deploy_block(generate_table.RUNS_DIR, tmp_path)
+
+
+def test_the_deploy_block_shows_both_postprocess_stages_and_where_gates_are_read(tmp_path):
+    _judged(tmp_path)
+    for name in ("run1", "run2"):
+        _add_tensorrt_fp32(tmp_path / name)
+        _add_deploy(tmp_path / name)
+    block = generate_table.build_deploy_block(generate_table.RUNS_DIR, tmp_path)
+    assert "| Postprocess p50 (ms) | Main benchmark postprocess p50 (ms) |" in block
+    assert all(row.endswith(" | 0.50 | 2.00 |") for row in block.splitlines() if row.startswith("| GPU"))
+    assert "No recall or AP is reported at this threshold." in block
+    assert "power-mode evidence that the other blocks read are those of the main benchmark jobs" in block
+
+
+def _set(path, value):
+    """A change that sets results[path[0]][path[1]]... to value."""
+
+    def change(log):
+        target = log
+        for key in path[:-1]:
+            target = target[key]
+        target[path[-1]] = value
+
+    return change
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (_set(("results", "postprocess_settings", "score_threshold"), 0.4), "keeps labels .1. at score threshold 0.4"),
+        (_set(("results", "postprocess_settings", "kept_labels"), [1, 2]), "keeps labels .1, 2. at score threshold"),
+        (_set(("results", "postprocess_settings", "nms_iou_threshold"), 0.5), "nms_iou_threshold differ from the main"),
+        (_set(("results", "postprocess_settings", "top_k_per_class"), 100), "top_k_per_class differ from the main"),
+        (_set(("results", "postprocess_settings", "detections_per_image"), 10), "detections_per_image differ"),
+        (_set(("results", "runtime"), "pytorch-cpu"), "deployment-style runtime pytorch-cpu differs from the main"),
+        (_set(("iterations", "timed"), 7), "deployment-style iterations .* differs from the main benchmark's"),
+    ],
+    ids=["threshold", "labels", "nms", "top-k", "cap", "runtime", "iterations"],
+)
+def test_a_deploy_log_that_does_not_match_the_deploy_constants_or_its_main_benchmark_stops(tmp_path, change, message):
+    _judged(tmp_path)
+    for name in ("run1", "run2"):
+        _add_tensorrt_fp32(tmp_path / name)
+        _add_deploy(tmp_path / name, change=change if name == "run2" else None)
+    for build in (generate_table.build_deploy_block, generate_table.build_block):
+        with pytest.raises(generate_table.TableError, match=message):
+            build(generate_table.RUNS_DIR, tmp_path)
+
+
+def test_a_deploy_log_without_its_main_benchmark_stops(tmp_path):
+    _judged(tmp_path, names=("run1",))
+    _add_deploy(tmp_path / "run1", precisions=("fp16",))
+    (main,) = (tmp_path / "run1").glob("benchmark_fp16_*.json")
+    main.unlink()
+    with pytest.raises(generate_table.TableError, match="FP16 deployment-style log has no main benchmark log"):
+        generate_table.select(generate_table.load_logs(tmp_path / "run1"))
+
+
+@pytest.mark.parametrize("group", ["TensorRT FP32", "deployment-style benchmark"])
+def test_a_partial_group_in_the_runs_dir_stops_the_generator_too(tmp_path, group):
+    runs = tmp_path / "runs"
+    _copy_runs(generate_table.RUNS_DIR, runs)
+    if group == "TensorRT FP32":
+        _add_tensorrt_fp32(runs, kinds=("benchmark", "eval"))
+    else:
+        _add_deploy(runs, precisions=("fp16",))
+    with pytest.raises(generate_table.TableError, match=f"runs/ has some {group} logs but no clean log for"):
+        generate_table.build_block(runs)

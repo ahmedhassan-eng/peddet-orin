@@ -251,3 +251,35 @@ def test_deploy_logs_print_reported_lines_and_are_never_judged(tmp_path):
     assert any(item.startswith(energy) for item in lines)
     status, lines = run(tmp_path, complete())
     assert status == 0 and not any("benchmark_deploy" in item for item in lines)
+
+
+def deploy_of(precision="fp16", **fields):
+    log = make_log("benchmark", precision, results={"end_to_end": latency(9.0), "avg_power_w": 8.0}, **fields)
+    log["kind"] = "benchmark_deploy"
+    return log
+
+
+def test_a_dirty_deploy_log_is_shown_and_not_judged(tmp_path):
+    (tmp_path / "with").mkdir()
+    status, lines = run(tmp_path / "with", [*complete(), deploy_of(dirty=True)])
+    assert status == 0
+    assert "COMPARE benchmark_deploy fp16 log published=- new=dirty delta=n/a tol=- REPORTED" in lines
+    assert not any(item.startswith("COMPARE benchmark_deploy fp16 end_to_end") for item in lines)
+
+
+def test_a_deploy_log_with_another_setup_is_shown_and_not_judged(tmp_path):
+    (tmp_path / "with").mkdir()
+    status, lines = run(tmp_path / "with", [*complete(), deploy_of(iterations={"timed": 7})])
+    assert status == 0
+    setup = line(lines, "benchmark_deploy", "fp16", "setup")
+    assert setup.endswith(" REPORTED") and 'new=tensorrt-gpu/{"timed":7}' in setup
+
+
+def test_logs_of_any_kind_from_another_commit_fail_and_the_deploy_log_says_so(tmp_path):
+    (tmp_path / "deploy").mkdir()
+    status, lines = run(tmp_path / "deploy", [*complete(), deploy_of(commit="f" * 40)])
+    assert status == 1 and line(lines, "-", "-", "commit").endswith(" OUT")
+    assert line(lines, "benchmark_deploy", "fp16", "commit").endswith(" REPORTED")
+    (tmp_path / "build").mkdir()
+    status, lines = run(tmp_path / "build", [*complete(), make_log("build", "fp16", commit="f" * 40)])
+    assert status == 1 and line(lines, "-", "-", "commit").endswith(" OUT")

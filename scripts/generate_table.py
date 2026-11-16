@@ -42,7 +42,7 @@ DEPLOY_PENDING = (
 )
 DEPLOY_HEADER = (
     "| Device and precision | End-to-end p50/p90/p99 (ms) | End-to-end FPS | Avg power VDD_IN (W) | "
-    "End-to-end energy per frame (J) |"
+    "End-to-end energy per frame (J) | Postprocess p50 (ms) | Main benchmark postprocess p50 (ms) |"
 )
 # The precisions every judged run carries: PyTorch FP32, the PyTorch baseline, and TensorRT FP16 and INT8.
 PRECISIONS = ("fp32", "fp16", "int8")
@@ -125,8 +125,9 @@ def measured(chosen: dict) -> list[str]:
     ]
 
 
-def check_groups(runs: list[tuple[str, dict]]) -> None:
-    """Stop with ``TableError`` unless each optional group is absent from every judged run or complete in each."""
+def check_groups(runs: list[tuple[str, dict]], judged: bool = True) -> None:
+    """Stop with ``TableError`` unless each optional group is absent from every run or complete in each. ``judged``
+    names each run as a judged run; otherwise it is a directory of logs read by its newest logs, as ``runs/`` is."""
     for group, keys in OPTIONAL_GROUPS.items():
         complete = []
         for name, chosen in runs:
@@ -134,7 +135,8 @@ def check_groups(runs: list[tuple[str, dict]]) -> None:
             if any(have) and not all(have):
                 absent = [f"{kind} {precision}" for kind, precision in keys if (kind, precision) not in chosen]
                 missing = ", ".join(absent)
-                raise TableError(f"judged run {name} has some {group} logs but no clean log for {missing}")
+                where = f"judged run {name}" if judged else f"{name}/"
+                raise TableError(f"{where} has some {group} logs but no clean log for {missing}")
             complete.append(all(have))
         if any(complete) and not all(complete):
             raise TableError(f"{group} logs are in {sum(complete)} of the {len(runs)} judged runs, not all or none")
@@ -172,6 +174,61 @@ def select(logs: list[dict]) -> dict[tuple[str, str], dict]:
                 f"{PRECISION_NAMES[precision]} eval runtime {evaluation['results']['runtime']} differs from "
                 f"benchmark runtime {benchmark['results']['runtime']}"
             )
+    check_deploy(chosen)
+    return chosen
+
+
+# The postprocess settings a deployment-style log shares with the main benchmark of its precision.
+SHARED_SETTINGS = ("nms_iou_threshold", "top_k_per_class", "detections_per_image", "num_classes")
+
+
+def check_deploy(chosen: dict) -> None:
+    """Stop with ``TableError`` unless each deployment-style log ran as the main benchmark of its precision did, the
+    same runtime and iteration counts, with the deploy postprocess: the deploy labels at the deploy threshold, and
+    the main benchmark's NMS, top-k, per-image cap and class count."""
+    deploys = [
+        (precision, chosen[(DEPLOY, precision)]) for precision in TABLE_PRECISIONS if (DEPLOY, precision) in chosen
+    ]
+    if not deploys:
+        return
+    # Imported only when there are deployment-style logs: the constants live in the postprocess, which needs torch.
+    from peddet_orin.postprocess import DEPLOY_LABELS, DEPLOY_SCORE_THRESHOLD
+
+    for precision, deploy in deploys:
+        name = PRECISION_NAMES[precision]
+        main = chosen.get(("benchmark", precision))
+        if main is None:
+            raise TableError(f"{name} deployment-style log has no main benchmark log of its precision")
+        for field, read in (
+            ("runtime", lambda log: log["results"]["runtime"]),
+            ("iterations", lambda log: log["iterations"]),
+        ):
+            if read(deploy) != read(main):
+                raise TableError(
+                    f"{name} deployment-style {field} {read(deploy)} differs from the main benchmark's {read(main)}"
+                )
+        settings, standard = deploy["results"]["postprocess_settings"], main["results"].get("postprocess_settings")
+        if (
+            settings.get("kept_labels") != list(DEPLOY_LABELS)
+            or settings.get("score_threshold") != DEPLOY_SCORE_THRESHOLD
+        ):
+            raise TableError(
+                f"{name} deployment-style log keeps labels {settings.get('kept_labels')} at score threshold "
+                f"{settings.get('score_threshold')}, not {list(DEPLOY_LABELS)} at {DEPLOY_SCORE_THRESHOLD}"
+            )
+        if not isinstance(standard, dict):
+            raise TableError(
+                f"{name} main benchmark log records no postprocess settings to check the deploy run against"
+            )
+        differ = [key for key in SHARED_SETTINGS if settings.get(key) != standard.get(key)]
+        if differ:
+            raise TableError(f"{name} deployment-style {', '.join(differ)} differ from the main benchmark's")
+
+
+def select_dir(runs_dir: Path) -> dict[tuple[str, str], dict]:
+    """``select`` over one directory read by its newest logs, as ``runs/`` is, with the all-or-none group check."""
+    chosen = select(load_logs(runs_dir))
+    check_groups([(Path(runs_dir).name, chosen)], judged=False)
     return chosen
 
 
@@ -370,7 +427,7 @@ def headline(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> tupl
     repeats = _resolve_repeats(runs_dir, repeats_dir)
     runs = [(path.name, chosen) for path, chosen in judged_runs(repeats)] if repeats else []
     if not runs:
-        return select(load_logs(runs_dir)), []
+        return select_dir(runs_dir), []
     return median_chosen([chosen for _, chosen in runs]), runs
 
 
@@ -480,8 +537,8 @@ def build_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> s
         "included; the earlier runs have no such record.",
         *pending,
         *[note for note in _notes(chosen) if note.startswith("INT8 person AP")],
-        int8_ap_sentence(runs, select(load_logs(runs_dir))),
-        power_mode_sentence(runs, select(load_logs(runs_dir))),
+        int8_ap_sentence(runs, select_dir(runs_dir)),
+        power_mode_sentence(runs, select_dir(runs_dir)),
         *[line for precision in measured(chosen) if (line := _ranges(runs, precision))],
     ]
     for name, run in runs:
@@ -555,12 +612,15 @@ def build_deploy_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
     rows = []
     for precision in precisions:
         results = chosen[(DEPLOY, precision)]["results"]
+        main = chosen[("benchmark", precision)]["results"]
         cells = [
             _device(results["runtime"], precision),
             _latency(results["end_to_end"]),
             _number(results["end_to_end"]["fps"], 1),
             _number(results["avg_power_w"], 1),
             _number(results[ENERGY], 3),
+            _number(results["stages"]["postprocess"]["p50_ms"], 2),
+            _number(main["stages"]["postprocess"]["p50_ms"], 2) if "stages" in main else MISSING,
         ]
         rows.append("| " + " | ".join(cells) + " |")
     settings = _deploy_settings([run for _, run in runs] or [chosen])
@@ -579,8 +639,12 @@ def build_deploy_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
             f"{settings['top_k_per_class']} per class, at most {settings['detections_per_image']} detections per "
             f"image, over {settings['num_classes']} classes. The score threshold is a fixed midpoint chosen before "
             "any deployment-style run; it is not tuned on the results. The other settings are torchvision's.",
-            "- Only end-to-end figures are shown: the postprocess runs after the engine, whose time the results "
-            "table gives. No accuracy is measured with this postprocess.",
+            "- Only end-to-end figures and the postprocess stage are shown: the postprocess runs after the engine, "
+            "whose time the results table gives. The main benchmark's postprocess p50, from its own log, stands "
+            "beside the deploy run's. No recall or AP is reported at this threshold.",
+            "- Each deployment-style log ran with the runtime and iteration counts of the main benchmark of its "
+            "precision, which the script checks. The QUIET gates, sampler records and power-mode evidence that the "
+            "other blocks read are those of the main benchmark jobs.",
         ]
     )
 
@@ -956,7 +1020,7 @@ def build_repeat_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
     further = [chosen for _, chosen in judged_runs(repeats)]
     apart = [(path.name, select(load_logs(path))) for path in apart_runs]
     median = median_chosen(further)
-    earlier = select(load_logs(runs_dir))
+    earlier = select_dir(runs_dir)
     apart.append(("earlier run", earlier))
     commits = sorted({log["commit"] for chosen in further for log in chosen.values()})
     earlier_commits = sorted({log["commit"][:7] for log in earlier.values()})

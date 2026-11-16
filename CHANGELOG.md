@@ -143,6 +143,15 @@ All notable changes to this project are recorded here. The format follows
   `benchmark` log, and requires a `benchmark_deploy` log to keep labels `[1]` at the score threshold
   `postprocess.DEPLOY_SCORE_THRESHOLD`, 0.5. The standard benchmark prints `<precision>: end-to-end p50 ...` as
   before; the deploy run prints `<precision> deploy: ...`.
+- `scripts/generate_table.py` stops unless each deployment-style log ran with the runtime and iteration counts of
+  the main benchmark of its precision, keeps labels `[1]` at the deploy score threshold, and has the main benchmark's
+  NMS IoU threshold, top-k, per-image cap and class count. The deploy block adds the postprocess-stage p50 of the
+  deploy run and of the main benchmark, and says the QUIET gates, sampler records and power-mode evidence are read
+  for the main benchmark jobs. The all-or-none check of the TensorRT FP32 and deployment-style logs also applies to
+  a `runs/` read by its newest logs.
+- `scripts/compare_logs.py` fails new logs of any kind, build and deployment-style included, from more than one
+  commit. A dirty newest deployment-style log, or one with another commit or setup than the main benchmark of its
+  precision, prints a REPORTED line saying so.
 - The README gains a generated deployment-style block right after the results table: per precision, end-to-end
   p50/p90/p99, end-to-end FPS, power and energy per frame from the `benchmark_deploy` logs, and the postprocess
   settings they record. The committed judged runs have no such logs, so the block says in one line that they are
