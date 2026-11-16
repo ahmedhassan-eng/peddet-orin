@@ -309,7 +309,8 @@ SETTINGS = {
     "detections_per_image": 300,
     "num_classes": 91,
 }
-STAGES = {"decode": latency(5.0), "preprocess": latency(2.0), "engine": latency(4.0), "postprocess": latency(3.0)}
+# Means 2 + 1 + 4 + 2 ms, the benchmark's end-to-end mean of 9 ms; the engine stage is the engine summary.
+STAGES = {"decode": latency(2.0), "preprocess": latency(1.0), "engine": latency(4.0), "postprocess": latency(2.0)}
 
 
 def test_a_benchmarks_stages_and_postprocess_settings_are_optional_and_checked():
@@ -422,6 +423,65 @@ def test_a_deploy_benchmark_log_needs_the_benchmark_results_and_its_kept_labels(
     assert runlog.validate_log(deploy_log(engine_p50_ms_per_repeat=[4.0])) == [
         "bad result: benchmark_deploy engine_p50_ms_per_repeat does not hold one value per repeat"
     ]
+
+
+def test_the_stages_must_hold_the_engine_summary_and_add_up_to_end_to_end():
+    def problems(stages):
+        return runlog.validate_log(make_log("benchmark", results={"stages": stages}))
+
+    assert problems(STAGES) == []
+    assert problems(dict(STAGES, engine=latency(4.1), postprocess=latency(1.9))) == [
+        "bad result: benchmark stages engine differs from the engine summary"
+    ]
+    assert problems(dict(STAGES, decode=latency(2.5))) == [
+        "bad result: benchmark stage means do not add up to the end-to-end mean"
+    ]
+    # Rounding far below a microsecond in 9 ms is allowed.
+    assert problems(dict(STAGES, decode=dict(latency(2.0), fps=1000.0 / (2.0 + 1e-9)))) == []
+
+
+def test_the_postprocess_settings_are_pinned_per_benchmark_kind():
+    from peddet_orin.postprocess import DEPLOY_LABELS, DEPLOY_SCORE_THRESHOLD
+
+    keeping = dict(SETTINGS, kept_labels=[1])
+    assert runlog.validate_log(make_log("benchmark", results={"postprocess_settings": keeping})) == [
+        "bad result: benchmark postprocess_settings keeps only some labels"
+    ]
+    pinned = "bad result: benchmark_deploy postprocess_settings must keep labels [1] at score threshold 0.5"
+    assert (list(DEPLOY_LABELS), DEPLOY_SCORE_THRESHOLD) == ([1], 0.5)
+    for settings in (
+        dict(SETTINGS, kept_labels=[2]),
+        dict(SETTINGS, kept_labels=[1, 2]),
+        dict(SETTINGS, kept_labels=[1]),
+    ):
+        assert runlog.validate_log(deploy_log(postprocess_settings=settings)) == [pinned], settings
+
+
+@pytest.mark.parametrize(
+    ("kind", "precision"),
+    [
+        ("build", "fp32"),
+        ("build", "fp16-trt"),
+        ("eval", "onnx"),
+        ("benchmark", "FP16"),
+        ("gpu_check", "fp16"),
+        ("export", "fp32"),
+    ],
+)
+def test_a_precision_the_kind_does_not_have_is_refused(kind, precision):
+    assert f"bad precision for {kind}: {precision}" in runlog.validate_log(make_log(kind, precision))
+
+
+def test_each_kind_takes_its_precisions():
+    for precision in ("fp32", "fp32-trt", "fp16", "int8"):
+        assert runlog.validate_log(make_log("eval", precision)) == []
+        assert (
+            runlog.validate_log(deploy_log(precision, engine_sha256="-" if precision == "fp32" else ENGINE_SHA256))
+            == []
+        )
+    for precision in ("fp32-trt", "fp16"):
+        assert runlog.validate_log(make_log("build", precision)) == []
+    assert "bad precision for benchmark_deploy: int4" in runlog.validate_log(deploy_log("int4"))
 
 
 @pytest.mark.parametrize("kind", sorted(RESULTS))

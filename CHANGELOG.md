@@ -136,6 +136,13 @@ All notable changes to this project are recorded here. The format follows
   writes a log of its own kind, `benchmark_deploy`, whose results are the benchmark's with `stages`,
   `postprocess_settings` (with `kept_labels`), `engine_sha256` and `torch_num_threads` required. `--postprocess`
   defaults to `standard`, the main benchmark, which is unchanged.
+- The log check refuses a precision a kind does not have: `build` takes `fp16`, `int8` and `fp32-trt`; `eval`,
+  `benchmark` and `benchmark_deploy` take `fp32`, `fp16`, `int8` and `fp32-trt`; `gpu_check` takes `fp32` and
+  `export` `onnx`, as the committed logs name them. It requires a benchmark's `stages` to hold the `engine` summary
+  itself and their means to add up to the end-to-end mean within a relative 1e-6; it refuses `kept_labels` in a
+  `benchmark` log, and requires a `benchmark_deploy` log to keep labels `[1]` at the score threshold
+  `postprocess.DEPLOY_SCORE_THRESHOLD`, 0.5. The standard benchmark prints `<precision>: end-to-end p50 ...` as
+  before; the deploy run prints `<precision> deploy: ...`.
 - The README gains a generated deployment-style block right after the results table: per precision, end-to-end
   p50/p90/p99, end-to-end FPS, power and energy per frame from the `benchmark_deploy` logs, and the postprocess
   settings they record. The committed judged runs have no such logs, so the block says in one line that they are

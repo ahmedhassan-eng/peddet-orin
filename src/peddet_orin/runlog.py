@@ -632,12 +632,66 @@ def _cross_field_problems(kind: str, precision: Any, results: dict) -> list[str]
     return problems
 
 
+# The precisions each kind of log may name. gpu_check and export name what the committed logs name.
+MEASURED_PRECISIONS = (PYTORCH_PRECISION, TENSORRT_FP32_PRECISION, "fp16", "int8")
+KIND_PRECISIONS: dict[str, tuple[str, ...]] = {
+    "build": (TENSORRT_FP32_PRECISION, "fp16", "int8"),
+    "eval": MEASURED_PRECISIONS,
+    "benchmark": MEASURED_PRECISIONS,
+    DEPLOY_BENCHMARK_KIND: MEASURED_PRECISIONS,
+    "gpu_check": (PYTORCH_PRECISION,),
+    "export": ("onnx",),
+}
+# The slack allowed between the sum of the stage means and the end-to-end mean, relative to the latter: each
+# iteration's stages add up to its end-to-end time exactly, so only rounding separates them.
+STAGE_SUM_RELATIVE_TOLERANCE = 1e-6
+MS_PER_S = 1e3
+
+
+def _stage_problems(kind: str, results: dict) -> list[str]:
+    """The stages must hold the engine summary itself, and their means must add up to the end-to-end mean."""
+    stages, engine, end_to_end = results.get("stages"), results.get("engine"), results.get("end_to_end")
+    if not (_is_stages(stages) and _is_latency(engine) and _is_latency(end_to_end)):
+        return []
+    problems = []
+    if stages["engine"] != engine:
+        problems.append(f"bad result: {kind} stages engine differs from the engine summary")
+    means = [MS_PER_S / stage["fps"] for stage in stages.values() if stage["fps"] > 0]
+    total = MS_PER_S / end_to_end["fps"] if end_to_end["fps"] > 0 else None
+    if total is None or len(means) != len(stages) or abs(sum(means) - total) > STAGE_SUM_RELATIVE_TOLERANCE * total:
+        problems.append(f"bad result: {kind} stage means do not add up to the end-to-end mean")
+    return problems
+
+
+def _deploy_problems(kind: str, results: dict) -> list[str]:
+    """The main benchmark keeps every class; the deployment-style one keeps the deploy labels at its threshold."""
+    settings = results.get("postprocess_settings")
+    if not isinstance(settings, dict):
+        return []
+    if kind == "benchmark" and "kept_labels" in settings:
+        return ["bad result: benchmark postprocess_settings keeps only some labels"]
+    # A deploy log without kept_labels is already refused by its settings check.
+    if kind != DEPLOY_BENCHMARK_KIND or "kept_labels" not in settings:
+        return []
+    # Imported here: postprocess needs torch, and this module must import without it, so that an installed copy
+    # refuses with one line (PRD R-13). A deploy log is written and checked only where torch is.
+    from peddet_orin.postprocess import DEPLOY_LABELS, DEPLOY_SCORE_THRESHOLD
+
+    if settings["kept_labels"] != list(DEPLOY_LABELS) or settings.get("score_threshold") != DEPLOY_SCORE_THRESHOLD:
+        return [
+            f"bad result: {kind} postprocess_settings must keep labels {list(DEPLOY_LABELS)} at score threshold "
+            f"{DEPLOY_SCORE_THRESHOLD}"
+        ]
+    return []
+
+
 def _results_problems(kind: Any, precision: Any, results: Any) -> list[str]:
     """Return the problems in ``results`` for a log's kind: missing, unexpected or bad values."""
     if kind not in RESULT_CHECKS:
         return [f"unknown kind: {kind}"]
+    precision_problems = [] if precision in KIND_PRECISIONS[kind] else [f"bad precision for {kind}: {precision}"]
     if not isinstance(results, dict):
-        return []
+        return precision_problems
     checks = RESULT_CHECKS[kind]
     problems = [f"missing result: {kind} {key}" for key in checks if key not in results]
     allowed = set(checks) | OPTIONAL_RESULTS.get(kind, frozenset())
@@ -646,7 +700,9 @@ def _results_problems(kind: Any, precision: Any, results: Any) -> list[str]:
     problems += [
         f"bad result: {kind} {key}" for key, check in checks.items() if key in results and not check(results[key])
     ]
-    return problems + _cross_field_problems(kind, precision, results)
+    if kind in BENCHMARK_KINDS:
+        problems += _stage_problems(kind, results) + _deploy_problems(kind, results)
+    return precision_problems + problems + _cross_field_problems(kind, precision, results)
 
 
 def validate_log(record: Any) -> list[str]:

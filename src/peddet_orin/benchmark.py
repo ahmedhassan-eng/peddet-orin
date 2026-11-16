@@ -476,7 +476,8 @@ def main(argv: list[str] | None = None) -> int:
                 "torch_num_threads": threads,
             }
         )
-    print(f"{args.precision} {args.postprocess}: end-to-end p50 {log.results['end_to_end']['p50_ms']:.2f} ms")
+    shown = args.precision if args.postprocess == STANDARD else f"{args.precision} {args.postprocess}"
+    print(f"{shown}: end-to-end p50 {log.results['end_to_end']['p50_ms']:.2f} ms")
     return 0
 
 

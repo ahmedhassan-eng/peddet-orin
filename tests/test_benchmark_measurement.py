@@ -4,6 +4,7 @@
 import hashlib
 import itertools
 import os
+import re
 import resource
 import time
 import types
@@ -422,3 +423,10 @@ def test_the_deploy_postprocess_writes_its_own_log_kind(cpu_benchmark, monkeypat
     cpu_benchmark()
     assert written[1].kind == "benchmark" and "kept_labels" not in written[1].results["postprocess_settings"]
     assert benchmark.build_parser().parse_args(["--precision", "fp16"]).postprocess == "standard"
+
+
+def test_the_standard_run_prints_its_old_line_and_the_deploy_run_names_itself(cpu_benchmark, capsys):
+    cpu_benchmark()
+    assert re.search(r"^fp32: end-to-end p50 \d+\.\d\d ms$", capsys.readouterr().out, re.M)
+    cpu_benchmark("--postprocess", "deploy")
+    assert re.search(r"^fp32 deploy: end-to-end p50 \d+\.\d\d ms$", capsys.readouterr().out, re.M)
