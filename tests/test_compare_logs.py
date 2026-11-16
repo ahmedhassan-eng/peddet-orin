@@ -170,6 +170,20 @@ def test_a_re_measure_with_other_counts_or_another_runtime_fails(tmp_path):
     assert status == 1 and line(lines, "eval", "fp32", "setup").endswith(" OUT")
 
 
+def test_an_int8_build_on_another_calibration_path_fails(tmp_path):
+    build = make_log("build", "int8", results={"int8_path": "IInt8EntropyCalibrator2"})
+    reference = published(tmp_path, [*complete(), build])
+    fallback = make_log("build", "int8", results={"int8_path": "qdq-fallback"})
+    for name in ("same", "fallback", "none"):
+        (tmp_path / name).mkdir()
+    status, lines = run(tmp_path / "same", [*complete(), build], reference)
+    assert status == 0 and line(lines, "build", "int8", "int8_path").endswith(" OK")
+    status, lines = run(tmp_path / "fallback", [*complete(), fallback], reference)
+    assert status == 1 and "new=qdq-fallback" in line(lines, "build", "int8", "int8_path")
+    status, lines = run(tmp_path / "none", complete(), reference)
+    assert status == 1 and "new=missing" in line(lines, "build", "int8", "int8_path")
+
+
 def test_an_incomplete_new_set_fails(tmp_path):
     status, lines = run(tmp_path, complete(skip={("benchmark", "int8")}))
     assert status == 1 and lines[-1] == "COMPARE DONE FAIL 1"

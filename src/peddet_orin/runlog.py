@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """JSON run logs: writing them, recording host facts, and validating their shape.
 
-Every number published by this project comes from a file under ``runs/``. A log
-is written only if the run completes, so a crashed run cannot supply a number.
+Every number published by this project comes from a log: the judged runs' under ``runs-repeat/``, the earlier
+run's under ``runs/``. A log is written only if the run completes, so a crashed run cannot supply a number.
 Paths under the repository root are written relative to it, and every other
 absolute, home or ``file:`` path in a log string is replaced by ``<path>``
 before the log is written. Validation still rejects any such path that is not

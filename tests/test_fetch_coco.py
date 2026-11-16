@@ -169,6 +169,21 @@ def test_a_second_run_whose_download_fails_leaves_the_kept_archive_as_it_is(tmp_
     assert sorted(path.name for path in tmp_path.iterdir()) == [archive.name]
 
 
+def test_a_download_that_breaks_on_every_attempt_leaves_no_partial_file(tmp_path, monkeypatch):
+    class Broken(io.BytesIO):
+        def read(self, size=-1):
+            if self.tell():
+                raise OSError("connection reset")
+            return super().read(4)
+
+    archive = tmp_path / "val2017.zip"
+    monkeypatch.setattr(fetch_coco.urllib.request, "urlopen", lambda url, timeout: Broken(b"half an archive"))
+    monkeypatch.setattr(fetch_coco.time, "sleep", lambda seconds: None)
+    with pytest.raises(RuntimeError, match="giving up"):
+        fetch_coco._stream_to("https://images.cocodataset.org/a.zip", archive, ("md5",))
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_every_download_url_is_https():
     urls = [value for name, value in vars(fetch_coco).items() if name.endswith(("_URL", "_URL_PREFIX"))]
     assert len(urls) == 4

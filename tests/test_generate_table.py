@@ -50,7 +50,11 @@ def test_only_dirty_logs_give_the_empty_table(tmp_path, capsys):
 
 def test_no_logs_print_the_empty_table_and_exit_zero(tmp_path, capsys):
     assert generate_table.main(["--runs", str(tmp_path)]) == 0
-    assert capsys.readouterr().out == EMPTY_BLOCK + "\n"
+    out = capsys.readouterr().out
+    assert out.startswith(f"{generate_table.BEGIN_MARKER}\n{EMPTY_BLOCK}\n{generate_table.END_MARKER}\n")
+    # Without --write every generated block is printed, each between its markers.
+    for markers, _ in generate_table.BLOCKS:
+        assert out.count(f"{markers[0]}\n") == 1 and out.count(f"\n{markers[1]}\n") == 1, markers
 
 
 def test_logs_from_two_commits_exit_nonzero_with_one_line(tmp_path, capsys):
@@ -77,6 +81,16 @@ def test_an_eval_and_benchmark_runtime_mismatch_exits_nonzero(tmp_path, capsys):
     assert generate_table.main(["--runs", str(tmp_path)]) == 1
     error = capsys.readouterr().err
     assert error.count("\n") == 1 and "FP32" in error and "pytorch-cpu" in error and "pytorch-cuda" in error
+
+
+def test_a_benchmark_log_with_fewer_than_three_repeats_exits_nonzero(tmp_path, capsys):
+    two = {"repeats": 2, "engine_p50_ms_per_repeat": [3.0, 3.1], "end_to_end_p50_ms_per_repeat": [60.0, 61.0]}
+    write_logs(tmp_path, [make_log("eval", "fp16"), make_log("benchmark", "fp16", results=two)])
+    assert generate_table.main(["--runs", str(tmp_path)]) == 1
+    error = capsys.readouterr().err
+    assert error.count("\n") == 1 and "FP16 benchmark log times 2 repeats" in error and "R-12" in error
+    write_logs(tmp_path, [make_log("eval", "fp16"), make_log("benchmark", "fp16")])
+    assert "| GPU, TensorRT FP16 |" in generate_table.build_block(tmp_path)
 
 
 def test_the_ram_rise_column_is_gone_and_power_has_one_decimal(tmp_path):

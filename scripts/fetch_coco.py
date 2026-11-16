@@ -85,6 +85,8 @@ def _stream_to(url: str, destination: Path, digests: tuple[str, ...]) -> dict[st
         except OSError as error:  # URLError and timeouts both derive from OSError.
             last_error = error
             time.sleep(RETRY_SLEEP_S * attempt)
+    # The last attempt's truncated file is removed, so a run that gives up leaves nothing half-written behind.
+    partial.unlink(missing_ok=True)
     raise RuntimeError(f"giving up on {url}: {last_error}")
 
 

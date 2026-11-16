@@ -24,7 +24,7 @@ def test_the_readme_carries_every_generated_block():
 
 
 def test_editing_one_number_is_detected(tmp_path):
-    # The committed README may carry only n/a cells, so the block is generated from synthetic logs.
+    # Synthetic logs, so the test does not depend on the committed numbers.
     for index, log in enumerate([make_log("eval", "fp16"), make_log("benchmark", "fp16")]):
         (tmp_path / f"{index}.json").write_text(json.dumps(log))
     block = generate_table.build_block(tmp_path)
@@ -32,13 +32,16 @@ def test_editing_one_number_is_detected(tmp_path):
     assert generate_table.readme_matches(text, tmp_path)
     lines = block.splitlines()
     row = next(index for index, line in enumerate(lines) if line.startswith("| GPU, TensorRT FP16"))
-    cells = lines[row].split(" | ")
-    column = next(index for index, cell in enumerate(cells) if NUMERIC_CELL.match(cell))
-    original = cells[column]
-    cells[column] = original[:-1] + ("1" if original[-1] != "1" else "2")
-    edited = "\n".join([*lines[:row], " | ".join(cells), *lines[row + 1 :]])
-    assert NUMERIC_CELL.match(cells[column]) and cells[column] != original
-    assert not generate_table.readme_matches(text.replace(block, edited), tmp_path)
+    numeric = [index for index, cell in enumerate(lines[row].split(" | ")) if NUMERIC_CELL.match(cell)]
+    assert len(numeric) >= 5
+    # Every numeric cell of the row, one at a time: a hand edit to any column is caught, not only the first.
+    for column in numeric:
+        cells = lines[row].split(" | ")
+        original = cells[column]
+        cells[column] = original[:-1] + ("1" if original[-1] != "1" else "2")
+        edited = "\n".join([*lines[:row], " | ".join(cells), *lines[row + 1 :]])
+        assert NUMERIC_CELL.match(cells[column]) and cells[column] != original
+        assert not generate_table.readme_matches(text.replace(block, edited), tmp_path), column
 
 
 QUIET_PASSED = "".join(

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Generate the README's results block, and its INT8 and repeat-run blocks, from the committed JSON logs.
 
-Each block sits between two HTML comment markers in the README, and ``--write`` replaces them; without it the
-results block is printed. A test calls ``readme_matches`` so that the README cannot drift from the logs.
+Each block sits between two HTML comment markers in the README, and ``--write`` replaces them; without it every
+block is printed between its markers. A test calls ``readme_matches`` so that the README cannot drift from the logs.
 With judged runs under ``runs-repeat/``, each cell is the median over them; the earlier run in ``runs/`` is shown
 apart and not judged. Without them, the newest clean log of each kind and precision in ``runs/`` supplies the
 cells. A log made from a dirty tree is skipped, with a line on stderr. The logs that feed the table must come from
@@ -50,6 +50,8 @@ PRECISIONS = ("fp32", "fp16", "int8")
 TENSORRT_FP32 = "fp32-trt"
 # Every precision the table can show, in row order.
 TABLE_PRECISIONS = ("fp32", TENSORRT_FP32, "fp16", "int8")
+# PRD.md R-12: a benchmark log that feeds the README times at least this many repeats of its loop.
+MIN_REPEATS = 3
 PRECISION_NAMES = {"fp32": "FP32", TENSORRT_FP32: "TensorRT FP32", "fp16": "FP16", "int8": "INT8"}
 # The precision a row's first cell names after its device and framework, and what the row is a baseline for.
 ROW_PRECISION = {TENSORRT_FP32: "FP32"}
@@ -171,6 +173,13 @@ def select(logs: list[dict]) -> dict[tuple[str, str], dict]:
             raise TableError(
                 f"{PRECISION_NAMES[precision]} eval runtime {evaluation['results']['runtime']} differs from "
                 f"benchmark runtime {benchmark['results']['runtime']}"
+            )
+    for (kind, precision), log in chosen.items():
+        repeats = log["results"].get("repeats") if kind in ("benchmark", DEPLOY) else None
+        if repeats is not None and repeats < MIN_REPEATS:
+            raise TableError(
+                f"{PRECISION_NAMES[precision]} {kind} log times {repeats} repeats; a published one times at least "
+                f"{MIN_REPEATS} (PRD.md R-12)"
             )
     check_deploy(chosen)
     check_engines(chosen)
@@ -1174,7 +1183,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.write:
             write_readme(args.readme, args.runs)
         else:
-            print(build_block(args.runs))
+            print("\n".join(f"{markers[0]}\n{make(args.runs, None)}\n{markers[1]}" for markers, make in BLOCKS))
     except TableError as error:
         print(f"generate_table: {error}", file=sys.stderr)
         return 1

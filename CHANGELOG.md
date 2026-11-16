@@ -219,6 +219,11 @@ All notable changes to this project are recorded here. The format follows
   marks INT8's effect on postprocess time as a hypothesis.
 - `CONTRIBUTING.md` gives the Jetson suite's time as about fifteen minutes.
 - `pyproject.toml` requires pillow 10.3 or later, the first release with the fix for CVE-2024-28219.
+- `scripts/generate_table.py` refuses a benchmark log that times fewer than 3 repeats, as `PRD.md` R-12 requires
+  of a published one; `--repeats` still accepts fewer for a quick run. Without `--write` it prints every generated
+  block between its markers, not the results block alone.
+- `scripts/compare_logs.py` fails an INT8 build on another calibration path than the reference's.
+- `scripts/fetch_coco.py` removes the partial file when every download attempt fails.
 
 ## [0.1.0] - 2026-11-14
 

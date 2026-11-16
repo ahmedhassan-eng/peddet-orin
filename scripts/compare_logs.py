@@ -183,9 +183,26 @@ def compare(new_dir: Path, published_logs: dict | None = None, committed: set[tu
                     f"COMPARE {kind} {precision} {metric} published={_shown(published_value)} "
                     f"new={_shown(new_value)} delta={delta} tol={tolerance} {verdict}"
                 )
+    path_lines = int8_path_lines(new_logs, published_logs)
+    failures += sum(line.endswith(" OUT") for line in path_lines)
+    lines += path_lines
     lines += deploy_lines(new_logs, published_logs)
     lines.append("COMPARE DONE PASS" if failures == 0 else f"COMPARE DONE FAIL {failures}")
     return lines
+
+
+def int8_path_lines(new_logs: list[dict], published_logs: dict) -> list[str]:
+    """One line for the INT8 build's calibration path: the newest INT8 build log must take the reference's path, so a
+    fallback build is never judged against an entropy-calibrated reference. No line when the reference has no
+    INT8 build log."""
+    published = published_logs.get(("build", "int8"))
+    if published is None:
+        return []
+    new = _newest(new_logs, "build", "int8")
+    want = published["results"].get("int8_path")
+    got = new["results"].get("int8_path") if new else "missing"
+    verdict = "OK" if got == want else "OUT"
+    return [f"COMPARE build int8 int8_path published={want} new={got} delta=n/a tol=- {verdict}"]
 
 
 def deploy_lines(new_logs: list[dict], published_logs: dict) -> list[str]:

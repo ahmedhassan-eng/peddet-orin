@@ -299,9 +299,9 @@ python -m peddet_orin.benchmark --precision int8 --postprocess deploy
 python -m peddet_orin.benchmark --precision fp32-trt --postprocess deploy
 ```
 
-Each command writes a JSON log to `runs/`. The results table is built from the judged runs committed under `runs-repeat/`, and `python scripts/generate_table.py --write` rebuilds it from them; a re-measure does not run it, since it would show the re-measure's logs in `runs/` as the earlier run. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
+Each command writes a JSON log to `runs/`. The results table is built from the judged runs committed under `runs-repeat/`, and `python scripts/generate_table.py --write` rebuilds it from them, refusing a benchmark log that times fewer than 3 repeats (`PRD.md` R-12); a re-measure does not run it, since it would show the re-measure's logs in `runs/` as the earlier run. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
 
-The last command checks the re-measure against the published numbers. `python scripts/compare_logs.py <runs dir>` leaves out the logs committed under `runs/`, `runs-repeat/` and `runs-superseded/`, so the committed logs never stand in for a missing or failed one. It compares the newest eval and benchmark log of each precision with what the results table is built from, the median of the judged runs, applies the tolerances of `PRD.md` R-11 and prints one line per metric. TensorRT FP32 is reported, not judged, while the judged runs have no logs for it, and judged once they do. The deployment-style benchmark is never judged: it prints one REPORTED line per metric when the new logs carry it. It fails a precision with no new log, a dirty newest log, a log run with another runtime or other iteration counts, and new logs from more than one commit. Set `PDORIN_DEBUG=1` to turn on diagnostic logging and profiling.
+The last command checks the re-measure against the published numbers. `python scripts/compare_logs.py <runs dir>` leaves out the logs committed under `runs/`, `runs-repeat/` and `runs-superseded/`, so the committed logs never stand in for a missing or failed one. It compares the newest eval and benchmark log of each precision with what the results table is built from, the median of the judged runs, applies the tolerances of `PRD.md` R-11 and prints one line per metric. TensorRT FP32 is reported, not judged, while the judged runs have no logs for it, and judged once they do. The deployment-style benchmark is never judged: it prints one REPORTED line per metric when the new logs carry it. It fails a precision with no new log, a dirty newest log, a log run with another runtime or other iteration counts, an INT8 build on another calibration path than the reference's, and new logs from more than one commit. Set `PDORIN_DEBUG=1` to turn on diagnostic logging and profiling.
 
 ## Continuous integration
 
@@ -348,8 +348,8 @@ peddet-orin/
 │   ├── ci-cpu.txt                   the CPU-only set for CI
 │   ├── pip-audit.lock               pip-audit and its dependencies, with hashes
 │   └── pip-audit.txt                the pip-audit release CI audits with
-├── runs-repeat/                     further full runs, one directory each, with their QUIET lines and samples
-├── runs/                            one JSON log per measurement; the results table is built from them
+├── runs-repeat/                     the judged runs the results table is built from, with their QUIET lines and samples
+├── runs/                            the earlier run's JSON logs, one per measurement, shown apart from the judged runs
 ├── scripts/
 │   ├── check_planted_defects.py     plants each registered defect and checks that its test fails
 │   ├── ci_local.sh                  runs the CI matrix locally, one venv per Python version
