@@ -185,6 +185,27 @@ DEFECTS = [
         "catches": "tests/test_generate_table.py::test_latest_picks_the_newer_of_two_clean_logs",
     },
     {
+        "id": "ram-job-memory-first-sample",
+        "file": "scripts/generate_table.py",
+        "old": "jobs.append((job, min(memory) // 1024",
+        "new": "jobs.append((job, memory[0] // 1024",
+        "catches": "tests/test_readme_table.py::test_each_jobs_lowest_memory_is_the_lowest_of_the_samples_during_it",
+    },
+    {
+        "id": "ram-job-swap-outs-zero",
+        "file": "scripts/generate_table.py",
+        "old": "counts[-1] - counts[0] if counts else None",
+        "new": "counts[0] - counts[0] if counts else None",
+        "catches": "tests/test_readme_table.py::test_each_jobs_swap_outs_are_its_pswpout_delta",
+    },
+    {
+        "id": "ram-sentence-highest-job",
+        "file": "scripts/generate_table.py",
+        "old": "f\"{min(lowest)} MiB, and 0 pages were swapped out.\")",
+        "new": "f\"{max(lowest)} MiB, and 0 pages were swapped out.\")",
+        "catches": "tests/test_readme_table.py::test_the_ram_sentence_gives_the_lowest_job_or_each_swap_out",
+    },
+    {
         "id": "resize-nearest",
         "file": "src/peddet_orin/preprocess.py",
         "old": "mode=\"bilinear\", align_corners=False",

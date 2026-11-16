@@ -4,27 +4,36 @@ All notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - 2026-11-15
+## [0.1.1] - 2026-11-16
 
 ### Added
 
 - `CODE_OF_CONDUCT.md`, the Contributor Covenant 2.1 unchanged except for its contact line, which points at the
   repository's private vulnerability reporting.
-- Generated README text for the INT8 against FP16 comparison and for the check of `PRD.md` R-11 against further
-  runs under `runs-repeat/`, so every number in it comes from the logs.
+- `runs-repeat/`: further full runs on a quieted host, each with its QUIET gate lines and, for the judged runs,
+  memory, swap and temperature samples of every GPU job from the host's sampler script; the README gives each
+  judged GPU job's lowest available memory and pages swapped out.
+- README Provenance names the three host scripts that ran the judged runs, outside this repository, by sha256;
+  `scripts/generate_table.py` refuses a sampler file that does not name the recorded sampler's sha256.
+- Generated README text for the INT8 against FP16 comparison and for the check of `PRD.md` R-11 among the judged
+  runs, so every number in it comes from the logs.
+
+### Changed
+
+- The published numbers changed. The results table is the median of the judged quieted runs at commit `025171d`;
+  0.1.0's table came from one run at `17a1ee2` on a host that was not quieted. That run stays in `runs/` and is
+  shown apart, with its deviation from the median, and is not judged.
+- No file under `src/` changes.
 
 ### Fixed
 
 - `scripts/fetch_coco.py` keeps a COCO archive whose MD5 does not match and names it in the error. 0.1.0 deleted
-  it, against its own docstring and the 0.1.0 Security note.
+  it, so 0.1.0's Security note, which says a file that fails its check is kept, was wrong for archives. A second
+  run downloads the archive again and replaces the kept one only once the new download is complete.
 - The README defines FPS as 1 / mean latency over serial batch-1 iterations, says where `nvpmodel` lives, and
   marks INT8's effect on postprocess time as a hypothesis.
 - `CONTRIBUTING.md` gives the Jetson suite's time as about fifteen minutes.
 - `pyproject.toml` requires pillow 10.3 or later, the first release with the fix for CVE-2024-28219.
-
-### Notes
-
-- No file under `src/` changes. The results table is the 0.1.0 measurement at commit `17a1ee2`.
 
 ## [0.1.0] - 2026-11-14
 

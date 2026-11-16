@@ -1,0 +1,8 @@
+QUIET start try=1 held_active=0 allowed_timers=3 scopes_over=0 busy_services=0 load1=0.09 bound=1.0 swap_used_kb=0 pswpout_delta=0 mem_available_kb=6236208 mem_min_kb=5859375 cpu-thermal_mc=50281 gpu-thermal_mc=50937 soc0-thermal_mc=50375 soc1-thermal_mc=51187 soc2-thermal_mc=49437 tj-thermal_mc=51187 fail=none 2026-11-15T20:35:52Z
+QUIET start PASS
+QUIET bench_fp32 try=1 held_active=0 allowed_timers=3 scopes_over=0 busy_services=0 load1=0.17 bound=1.0 swap_used_kb=0 pswpout_delta=0 mem_available_kb=6252984 mem_min_kb=5859375 cpu-thermal_mc=51125 gpu-thermal_mc=52093 soc0-thermal_mc=51218 soc1-thermal_mc=52093 soc2-thermal_mc=50343 tj-thermal_mc=52093 fail=none 2026-11-15T21:08:47Z
+QUIET bench_fp32 PASS
+QUIET bench_fp16 try=1 held_active=0 allowed_timers=3 scopes_over=0 busy_services=0 load1=0.20 bound=1.0 swap_used_kb=0 pswpout_delta=0 mem_available_kb=6255428 mem_min_kb=5859375 cpu-thermal_mc=51187 gpu-thermal_mc=52031 soc0-thermal_mc=51187 soc1-thermal_mc=52156 soc2-thermal_mc=50343 tj-thermal_mc=52156 fail=none 2026-11-15T21:15:21Z
+QUIET bench_fp16 PASS
+QUIET bench_int8 try=1 held_active=0 allowed_timers=3 scopes_over=0 busy_services=0 load1=0.57 bound=1.0 swap_used_kb=0 pswpout_delta=0 mem_available_kb=6252944 mem_min_kb=5859375 cpu-thermal_mc=51093 gpu-thermal_mc=51687 soc0-thermal_mc=50812 soc1-thermal_mc=51656 soc2-thermal_mc=50000 tj-thermal_mc=51750 fail=none 2026-11-15T21:20:37Z
+QUIET bench_int8 PASS

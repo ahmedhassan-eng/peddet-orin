@@ -13,7 +13,7 @@ BEGIN_MARKER = "<!-- tree:start -->"
 END_MARKER = "<!-- tree:end -->"
 ROOT_NAME = "peddet-orin/"
 # Directories shown as one line, without their files.
-COLLAPSED = ("runs/", "src/peddet_orin/", "tests/", ".github/ISSUE_TEMPLATE/")
+COLLAPSED = ("runs/", "runs-repeat/", "src/peddet_orin/", "tests/", ".github/ISSUE_TEMPLATE/")
 # A short note after a path; every key must be a tracked file or a shown directory.
 DESCRIPTIONS = {
     ".github/ISSUE_TEMPLATE/": "bug report, feature request and the private security link",
@@ -22,11 +22,12 @@ DESCRIPTIONS = {
     "manifests/calibration_train2017.sha256": "the 500 calibration images and their sha256 hashes",
     "requirements/ci-cpu.txt": "the CPU-only set for CI",
     "runs/": "one JSON log per measurement; the results table is built from them",
+    "runs-repeat/": "further full runs, one directory each, with their QUIET lines and samples",
     "scripts/check_planted_defects.py": "plants each registered defect and checks that its test fails",
     "scripts/ci_local.sh": "runs the CI matrix locally, one venv per Python version",
     "scripts/compare_logs.py": "checks a re-measure against runs/ within the PRD tolerances",
     "scripts/fetch_coco.py": "fetches COCO 2017 over HTTPS from the official URLs into data/",
-    "scripts/generate_table.py": "writes the README results block from runs/",
+    "scripts/generate_table.py": "writes the README's generated blocks from runs/ and runs-repeat/",
     "scripts/generate_tree.py": "writes this tree from git ls-files",
     "src/peddet_orin/": "export, engine builds, evaluation, benchmarks and run logs",
     "tests/": "CPU tests, GPU and TensorRT tests, and the repository-rule tests",
