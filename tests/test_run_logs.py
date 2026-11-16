@@ -11,7 +11,8 @@ import pytest
 
 from peddet_orin import runlog
 
-RUNS = sorted(runlog.RUNS_DIR.glob("*.json"))
+# Every committed log: the earlier run in runs/ and each judged or further run under runs-repeat/.
+RUNS = sorted([*runlog.RUNS_DIR.glob("*.json"), *(runlog.REPO_ROOT / "runs-repeat").glob("*/*.json")])
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
 MANIFEST_SHA256 = "ab" * 32
 # Paths are built at run time, so that no absolute or home path is stored in the repository.
@@ -459,6 +460,11 @@ def test_new_and_changed_logs_under_runs_leave_the_tree_clean(git_repo):
     assert runlog.tree_is_dirty() is False
 
 
-@pytest.mark.parametrize("path", RUNS, ids=lambda item: item.name)
+@pytest.mark.parametrize("path", RUNS, ids=lambda item: f"{item.parent.name}/{item.name}")
 def test_committed_logs_are_valid(path):
     assert runlog.validate_log(json.loads(path.read_text())) == []
+
+
+def test_the_committed_logs_include_every_judged_run():
+    assert {path.parent.name for path in RUNS} >= {"runs", "run3", "run4", "run5"}
+    assert len(RUNS) >= 40
