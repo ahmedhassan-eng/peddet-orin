@@ -22,6 +22,7 @@ NEGATIVE_TESTS = {
     "tests/test_negative_controls.py": "test_a_readme_sentence_with_one_number_changed_is_refused",
     "tests/test_network_guard.py": "test_a_test_that_opens_a_socket_fails",
     "tests/test_packaging_metadata.py": "test_an_unpinned_transitive_dependency_is_detected",
+    "tests/test_pins_match_logs.py": "test_a_pin_that_differs_from_the_logs_is_detected",
     "tests/test_planted_defects.py": "test_a_stale_registry_entry_is_detected",
     "tests/test_preprocess.py": "test_uint8_pixels_are_rejected",
     "tests/test_repo_root.py": "test_pdorin_root_without_a_pyproject_is_refused",
