@@ -11,8 +11,15 @@ import pytest
 
 from peddet_orin import runlog
 
-# Every committed log: the earlier run in runs/ and each judged or further run under runs-repeat/.
-RUNS = sorted([*runlog.RUNS_DIR.glob("*.json"), *(runlog.REPO_ROOT / "runs-repeat").glob("*/*.json")])
+# Every committed log: the earlier run in runs/, each judged or further run under runs-repeat/, and any superseded
+# run under runs-superseded/.
+RUNS = sorted(
+    [
+        *runlog.RUNS_DIR.glob("*.json"),
+        *(runlog.REPO_ROOT / "runs-repeat").glob("*/*.json"),
+        *(runlog.REPO_ROOT / "runs-superseded").glob("*/*.json"),
+    ]
+)
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
 MANIFEST_SHA256 = "ab" * 32
 # Paths are built at run time, so that no absolute or home path is stored in the repository.

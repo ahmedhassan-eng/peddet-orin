@@ -3,12 +3,12 @@
 
 Usage: python scripts/compare_logs.py <runs dir>, for example runs after a re-measure
 
-The reference is what the README's results table is built from: with judged runs under ``runs-repeat/``, their
-median; without them, the newest clean logs in ``runs/``. Logs that are committed under ``runs/`` or
-``runs-repeat/`` are left out of the new set, so a fresh clone's ``runs/`` can be compared after a re-measure and
-the committed logs never stand in for missing ones. The rest must come from one commit and hold an eval and a
-benchmark log for every precision; for each, the newest is compared, and it must be clean and run with the same
-runtime and iteration counts as the reference. Each metric prints one line:
+The reference is what the README's results table is built from: with judged runs under ``runs-repeat/``, their median;
+without them, the newest clean logs in ``runs/``. Logs that are committed under ``runs/``, ``runs-repeat/`` or
+``runs-superseded/`` are left out of the new set, so a fresh clone's ``runs/`` can be compared after a re-measure and
+the committed logs never stand in for missing ones. The rest must come from one commit and hold an eval and a benchmark
+log for every precision; for each, the newest is compared, and it must be clean and run with the same runtime and
+iteration counts as the reference. Each metric prints one line:
 
     COMPARE <kind> <precision> <metric> published=.. new=.. delta=.. tol=.. OK|OUT
 
@@ -115,10 +115,11 @@ def _identity(log: dict) -> tuple:
 
 
 def committed_identities() -> set[tuple]:
-    """The identity of every log committed under runs/ and runs-repeat/."""
+    """The identity of every log committed under runs/, runs-repeat/ and runs-superseded/."""
     logs = generate_table.load_logs(generate_table.RUNS_DIR)
-    for directory in sorted(path for path in generate_table.REPEATS_DIR.glob("*") if path.is_dir()):
-        logs += generate_table.load_logs(directory)
+    for parent in (generate_table.REPEATS_DIR, generate_table.REPO_ROOT / "runs-superseded"):
+        for directory in sorted(path for path in parent.glob("*") if path.is_dir()):
+            logs += generate_table.load_logs(directory)
     return {_identity(log) for log in logs}
 
 
