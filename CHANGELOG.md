@@ -54,6 +54,8 @@ All notable changes to this project are recorded here. The format follows
   `src/peddet_orin/cli.py`, so benchmark no longer imports them from evaluate.
 - A bad input to `python -m peddet_orin.engine_build` prints `python -m peddet_orin.engine_build: error: ...`,
   naming the command as evaluate and benchmark do; it printed `error: ...` before.
+- Diagnostic logging and profiling turn on with `PDORIN_DEBUG=1`; the generic `DEBUG` variable, which other
+  tools also read, no longer turns them on. `tests/test_debug.py` checks both.
 
 ### Security
 

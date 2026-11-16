@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Logging and profiling helpers, silent unless the ``DEBUG`` environment variable is set.
+"""Logging and profiling helpers, silent unless the ``PDORIN_DEBUG`` environment variable is set.
 
-Production paths call these freely: with ``DEBUG`` unset, ``log`` returns at once
+Production paths call these freely: with ``PDORIN_DEBUG`` unset, ``log`` returns at once
 and ``profile`` measures nothing, so timed code is not perturbed by diagnostics.
 """
 from __future__ import annotations
@@ -12,7 +12,8 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-DEBUG_ENV_VAR = "DEBUG"
+# Prefixed, so a DEBUG that another tool reads does not turn on this package's diagnostics.
+DEBUG_ENV_VAR = "PDORIN_DEBUG"
 FALSE_VALUES = ("", "0", "false", "no")
 
 
@@ -22,14 +23,14 @@ def enabled() -> bool:
 
 
 def log(message: str) -> None:
-    """Write one diagnostic line to stderr when ``DEBUG`` is set."""
+    """Write one diagnostic line to stderr when ``PDORIN_DEBUG`` is set."""
     if enabled():
         print(f"[debug] {message}", file=sys.stderr, flush=True)
 
 
 @contextmanager
 def profile(label: str) -> Iterator[None]:
-    """Log the wall time of the enclosed block when ``DEBUG`` is set."""
+    """Log the wall time of the enclosed block when ``PDORIN_DEBUG`` is set."""
     if not enabled():
         yield
         return

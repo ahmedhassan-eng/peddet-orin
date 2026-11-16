@@ -16,6 +16,7 @@ QUEUE = REPO_ROOT / "QUEUE.md"
 # One in-file negative test for each test file that no registry entry names; each must exist in its file.
 NEGATIVE_TESTS = {
     "tests/test_checkout_kinds.py": "test_a_shallow_clone_in_ci_still_fails_a_strict_run",
+    "tests/test_debug.py": "test_the_generic_debug_variable_turns_nothing_on",
     "tests/test_device_resources.py": "test_write_rejects_a_wrong_shape_with_the_same_byte_count",
     "tests/test_internal_ids.py": "test_an_id_planted_in_any_tracked_path_is_found",
     "tests/test_measure_cli_checks.py": "test_measure_corrupt_engine_is_refused",

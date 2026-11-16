@@ -265,7 +265,7 @@ python scripts/generate_table.py --write
 
 Each command writes a JSON log to `runs/`, and the last one rewrites the README's generated blocks. With quieted runs committed under `runs-repeat/`, the results table is their median; without them, it is the newest clean logs in `runs/`, which must all come from one commit. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
 
-To check a re-measure against the published numbers, write its logs to another directory, for example a fresh clone's `runs/`, and compare: `python scripts/compare_logs.py <that runs dir>`. It compares the newest clean eval and benchmark log of each precision with what the results table is built from, the median of the judged runs in `runs-repeat/`, applies the tolerances of `PRD.md` R-11 and prints one line per metric. A set without a clean eval and benchmark log for every precision fails. Set `DEBUG=1` to turn on diagnostic logging and profiling.
+To check a re-measure against the published numbers, write its logs to another directory, for example a fresh clone's `runs/`, and compare: `python scripts/compare_logs.py <that runs dir>`. It compares the newest clean eval and benchmark log of each precision with what the results table is built from, the median of the judged runs in `runs-repeat/`, applies the tolerances of `PRD.md` R-11 and prints one line per metric. A set without a clean eval and benchmark log for every precision fails. Set `PDORIN_DEBUG=1` to turn on diagnostic logging and profiling.
 
 ## Continuous integration
 
@@ -284,7 +284,7 @@ PDORIN_STRICT_SKIPS=1 python -m pytest -rs
 ```
 <!-- ci:end -->
 
-Negative controls: `tests/planted_defects.py` registers 37 planted defects, and `python scripts/check_planted_defects.py` plants each one in a fresh clone and checks that its test fails; the release check requires all 37 to be caught. They cover 21 of the 35 test files, 13 more carry in-file negative tests, and `QUEUE.md` names the rest. `tests/test_negative_controls.py` fails if these numbers differ from the registry and the test files.
+Negative controls: `tests/planted_defects.py` registers 37 planted defects, and `python scripts/check_planted_defects.py` plants each one in a fresh clone and checks that its test fails; the release check requires all 37 to be caught. They cover 21 of the 36 test files, 14 more carry in-file negative tests, and `QUEUE.md` names the rest. `tests/test_negative_controls.py` fails if these numbers differ from the registry and the test files.
 
 ## Repository layout
 
