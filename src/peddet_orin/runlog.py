@@ -134,6 +134,9 @@ REQUIRED_ENVIRONMENT = (
     "cuda",
     "peddet_orin",
 )
+# Recorded by every log from 0.1.1 on, and checked as strings when present; not required, so the committed logs
+# written before them stay valid. JPEG decoding is inside every end-to-end iteration, so its library is recorded.
+DECODE_ENVIRONMENT = ("numpy", "pillow", "libjpeg", "pycocotools")
 
 
 def _utc_now() -> str:
@@ -169,6 +172,29 @@ def _torch_cuda_version() -> str:
         return UNREADABLE
 
 
+def _distribution_version(name: str) -> str:
+    """Return an installed distribution's version, or ``UNREADABLE``."""
+    try:
+        return metadata.version(name)
+    except metadata.PackageNotFoundError:
+        return UNREADABLE
+
+
+def _libjpeg_version() -> str:
+    """Return the libjpeg Pillow decodes JPEG with, as "libjpeg-turbo <release>" or "libjpeg <version>", or
+    ``UNREADABLE``. Pillow's plain "jpg" version is the libjpeg API level, which many turbo releases share."""
+    try:
+        from PIL import features
+
+        turbo = features.version_feature("libjpeg_turbo") if features.check_feature("libjpeg_turbo") else None
+        version = features.version("jpg")
+    except Exception:  # Pillow raises its own errors for a missing codec; any failure means it was not read.
+        return UNREADABLE
+    if turbo:
+        return f"libjpeg-turbo {turbo}"
+    return f"libjpeg {version}" if version else UNREADABLE
+
+
 def _package_version() -> str:
     try:
         return metadata.version(PROJECT_NAME)
@@ -188,6 +214,10 @@ def environment_facts() -> dict[str, str]:
     facts["python"] = platform.python_version()
     facts["cuda"] = _torch_cuda_version()
     facts["peddet_orin"] = _package_version()
+    facts["numpy"] = _module_version("numpy")
+    facts["pillow"] = _module_version("PIL")
+    facts["libjpeg"] = _libjpeg_version()
+    facts["pycocotools"] = _distribution_version("pycocotools")
     return facts
 
 
@@ -513,7 +543,7 @@ def validate_log(record: Any) -> list[str]:
         problems += [f"missing fact: {name}" for name in REQUIRED_ENVIRONMENT if name not in environment]
         problems += [
             f"fact is not a string: {name}"
-            for name in REQUIRED_ENVIRONMENT
+            for name in (*REQUIRED_ENVIRONMENT, *DECODE_ENVIRONMENT)
             if name in environment and not isinstance(environment[name], str)
         ]
     times = {}

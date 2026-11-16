@@ -181,6 +181,29 @@ def test_the_new_environment_facts_are_required_and_collected():
     assert facts["python"].count(".") == 2
 
 
+def test_the_decode_facts_are_recorded_as_strings():
+    facts = runlog.environment_facts()
+    assert set(runlog.DECODE_ENVIRONMENT) <= set(facts)
+    assert all(isinstance(facts[name], str) and facts[name] for name in runlog.DECODE_ENVIRONMENT)
+    import numpy
+    import PIL
+
+    assert (facts["numpy"], facts["pillow"]) == (numpy.__version__, PIL.__version__)
+    from PIL import features
+
+    turbo = features.version_feature("libjpeg_turbo")
+    assert facts["libjpeg"] == (f"libjpeg-turbo {turbo}" if turbo else f"libjpeg {features.version('jpg')}")
+
+
+@pytest.mark.parametrize("fact", runlog.DECODE_ENVIRONMENT)
+def test_a_decode_fact_that_is_not_a_string_is_rejected(fact):
+    broken = make_log()
+    broken["environment"][fact] = 3
+    assert f"fact is not a string: {fact}" in runlog.validate_log(broken)
+    del broken["environment"][fact]
+    assert runlog.validate_log(broken) == []
+
+
 BAD_RESULTS = [
     ("eval", {"ap": 1.5}),
     ("eval", {"ap": -0.1}),
