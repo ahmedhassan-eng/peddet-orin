@@ -191,13 +191,54 @@ def top_level_block(text: str, key: str) -> list[str]:
     return lines[start:end]
 
 
+TRIGGERS = [
+    "on:",
+    "push:",
+    "branches: [main]",
+    "pull_request:",
+    "schedule:",
+    '- cron: "17 5 * * 1"',
+    "workflow_dispatch:",
+]
+
+
 def trigger_problems(text: str) -> list[str]:
-    """Return what makes a pull request branch run twice: push must be limited to main."""
-    block = [line.strip() for line in top_level_block(text, "on")]
+    """Return what makes a pull request branch run twice, push being limited to main, or drops the weekly run."""
+    block = [line.strip() for line in top_level_block(text, "on") if not line.strip().startswith("#")]
     problems = []
-    if block != ["on:", "push:", "branches: [main]", "pull_request:"]:
-        problems.append(f"triggers are not push to main plus pull_request: {block}")
+    if block != TRIGGERS:
+        problems.append(f"triggers are not push to main, pull_request, a weekly schedule and dispatch: {block}")
     return problems
+
+
+# Keys that would let a step or the job pass without running what it lists, or change how it runs.
+WEAKENING_KEYS = re.compile(r"^\s*(?:- )?(?P<key>if|continue-on-error|shell|env|working-directory):", re.M)
+
+
+def hardening_problems(text: str) -> list[str]:
+    """Return each way the workflow could pass without running its commands, or keeps a writable token."""
+    problems = [f"workflow sets {match.group('key')}" for match in WEAKENING_KEYS.finditer(text)]
+    if top_level_block(text, "permissions") != ["permissions:", "  contents: read"]:
+        problems.append("permissions are not contents: read only")
+    if "persist-credentials: false" not in text:
+        problems.append("checkout keeps the token in the clone")
+    return problems
+
+
+def test_the_workflow_cannot_skip_or_soften_its_steps():
+    assert hardening_problems(WORKFLOW.read_text()) == []
+
+
+def test_a_skipped_or_softened_step_is_detected():
+    text = WORKFLOW.read_text()
+    softened = text.replace(
+        "      - name: Lint and check the format\n",
+        "      - name: Lint and check the format\n        continue-on-error: true\n",
+    )
+    assert hardening_problems(softened) == ["workflow sets continue-on-error"]
+    skipped = text.replace("  cpu-tests:\n", "  cpu-tests:\n    if: false\n")
+    assert hardening_problems(skipped) == ["workflow sets if"]
+    assert "checkout keeps the token in the clone" in hardening_problems(text.replace("persist-credentials: false", ""))
 
 
 def test_ci_runs_on_push_to_main_and_on_pull_requests_only():

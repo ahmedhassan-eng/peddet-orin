@@ -282,7 +282,7 @@ CI runs on every push to `main` and on every pull request, cancels a run that a 
 
 <!-- ci:begin -->
 ```sh
-# CI: ubuntu-latest, Python 3.11 and 3.12
+# CI: ubuntu-24.04, Python 3.11 and 3.12
 python -m pip install --require-hashes -r requirements/ci-cpu.lock
 python -m pip install --no-deps --no-build-isolation -e .
 python -m venv --clear .cache/pip-audit

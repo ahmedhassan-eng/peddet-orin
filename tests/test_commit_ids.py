@@ -2,7 +2,9 @@
 """Every commit id that a tracked file cites is a commit in this repository's history.
 
 A cited id that is not in the history points at work nobody can check out, such as an unpushed or rewritten
-commit. Action SHAs in the workflow name commits of other repositories and are checked in test_ci_contract.py.
+commit. Action SHAs in the workflow name commits of other repositories: test_ci_contract.py checks each is a full
+SHA with its release tag beside it, which this test cannot resolve offline; each was matched against its tag on
+GitHub when it was pinned.
 """
 
 import re

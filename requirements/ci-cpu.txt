@@ -1,4 +1,4 @@
-# CPU-only set for CI (ubuntu-latest, Python 3.11 and 3.12). No CUDA, no TensorRT:
+# CPU-only set for CI (ubuntu-24.04, Python 3.11 and 3.12). No CUDA, no TensorRT:
 # the GPU and TensorRT tests skip when those are absent.
 #
 # A complete lock: every package pip installs from this file is pinned here, transitive
