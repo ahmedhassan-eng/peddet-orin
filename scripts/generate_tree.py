@@ -25,7 +25,7 @@ DESCRIPTIONS = {
     "runs-repeat/": "further full runs, one directory each, with their QUIET lines and samples",
     "scripts/check_planted_defects.py": "plants each registered defect and checks that its test fails",
     "scripts/ci_local.sh": "runs the CI matrix locally, one venv per Python version",
-    "scripts/compare_logs.py": "checks a re-measure against runs/ within the PRD tolerances",
+    "scripts/compare_logs.py": "checks a re-measure against the judged median within the PRD tolerances",
     "scripts/fetch_coco.py": "fetches COCO 2017 over HTTPS from the official URLs into data/",
     "scripts/generate_table.py": "writes the README's generated blocks from runs/ and runs-repeat/",
     "scripts/generate_tree.py": "writes this tree from git ls-files",

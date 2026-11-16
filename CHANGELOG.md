@@ -30,6 +30,9 @@ All notable changes to this project are recorded here. The format follows
   table includes it and was not re-measured; the timings and accuracy do not depend on it. The run log still loads
   ONNX Runtime to record its version, so a benchmark run of the released code loads it too, once its input checks
   have passed.
+- `scripts/compare_logs.py` compares a re-measure with what the results table is built from, the median of the
+  judged runs, not with the earlier run in `runs/`, and fails a re-measure that lacks a clean eval or benchmark log
+  for any precision; it skipped those before. Its `--against` option is gone. Two planted defects cover the change.
 
 ### Security
 

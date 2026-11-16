@@ -254,4 +254,18 @@ DEFECTS = [
         "new": "keep = keep",
         "catches": "tests/test_postprocess.py::test_pipeline_equals_torchvision_detector",
     },
+    {
+        "id": "compare-against-earlier-run",
+        "file": "scripts/compare_logs.py",
+        "old": "    return generate_table.headline()[0]\n",
+        "new": "    return generate_table.select(generate_table.load_logs(generate_table.RUNS_DIR))\n",
+        "catches": "tests/test_compare_logs.py::test_the_default_reference_is_what_the_published_table_is_built_from",
+    },
+    {
+        "id": "compare-skips-missing-log",
+        "file": "scripts/compare_logs.py",
+        "old": "                failures += 1\n                lines.append(f\"COMPARE {kind} {precision} log",
+        "new": "                lines.append(f\"COMPARE {kind} {precision} log",
+        "catches": "tests/test_compare_logs.py::test_an_incomplete_new_set_fails",
+    },
 ]

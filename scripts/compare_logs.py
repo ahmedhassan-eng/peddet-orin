@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Compare a new run's logs with the committed ones, metric by metric, against fixed tolerances.
+"""Compare a re-measure with the published table, metric by metric, against fixed tolerances.
 
-Usage: python scripts/compare_logs.py <new_runs_dir> [--against runs/]
+Usage: python scripts/compare_logs.py <new_runs_dir>
 
-For each kind and precision with an eval or benchmark log in the new run, the newest
-clean log there is compared with the newest clean log in ``--against``. Each metric
-prints one line:
+The reference is what the README's results table is built from: with judged runs under ``runs-repeat/``, their
+median; without them, the newest clean logs in ``runs/``. The new set must hold a clean eval and a clean benchmark
+log for every precision; for each, the newest is compared. Each metric prints one line:
 
     COMPARE <kind> <precision> <metric> published=.. new=.. delta=.. tol=.. OK|OUT
 
-Metrics in ``REPORTED_ONLY`` end in ``REPORTED`` instead: they are shown, not judged.
-The last line is ``COMPARE DONE PASS`` (exit 0) or ``COMPARE DONE FAIL <n>`` (exit 1),
-where n counts the OUT lines.
+Metrics in ``REPORTED_ONLY`` end in ``REPORTED`` instead: they are shown, not judged. A kind and precision with no
+clean new log prints one ``COMPARE <kind> <precision> log published=- new=missing delta=n/a tol=- OUT`` line.
+The last line is ``COMPARE DONE PASS`` (exit 0) or ``COMPARE DONE FAIL <n>`` (exit 1), where n counts the OUT lines.
 """
 from __future__ import annotations
 
@@ -83,17 +83,24 @@ def judge(metric: str, precision: str, published: object, new: object) -> tuple[
     return f"{delta * 100:+.1f}%", tolerance_text, "OK" if abs(delta) <= tolerance + EPSILON else "OUT"
 
 
-def compare(new_dir: Path, against_dir: Path) -> list[str]:
-    """Return the COMPARE lines, the final DONE line included."""
+def reference() -> dict:
+    """The logs the README's results table is built from, keyed by kind and precision."""
+    return generate_table.headline()[0]
+
+
+def compare(new_dir: Path, published_logs: dict | None = None) -> list[str]:
+    """Return the COMPARE lines, the final DONE line included; ``published_logs`` defaults to ``reference()``."""
+    published_logs = reference() if published_logs is None else published_logs
     new_logs = generate_table.load_logs(new_dir)
-    published_logs = generate_table.load_logs(against_dir)
     lines, failures = [], 0
     for kind in KINDS:
         for precision in generate_table.PRECISIONS:
             new = generate_table.latest(new_logs, kind, precision)
             if new is None:
+                failures += 1
+                lines.append(f"COMPARE {kind} {precision} log published=- new=missing delta=n/a tol=- OUT")
                 continue
-            published = generate_table.latest(published_logs, kind, precision)
+            published = published_logs.get((kind, precision))
             for metric, read in METRICS[kind]:
                 new_value = read(new["results"])
                 published_value = read(published["results"]) if published else "missing"
@@ -103,20 +110,19 @@ def compare(new_dir: Path, against_dir: Path) -> list[str]:
                     f"COMPARE {kind} {precision} {metric} published={_shown(published_value)} "
                     f"new={_shown(new_value)} delta={delta} tol={tolerance} {verdict}"
                 )
-    if not lines:
-        failures += 1
-        lines.append("COMPARE - - logs published=- new=none delta=n/a tol=- OUT")
     lines.append("COMPARE DONE PASS" if failures == 0 else f"COMPARE DONE FAIL {failures}")
     return lines
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("new_runs_dir", type=Path, help="directory holding the new run's logs")
-    parser.add_argument("--against", type=Path, default=generate_table.RUNS_DIR,
-                        help="directory of the committed logs (default: runs/)")
+    parser.add_argument("new_runs_dir", type=Path, help="directory holding the re-measure's logs")
     args = parser.parse_args(argv)
-    lines = compare(args.new_runs_dir, args.against)
+    try:
+        lines = compare(args.new_runs_dir)
+    except generate_table.TableError as error:
+        print(f"compare_logs: {error}", file=sys.stderr)
+        return 1
     print("\n".join(lines))
     return 0 if lines[-1] == "COMPARE DONE PASS" else 1
 

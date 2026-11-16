@@ -60,7 +60,7 @@ The suite also enforces the repository's own rules:
 ## Results
 
 Never edit the results table by hand. Run the measurement from a clean tree, commit its JSON log under `runs/`, then
-run `python scripts/generate_table.py --write`. Check a re-measure against the committed logs with
+run `python scripts/generate_table.py --write`. Check a re-measure against the published table with
 `python scripts/compare_logs.py <new runs dir>`, which applies the tolerances of `PRD.md` R-11. The run log records
 the Jetson Linux release, power mode and package versions; name the board and JetPack version in the pull request.
 
