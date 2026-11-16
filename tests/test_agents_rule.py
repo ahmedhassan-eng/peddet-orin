@@ -1,59 +1,61 @@
 # SPDX-License-Identifier: Apache-2.0
-"""AGENTS.md carries the shared commit-message rule byte for byte, in the shared-rules v2 block.
-
-The block is a declared-digest line, then BEGIN and END markers, the shape the shared-rules checker reads.
-"""
-import hashlib
+"""AGENTS.md states the commit-message rule, and every commit keeps its checkable parts: no trailer, and no
+subject that ends with a period."""
+import subprocess
 from pathlib import Path
 
 import pytest
 
-AGENTS = Path(__file__).resolve().parents[1] / "AGENTS.md"
-DIGEST_LINE = b"<!-- shared-rules v2 sha256=%s -->\n"
-BEGIN = b"<!-- BEGIN SHARED RULES v2 -->\n"
-END = b"<!-- END SHARED RULES v2 -->"
-# sha256 and size of commit-rule.md as shared by this project's repositories.
-RULE_SHA256 = "1900994bbf2c4f6c7090742d7457c66e7988fd0293d6b91023924c3cca987686"
-RULE_BYTES = 2174
+from strict_skips import checkout_skip_reason
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+AGENTS = REPO_ROOT / "AGENTS.md"
+RULE_LINES = (
+    "- Subject: imperative mood, no trailing period, at most 72 characters where the change can be named in that.",
+    "- Commit messages carry no trailers.",
+)
+HISTORY_SKIP = checkout_skip_reason(REPO_ROOT, history=True)
+needs_history = pytest.mark.skipif(HISTORY_SKIP is not None, reason=HISTORY_SKIP or "")
 
 
-def rule_bytes(document: bytes) -> bytes:
-    """Return the bytes between the markers, refusing a missing or repeated marker."""
-    for marker in (BEGIN, END):
-        if document.count(marker) != 1:
-            raise ValueError(f"expected one {marker!r}, found {document.count(marker)}")
-    start = document.index(BEGIN) + len(BEGIN)
-    end = document.index(END)
-    if end < start:
-        raise ValueError("END marker comes before BEGIN marker")
-    return document[start:end]
+def trailers(message: str) -> list[str]:
+    """The trailers git itself parses from a commit message."""
+    done = subprocess.run(["git", "interpret-trailers", "--parse"], input=message, capture_output=True, text=True,
+                          check=True, cwd=REPO_ROOT)
+    return done.stdout.splitlines()
 
 
-def rule_matches(document: bytes) -> bool:
-    copy = rule_bytes(document)
-    digest = hashlib.sha256(copy).hexdigest()
-    declared = DIGEST_LINE % digest.encode() + BEGIN
-    return len(copy) == RULE_BYTES and digest == RULE_SHA256 and document.count(declared) == 1
+def message_problems(commit: str, message: str) -> list[str]:
+    """Each break of the rule's checkable parts in one message, as "<commit>: <problem>"."""
+    subject = message.split("\n", 1)[0]
+    problems = [f"{commit}: trailer {line}" for line in trailers(message)]
+    return problems + ([f"{commit}: subject ends with a period"] if subject.rstrip().endswith(".") else [])
 
 
-def test_agents_md_carries_the_commit_rule_verbatim():
-    assert rule_matches(AGENTS.read_bytes())
+def history() -> list[tuple[str, str]]:
+    done = subprocess.run(["git", "log", "--format=%h%x00%B%x00"], cwd=REPO_ROOT, capture_output=True, text=True,
+                          check=True)
+    fields = done.stdout.split("\0")
+    return [(fields[i].strip(), fields[i + 1]) for i in range(0, len(fields) - 1, 2)]
 
 
-def test_one_changed_byte_in_the_rule_is_detected():
-    document = AGENTS.read_bytes()
-    position = document.index(BEGIN) + len(BEGIN) + 10
-    edited = document[:position] + bytes([document[position] ^ 0x20]) + document[position + 1 :]
-    assert not rule_matches(edited)
+def test_agents_md_states_the_commit_rule():
+    text = AGENTS.read_text()
+    assert "## Commit messages" in text
+    assert all(line in text.splitlines() for line in RULE_LINES)
 
 
-def test_a_missing_marker_is_rejected():
-    with pytest.raises(ValueError):
-        rule_bytes(AGENTS.read_bytes().replace(END, b""))
+@needs_history
+def test_no_commit_carries_a_trailer_or_a_subject_ending_in_a_period():
+    commits = history()
+    assert commits
+    assert [problem for commit, message in commits for problem in message_problems(commit, message)] == []
 
 
-def test_a_wrong_declared_digest_is_detected():
-    document = AGENTS.read_bytes()
-    edited = document.replace(b"sha256=" + RULE_SHA256.encode(), b"sha256=" + b"0" * 64)
-    assert edited != document
-    assert not rule_matches(edited)
+def test_a_trailer_or_a_period_at_the_end_of_the_subject_is_detected():
+    body = "Fix the thing\n\n- Change one file\n"
+    assert message_problems("abc1234", body) == []
+    assert message_problems("abc1234", body + "\nSigned-off-by: A Person <a@example.org>\n") == [
+        "abc1234: trailer Signed-off-by: A Person <a@example.org>"
+    ]
+    assert message_problems("abc1234", body.replace("thing", "thing.", 1)) == ["abc1234: subject ends with a period"]

@@ -41,6 +41,10 @@ All notable changes to this project are recorded here. The format follows
 - The README leads with Results and Limitations. The hardware and software follow, then a Judged runs section
   with the generated repeat block (gates, memory, swap, temperature and sampler records) and Provenance, then the
   Quickstart and how to reproduce the results.
+- `AGENTS.md` states this repository's own short commit-message rule in place of a block copied from other
+  projects; `tests/test_agents_rule.py` now checks that every commit keeps its checkable parts, no trailer and no
+  subject ending with a period, and refuses a message that breaks either.
+- `AGENTS.md` says the published numbers come from logs under `runs/` or `runs-repeat/`; it named `runs/` only.
 
 ### Security
 

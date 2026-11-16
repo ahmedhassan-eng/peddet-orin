@@ -18,9 +18,9 @@ DEFECTS = [
     {
         "id": "agents-rule-edited",
         "file": "AGENTS.md",
-        "old": "Subject: imperative, no trailing period",
-        "new": "Subject: imperative, no trailing full stop",
-        "catches": "tests/test_agents_rule.py::test_agents_md_carries_the_commit_rule_verbatim",
+        "old": "- Commit messages carry no trailers.\n",
+        "new": "- Commit messages may carry trailers.\n",
+        "catches": "tests/test_agents_rule.py::test_agents_md_states_the_commit_rule",
     },
     {
         "id": "test-name-shared",

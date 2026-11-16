@@ -318,7 +318,7 @@ peddet-orin/
 ├── tests/                           CPU tests, GPU and TensorRT tests, and the repository-rule tests
 ├── .editorconfig
 ├── .gitignore
-├── AGENTS.md                        rules for changes, with the shared commit-message rule
+├── AGENTS.md                        rules for changes, with the commit-message rule
 ├── CHANGELOG.md
 ├── CITATION.cff
 ├── CODE_OF_CONDUCT.md

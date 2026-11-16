@@ -31,7 +31,7 @@ DESCRIPTIONS = {
     "scripts/generate_tree.py": "writes this tree from git ls-files",
     "src/peddet_orin/": "export, engine builds, evaluation, benchmarks and run logs",
     "tests/": "CPU tests, GPU and TensorRT tests, and the repository-rule tests",
-    "AGENTS.md": "rules for changes, with the shared commit-message rule",
+    "AGENTS.md": "rules for changes, with the commit-message rule",
     "PRD.md": "requirements, their acceptance checks and the tests that cover them",
     "QUEUE.md": "open and not-shipped work",
 }

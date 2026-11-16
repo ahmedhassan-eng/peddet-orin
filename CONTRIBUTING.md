@@ -44,7 +44,8 @@ The suite also enforces the repository's own rules:
 - `tests/test_ci_contract.py`: `.github/workflows/ci.yml` runs exactly the commands the README's CI section lists,
   pins every action by commit SHA, and matches `scripts/ci_local.sh`, which runs the same matrix locally.
 - `tests/test_test_names.py`: no two tests share a name.
-- `tests/test_agents_rule.py`: the commit-message rule in `AGENTS.md` is unchanged, with its declared digest.
+- `tests/test_agents_rule.py`: `AGENTS.md` states the commit-message rule, and no commit carries a trailer or
+  ends its subject with a period.
 - `tests/test_version_agreement.py`: `pyproject.toml`, `CHANGELOG.md` and `CITATION.cff` name the same version.
 - `tests/test_strict_skips.py`: with `PDORIN_STRICT_SKIPS=1`, as in CI, any skip other than the five GPU and
   TensorRT tests fails the run. Outside CI, the repository-rule tests may also skip in a release tarball (no `.git`)
