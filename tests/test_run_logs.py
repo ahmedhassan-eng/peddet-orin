@@ -63,7 +63,7 @@ RESULTS = {
         "engine_bytes": 9000000,
         "build_seconds": 120.5,
         "int8_path": "-",
-        "entropy_failure": "",
+        "entropy_failure": "-",
         "calibration_manifest_sha256": "-",
     },
     "export": {"max_abs_difference": 1e-5, "tolerance": 1e-4, "opset": 17, "input_shape": [1, 3, 320, 320]},
@@ -128,7 +128,9 @@ def test_a_benchmark_without_tegrastats_records_power_and_ram_as_unreadable():
 
 
 def test_a_valid_int8_build_log_is_accepted():
-    log = make_log("build", "int8", results={"int8_path": "entropy", "calibration_manifest_sha256": MANIFEST_SHA256})
+    results = {"int8_path": "IInt8EntropyCalibrator2", "entropy_failure": "",
+               "calibration_manifest_sha256": MANIFEST_SHA256}
+    log = make_log("build", "int8", results=results)
     assert runlog.validate_log(log) == []
 
 
@@ -245,6 +247,27 @@ BAD_RESULTS = [
 @pytest.mark.parametrize(("kind", "results"), BAD_RESULTS, ids=[f"{k}-{sorted(r)[0]}" for k, r in BAD_RESULTS])
 def test_each_bad_result_is_rejected(kind, results):
     assert runlog.validate_log(make_log(kind, results=results))
+
+
+INT8_BUILD = {"int8_path": "IInt8EntropyCalibrator2", "entropy_failure": "", "calibration_manifest_sha256": "a" * 64}
+QDQ_FAILURE = "TensorRtBuildError: entropy build returned no engine"
+
+
+def test_each_build_has_one_valid_entropy_failure_form():
+    def problems(precision, **results):
+        return runlog.validate_log(make_log("build", precision, results=results))
+
+    assert problems("fp16") == []
+    assert problems("int8", **INT8_BUILD) == []
+    assert problems("int8", **dict(INT8_BUILD, int8_path="onnx-ptq-qdq", entropy_failure=QDQ_FAILURE)) == []
+    assert problems("fp16", entropy_failure="") == ["bad result: build entropy_failure must be - without int8"]
+    assert problems("int8", **dict(INT8_BUILD, entropy_failure=QDQ_FAILURE)) == [
+        "bad result: build entropy_failure must be empty when the entropy path was taken"
+    ]
+    for empty in ("", "-"):
+        assert problems("int8", **dict(INT8_BUILD, int8_path="onnx-ptq-qdq", entropy_failure=empty)) == [
+            "bad result: build entropy_failure must name the failure when the fallback was taken"
+        ]
 
 
 @pytest.mark.parametrize("kind", sorted(RESULTS))

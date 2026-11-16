@@ -445,6 +445,13 @@ RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
 OPTIONAL_RESULTS: dict[str, frozenset[str]] = {"gpu_check": frozenset({"inferred_slice"})}
 
 
+# A build log's sentinels: "-" for a field that does not apply to its precision, and NO_ENTROPY_FAILURE for an INT8
+# build whose entropy calibration succeeded. Each INT8 path has exactly one valid entropy_failure form.
+NOT_APPLICABLE = "-"
+NO_ENTROPY_FAILURE = ""
+INT8_ENTROPY_PATH = "IInt8EntropyCalibrator2"
+
+
 def _cross_field_problems(kind: str, precision: Any, results: dict) -> list[str]:
     """Return the problems that involve more than one value of a log's results."""
     problems = []
@@ -458,16 +465,23 @@ def _cross_field_problems(kind: str, precision: Any, results: dict) -> list[str]
     if kind == "build":
         manifest = results.get("calibration_manifest_sha256")
         route = results.get("int8_path")
+        failure = results.get("entropy_failure")
         if precision == "int8":
             if isinstance(manifest, str) and not SHA256_PATTERN.fullmatch(manifest):
                 problems.append("bad result: build calibration_manifest_sha256 is not a sha256")
-            if route in ("", "-"):
+            if route in ("", NOT_APPLICABLE):
                 problems.append("bad result: build int8_path is empty for int8")
+            elif route == INT8_ENTROPY_PATH and failure not in (None, NO_ENTROPY_FAILURE):
+                problems.append("bad result: build entropy_failure must be empty when the entropy path was taken")
+            elif route != INT8_ENTROPY_PATH and failure in (NO_ENTROPY_FAILURE, NOT_APPLICABLE):
+                problems.append("bad result: build entropy_failure must name the failure when the fallback was taken")
         else:
-            if manifest not in (None, "-"):
+            if manifest not in (None, NOT_APPLICABLE):
                 problems.append("bad result: build calibration_manifest_sha256 must be - without int8")
-            if route not in (None, "-"):
+            if route not in (None, NOT_APPLICABLE):
                 problems.append("bad result: build int8_path must be - without int8")
+            if failure not in (None, NOT_APPLICABLE):
+                problems.append("bad result: build entropy_failure must be - without int8")
     return problems
 
 

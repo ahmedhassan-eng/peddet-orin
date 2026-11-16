@@ -75,6 +75,9 @@ All notable changes to this project are recorded here. The format follows
   a host where PyTorch finds none, with one line and exit 2 (PRD R-14); it was a traceback.
 - The TensorRT backend refuses an engine whose input or outputs are not FLOAT before it allocates a buffer, since
   its buffers hold float32; the engines `engine_build` writes are FLOAT at both ends.
+- A build log's `entropy_failure` has one form per case, and the log check enforces it: `-` without INT8,
+  empty when the INT8 entropy path was taken, and the failure text when the Q/DQ fallback was; the committed logs
+  already follow it.
 
 ### Security
 

@@ -37,9 +37,9 @@ EXPECTED_CALIBRATION_IMAGES = 500
 # "Use Deprecated in TensorRT 10.1. Superseded by explicit quantization. instead."
 # and only that warning is filtered, only while the calibrator is set up and used.
 CALIBRATOR_DEPRECATION_PATTERN = r"Use Deprecated in TensorRT [\d.]+\. Superseded by explicit quantization\. instead\."
-PATH_ENTROPY = "IInt8EntropyCalibrator2"
+PATH_ENTROPY = runlog.INT8_ENTROPY_PATH
 PATH_QDQ = "onnx-ptq-qdq"
-NOT_APPLICABLE = "-"
+NOT_APPLICABLE = runlog.NOT_APPLICABLE
 PRECISIONS = ("fp16", "int8")
 EXIT_BAD_INPUT = 2
 PROG = "python -m peddet_orin.engine_build"
@@ -260,7 +260,7 @@ def build_int8(onnx_path: Path, output: Path, images: list[Path]) -> tuple[str, 
         raise InputError("INT8 needs calibration images and none were given")
     try:
         _build_int8_entropy(onnx_path, output, images)
-        return PATH_ENTROPY, ""
+        return PATH_ENTROPY, runlog.NO_ENTROPY_FAILURE
     except TensorRtBuildError as error:
         failure = f"{type(error).__name__}: {runlog.relative_command([str(error)])}"
     _build_int8_qdq(onnx_path, output, images)
