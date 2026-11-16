@@ -293,7 +293,7 @@ def test_a_build_logs_builder_flags_are_optional_and_checked():
 
 def test_a_tensorrt_fp32_build_has_no_precision_flag():
     def problems(**results):
-        return runlog.validate_log(make_log("build", "fp32-trt", results=results))
+        return runlog.validate_log(make_log("build", "fp32-trt", results={"engine_sha256": ENGINE_SHA256, **results}))
 
     assert problems(builder_flags=[]) == []
     for flags in (["TF32"], ["FP16", "TF32"]):
@@ -479,8 +479,9 @@ def test_each_kind_takes_its_precisions():
             runlog.validate_log(deploy_log(precision, engine_sha256="-" if precision == "fp32" else ENGINE_SHA256))
             == []
         )
-    for precision in ("fp32-trt", "fp16"):
-        assert runlog.validate_log(make_log("build", precision)) == []
+    assert runlog.validate_log(make_log("build", "fp16")) == []
+    trt32 = make_log("build", "fp32-trt", results={"builder_flags": [], "engine_sha256": ENGINE_SHA256})
+    assert runlog.validate_log(trt32) == []
     assert "bad precision for benchmark_deploy: int4" in runlog.validate_log(deploy_log("int4"))
 
 
@@ -721,3 +722,10 @@ def test_the_logged_package_version_is_the_checkouts_even_with_stale_metadata(mo
     assert runlog._package_version() == "7.7.7"
     (tmp_path / "pyproject.toml").write_text("[project]\n")
     assert runlog._package_version() == "0.0.1"
+
+
+def test_a_tensorrt_fp32_build_log_must_record_its_flags_and_engine():
+    log = make_log("build", "fp32-trt")
+    problems = runlog.validate_log(log)
+    assert "missing result: build builder_flags for fp32-trt" in problems
+    assert "missing result: build engine_sha256 for fp32-trt" in problems

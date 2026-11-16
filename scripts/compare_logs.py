@@ -45,7 +45,8 @@ TOLERANCES: dict[str, dict] = {
 REPORTED_ONLY = ("engine_p99_ms", "end_to_end_p99_ms", "system_ram_rise_mib")
 KINDS = ("eval", "benchmark")
 # The deployment-style benchmark is not judged by R-11: each of its metrics prints one REPORTED line when the new
-# logs carry it, and it never counts as a failure or a missing log.
+# logs carry it, and a missing one is not a failure. A deploy log from another commit than the rest still fails the
+# one-commit check, as a log of any kind does.
 DEPLOY_KIND = generate_table.DEPLOY
 DEPLOY_METRICS: tuple[tuple[str, Callable[[dict], object]], ...] = (
     ("end_to_end_p50_ms", lambda results: results["end_to_end"]["p50_ms"]),

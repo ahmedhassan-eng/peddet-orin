@@ -173,7 +173,33 @@ def select(logs: list[dict]) -> dict[tuple[str, str], dict]:
                 f"benchmark runtime {benchmark['results']['runtime']}"
             )
     check_deploy(chosen)
+    check_engines(chosen)
     return chosen
+
+
+def check_engines(chosen: dict) -> None:
+    """Stop with ``TableError`` unless each TensorRT precision's build, eval, benchmark and deploy logs name one engine
+    sha256, where they record one, and the TensorRT FP32 build records the flags it was built with as none."""
+    for precision in TABLE_PRECISIONS:
+        logs = {
+            kind: chosen[(kind, precision)]
+            for kind in ("build", "eval", "benchmark", DEPLOY)
+            if (kind, precision) in chosen
+        }
+        hashes = {log["results"].get("engine_sha256") for log in logs.values()} - {None, "-"}
+        if len(hashes) > 1:
+            raise TableError(
+                f"{PRECISION_NAMES[precision]} logs name {len(hashes)} engines: {', '.join(sorted(hashes))}"
+            )
+        build = logs.get("build")
+        if precision == TENSORRT_FP32 and build is not None:
+            if build["results"].get("builder_flags") != []:
+                raise TableError(
+                    f"{PRECISION_NAMES[precision]} build log records builder flags "
+                    f"{build['results'].get('builder_flags')}, not none"
+                )
+            if len(hashes) != 1 or any(log["results"].get("engine_sha256") in (None, "-") for log in logs.values()):
+                raise TableError(f"{PRECISION_NAMES[precision]} logs do not all name the one engine they used")
 
 
 # The postprocess settings a deployment-style log shares with the main benchmark of its precision.
@@ -636,7 +662,8 @@ def build_deploy_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
             f"{settings['score_threshold']:g}, NMS IoU threshold {settings['nms_iou_threshold']:g}, top-k "
             f"{settings['top_k_per_class']} per class, at most {settings['detections_per_image']} detections per "
             f"image, over {settings['num_classes']} classes. The score threshold is a fixed midpoint chosen before "
-            "any deployment-style run; it is not tuned on the results. The other settings are torchvision's.",
+            "any deployment-style run; it is not tuned on the results. The other settings are the main benchmark's of "
+            "the same precision.",
             "- Only end-to-end figures and the postprocess stage are shown: the postprocess runs after the engine, "
             "whose time the results table gives. The main benchmark's postprocess p50, from its own log, stands "
             "beside the deploy run's. No recall or AP is reported at this threshold.",

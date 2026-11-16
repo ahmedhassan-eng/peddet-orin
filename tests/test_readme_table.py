@@ -578,12 +578,19 @@ def test_the_judged_runs_paragraph_ends_before_the_gate_paragraph():
     assert first.endswith("and not judged.") and second.startswith("Each judged run's QUIET gate")
 
 
+ENGINE_SHA256 = "e" * 64
+
+
 def _add_tensorrt_fp32(run_dir, kinds=("benchmark", "eval", "build")):
     """Copy a run's FP16 logs of the given kinds as TensorRT FP32 logs, with their runtime unchanged."""
     for kind in kinds:
         (source,) = sorted(run_dir.glob(f"{kind}_fp16_*.json"))
         log = json.loads(source.read_text())
         log["precision"] = "fp32-trt"
+        # The engine these logs name, as a TensorRT FP32 build records it with the flags it was built with.
+        log["results"]["engine_sha256"] = ENGINE_SHA256
+        if kind == "build":
+            log["results"]["builder_flags"] = []
         (run_dir / source.name.replace("_fp16_", "_fp32-trt_")).write_text(json.dumps(log))
 
 
@@ -790,3 +797,18 @@ def test_a_partial_group_in_the_runs_dir_stops_the_generator_too(tmp_path, group
         _add_deploy(runs, precisions=("fp16",))
     with pytest.raises(generate_table.TableError, match=f"runs/ has some {group} logs but no clean log for"):
         generate_table.build_block(runs)
+
+
+def test_tensorrt_rows_must_name_one_engine_and_fp32_no_reduced_precision(tmp_path):
+    _judged(tmp_path, names=("run1",))
+    _add_tensorrt_fp32(tmp_path / "run1")
+    chosen = generate_table.select(generate_table.load_logs(tmp_path / "run1"))
+    generate_table.check_engines(chosen)
+    other = {key: json.loads(json.dumps(log)) for key, log in chosen.items()}
+    other[("benchmark", "fp32-trt")]["results"]["engine_sha256"] = "f" * 64
+    with pytest.raises(generate_table.TableError, match="name 2 engines"):
+        generate_table.check_engines(other)
+    flagged = {key: json.loads(json.dumps(log)) for key, log in chosen.items()}
+    flagged[("build", "fp32-trt")]["results"]["builder_flags"] = ["TF32"]
+    with pytest.raises(generate_table.TableError, match="builder flags"):
+        generate_table.check_engines(flagged)

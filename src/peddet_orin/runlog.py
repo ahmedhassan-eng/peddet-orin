@@ -571,7 +571,7 @@ PYTORCH_PRECISION = "fp32"
 # reduced-precision flags. "fp32" stays PyTorch's key, so the committed logs keep their meaning.
 TENSORRT_FP32_PRECISION = "fp32-trt"
 # The TensorRT precision flags a build controls, in the order a build log lists them.
-PRECISION_FLAG_NAMES = ("FP16", "INT8", "TF32", "BF16", "FP8")
+PRECISION_FLAG_NAMES = ("FP16", "INT8", "TF32", "BF16", "FP8", "INT4", "FP4")
 # The precision flags each engine precision has set, as its build log reads them back from the config. INT8 has FP16
 # too, so a layer TensorRT does not run in INT8 runs in FP16, not FP32. TF32 is TensorRT's default and stays on for
 # FP16 and INT8; TensorRT FP32 has none, so it is FP32 throughout.
@@ -632,6 +632,13 @@ def _cross_field_problems(kind: str, precision: Any, results: dict) -> list[str]
             if failure not in (None, NOT_APPLICABLE):
                 problems.append("bad result: build entropy_failure must be - without int8")
         flags = results.get("builder_flags")
+        # No committed log predates the TensorRT FP32 build, so its log must say what it was built with.
+        if precision == TENSORRT_FP32_PRECISION:
+            problems += [
+                f"missing result: build {key} for {precision}"
+                for key in ("builder_flags", "engine_sha256")
+                if key not in results
+            ]
         if isinstance(flags, list) and precision in BUILDER_FLAG_NAMES and flags != BUILDER_FLAG_NAMES[precision]:
             problems.append(f"bad result: build builder_flags must be {BUILDER_FLAG_NAMES[precision]} for {precision}")
     return problems
@@ -679,8 +686,11 @@ def _deploy_problems(kind: str, results: dict) -> list[str]:
     if kind != DEPLOY_BENCHMARK_KIND or "kept_labels" not in settings:
         return []
     # Imported here: postprocess needs torch, and this module must import without it, so that an installed copy
-    # refuses with one line (PRD R-13). A deploy log is written and checked only where torch is.
-    from peddet_orin.postprocess import DEPLOY_LABELS, DEPLOY_SCORE_THRESHOLD
+    # refuses with one line (PRD R-13). Where torch is missing, the check is a problem, not an ImportError.
+    try:
+        from peddet_orin.postprocess import DEPLOY_LABELS, DEPLOY_SCORE_THRESHOLD
+    except ImportError:
+        return ["bad result: benchmark_deploy settings cannot be checked without torch"]
 
     if settings["kept_labels"] != list(DEPLOY_LABELS) or settings.get("score_threshold") != DEPLOY_SCORE_THRESHOLD:
         return [
