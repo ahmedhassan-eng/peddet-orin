@@ -4,7 +4,7 @@
 
 ## How it was checked
 
-- [ ] `ruff check .` passes.
+- [ ] `ruff check .` and `ruff format --check .` pass.
 - [ ] `python -m pytest -rs` passes, and any skipped tests are named here.
 - [ ] If the GPU path changed: the tests also ran on a Jetson, with the board and JetPack version named here.
 - [ ] If a result changed: its JSON log is under `runs/`, and the table was regenerated with

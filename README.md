@@ -280,6 +280,7 @@ python -m venv --clear .cache/pip-audit
 .cache/pip-audit/bin/python -m pip install pip-audit==2.10.1
 .cache/pip-audit/bin/pip-audit --no-deps --disable-pip -r requirements/ci-cpu.txt
 ruff check .
+ruff format --check .
 PDORIN_STRICT_SKIPS=1 python -m pytest -rs
 ```
 <!-- ci:end -->

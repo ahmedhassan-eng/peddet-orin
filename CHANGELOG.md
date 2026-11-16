@@ -78,6 +78,8 @@ All notable changes to this project are recorded here. The format follows
 - A build log's `entropy_failure` has one form per case, and the log check enforces it: `-` without INT8,
   empty when the INT8 entropy path was taken, and the failure text when the Q/DQ fallback was; the committed logs
   already follow it.
+- The tree is formatted with `ruff format`, and CI and `scripts/ci_local.sh` run `ruff format --check .` after
+  `ruff check .`.
 
 ### Security
 

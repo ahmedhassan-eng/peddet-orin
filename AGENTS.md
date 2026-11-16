@@ -5,7 +5,7 @@ These rules apply to everyone who changes this repository, whether a person or a
 ## Build and test
 
 - Set up as the README's "Quickstart" says on a Jetson Orin, or as `CONTRIBUTING.md` says on any other Linux machine.
-- Run `ruff check .` and `python -m pytest -rs` before opening a pull request. CI runs them with `PDORIN_STRICT_SKIPS=1`.
+- Run `ruff check .`, `ruff format --check .` and `python -m pytest -rs` before opening a pull request. CI runs them, the tests with `PDORIN_STRICT_SKIPS=1`.
 - After adding or removing a file, run `python scripts/generate_tree.py --write`.
 
 ## Network and GPU

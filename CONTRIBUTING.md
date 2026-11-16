@@ -30,6 +30,7 @@ The package runs from a source checkout. Its commands find the checkout two leve
 
 ```sh
 ruff check .
+ruff format --check .
 python -m pytest -rs
 ```
 
