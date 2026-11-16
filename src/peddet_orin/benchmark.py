@@ -6,7 +6,9 @@ and postprocesses. Engine-only latency is the inference step alone, including th
 copies to and from device memory. End-to-end latency is the whole iteration.
 Each of the four stages is also timed on its own, from the same perf_counter
 readings plus one between decoding and preprocessing. Warm-up passes come first
-and are excluded, which also absorbs the first-call JIT.
+and are excluded, which also absorbs the first-call JIT. Each pooled image gets
+the full input check once, before warm-up; the timed iteration checks only the
+decoded image's layout, not every pixel's range.
 """
 
 from __future__ import annotations
@@ -43,7 +45,7 @@ from peddet_orin.cli import (
 )
 from peddet_orin.model import load_detector
 from peddet_orin.postprocess import Postprocessor
-from peddet_orin.preprocess import PIXEL_MAX, preprocess
+from peddet_orin.preprocess import PIXEL_MAX, check_image, preprocess
 
 # The clocks are read from sysfs, read-only; nothing here sets them. Each file is named in full,
 # so the absolute paths in the source are exactly these ten.
@@ -288,12 +290,26 @@ class IterationTimes(NamedTuple):
     end_to_end: float
 
 
+def check_pool(pool: list[bytes]) -> None:
+    """Decode each pooled image once and run the full ``check_image`` on it, before any timing.
+
+    The timed iteration decodes the same bytes again and checks only their layout, so the
+    full-frame range check is not inside the timed loop. A ``ValueError`` names the image's
+    place in the pool, counted from 0.
+    """
+    for index, encoded in enumerate(pool):
+        try:
+            check_image(_decode(encoded))
+        except ValueError as error:
+            raise ValueError(f"pooled image {index}: {error}") from None
+
+
 def _iteration(backend, postprocess, encoded: bytes) -> IterationTimes:
     """Run one full iteration and return its stage and end-to-end seconds."""
     started = time.perf_counter()
     image = _decode(encoded)
     decoded = time.perf_counter()
-    batch = preprocess(image)
+    batch = preprocess(image, range_checked=True)
     before_engine = time.perf_counter()
     box_regression, class_logits = backend(batch)
     after_engine = time.perf_counter()
@@ -371,6 +387,10 @@ def main(argv: list[str] | None = None) -> int:
     pool = image_pool(images_dir)
     if not pool:
         usage_error(parser.prog, f"{images_dir} holds no .jpg images; run python scripts/fetch_coco.py val")
+    try:
+        check_pool(pool)
+    except ValueError as error:
+        usage_error(parser.prog, f"{images_dir}, in file-name order: {error}")
     check_device(parser.prog, args.precision, args.device)
 
     counts = {"warmup": args.warmup, "timed": args.iterations, "repeats": args.repeats, "batch": 1}

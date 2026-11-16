@@ -4,7 +4,8 @@
 import pytest
 import torch
 
-from peddet_orin.preprocess import INPUT_SHAPE, PIXEL_MAX, preprocess
+from peddet_orin import preprocess as preprocess_module
+from peddet_orin.preprocess import INPUT_SHAPE, PIXEL_MAX, check_image, preprocess
 
 HEIGHT, WIDTH = 48, 64
 
@@ -62,3 +63,22 @@ def test_an_empty_image_is_rejected(shape):
 def test_a_numpy_array_is_rejected():
     with pytest.raises(ValueError, match="torch.Tensor"):
         preprocess(chw_image().numpy())
+
+
+def test_a_range_checked_image_skips_only_the_range_check(monkeypatch):
+    image = chw_image() * PIXEL_MAX
+    assert tuple(preprocess(image, range_checked=True).shape) == INPUT_SHAPE
+    with pytest.raises(ValueError, match="3 channels first"):
+        preprocess(chw_image().permute(1, 2, 0), range_checked=True)
+    with pytest.raises(ValueError, match="dtype torch.uint8"):
+        preprocess(image.to(torch.uint8), range_checked=True)
+    with pytest.raises(ValueError, match=r"values in \[0, 1\]"):
+        check_image(image)
+
+
+def test_preprocess_runs_the_full_check_by_default(monkeypatch):
+    checked = []
+    monkeypatch.setattr(preprocess_module, "check_pixel_range", checked.append)
+    preprocess(chw_image())
+    preprocess(chw_image(), range_checked=True)
+    assert len(checked) == 1

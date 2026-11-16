@@ -23,8 +23,9 @@ All notable changes to this project are recorded here. The format follows
 - The published numbers changed. The results table is the median of the judged quieted runs at commit `025171d`;
   0.1.0's table came from one run at `17a1ee2` on a host that was not quieted. That run stays in `runs/` and is
   shown apart, with its deviation from the median, and is not judged.
-- `src/` changes in the ways below. Only the INT8 builder flags change a computation; the published INT8 numbers
-  come from engines built with the INT8 flag alone, before that change, and were not re-measured. Each run log also records the numpy, Pillow, pycocotools and libjpeg versions,
+- `src/` changes in the ways below. Two change what a run measures: INT8 engines are built with the FP16 flag as
+  well, and the benchmark's full image check moves out of its timed loop. The published numbers come from the
+  code before both and were not re-measured. Each run log also records the numpy, Pillow, pycocotools and libjpeg versions,
   since JPEG decoding is inside every end-to-end iteration; the committed logs predate these facts and stay valid.
   And `peddet_orin.export` and `peddet_orin.engine_build` import ONNX Runtime where
   they use it, not at the top. On a host with no PCI bus id ONNX Runtime prints its own warning when it loads, so a
@@ -108,6 +109,11 @@ All notable changes to this project are recorded here. The format follows
 - Each eval and benchmark log records `torch_num_threads`, `torch.get_num_threads()` as the run begins: PyTorch's
   CPU threads run preprocessing and postprocessing at every precision, and FP32 inference on the CPU. The key is
   optional in the log check, a positive integer, and the committed logs predate it.
+- The benchmark runs the full `check_image` once on each pooled image, before warm-up, and refuses a bad one with
+  one line; the timed iteration calls `preprocess(image, range_checked=True)`, which checks the decoded image's
+  layout but not every pixel's range, so the full-frame `min()` and `max()` are out of the timed loop. evaluate and
+  calibration keep the full check on every image. The judged runs ran the check inside each timed iteration, so
+  their end-to-end times include it and were not re-measured.
 
 ### Security
 

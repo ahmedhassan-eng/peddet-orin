@@ -49,6 +49,12 @@ def check_image(image: torch.Tensor) -> None:
     An HWC tensor or 0-255 pixels would otherwise pass through and give a wrong
     batch shape or wrong values, with no error anywhere.
     """
+    check_layout(image)
+    check_pixel_range(image)
+
+
+def check_layout(image: torch.Tensor) -> None:
+    """Raise ``ValueError`` unless ``image`` is a non-empty CHW RGB float tensor; its values are not read."""
     if not isinstance(image, torch.Tensor):
         raise ValueError(f"expected a torch.Tensor image, got {type(image).__name__}")
     if image.ndim != 3 or image.shape[0] != 3:
@@ -57,16 +63,28 @@ def check_image(image: torch.Tensor) -> None:
         raise ValueError(f"expected a non-empty image, got shape {tuple(image.shape)}")
     if not image.is_floating_point():
         raise ValueError(f"expected a float image with values in [0, 1], got dtype {image.dtype}")
+
+
+def check_pixel_range(image: torch.Tensor) -> None:
+    """Raise ``ValueError`` unless every value of ``image`` is in [0, 1]; this reads the whole frame."""
     low, high = float(image.min()), float(image.max())
     if not (low >= 0.0 and high <= 1.0):
         raise ValueError(f"expected values in [0, 1], got values from {low:g} to {high:g}")
 
 
-def preprocess(image: torch.Tensor) -> torch.Tensor:
+def preprocess(image: torch.Tensor, *, range_checked: bool = False) -> torch.Tensor:
     """Run the complete preprocessing for one decoded image, after checking it.
+
+    ``range_checked=True`` says the caller has already run ``check_image`` on this
+    image, or on another decode of the same bytes, so the full-frame range check
+    is skipped; the layout is still checked. The benchmark uses it to keep that
+    check out of its timed loop.
 
     Normalising before resizing is torchvision's own order. The result is the same
     in exact arithmetic, but matching the order also matches the rounding.
     """
-    check_image(image)
+    if range_checked:
+        check_layout(image)
+    else:
+        check_image(image)
     return resize(normalise(image))

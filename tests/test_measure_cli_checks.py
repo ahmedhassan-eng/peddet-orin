@@ -100,6 +100,13 @@ def test_measure_missing_engine_names_the_build_command(name, tmp_path, capsys):
     assert "python -m peddet_orin.engine_build --precision int8" in error
 
 
+def test_benchmark_refuses_a_pooled_image_out_of_range_in_one_line(tmp_path, capsys, monkeypatch):
+    make_data_dir(tmp_path)
+    monkeypatch.setattr(benchmark, "_decode", lambda encoded: torch.full((3, 4, 5), 2.0))
+    error = fails_with_one_line(capsys, benchmark.main, ["--precision", "fp32", "--data-dir", str(tmp_path)])
+    assert "in file-name order: pooled image 0: expected values in [0, 1]" in error
+
+
 def test_benchmark_empty_image_pool_is_refused(tmp_path, capsys):
     (tmp_path / "val2017").mkdir()
     error = fails_with_one_line(capsys, benchmark.main, ["--precision", "fp32", "--data-dir", str(tmp_path)])

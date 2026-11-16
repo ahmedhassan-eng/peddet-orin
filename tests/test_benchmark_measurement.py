@@ -14,6 +14,7 @@ import torch
 from PIL import Image
 
 from peddet_orin import benchmark, runlog
+from peddet_orin import preprocess as preprocess_module
 from peddet_orin.model import load_detector
 from peddet_orin.postprocess import Postprocessor
 
@@ -315,7 +316,7 @@ def test_each_stage_is_timed_between_its_own_perf_counter_readings(monkeypatch):
     monkeypatch.setattr(benchmark, "time", types.SimpleNamespace(perf_counter=lambda: next(readings)))
     calls = []
     monkeypatch.setattr(benchmark, "_decode", lambda encoded: calls.append("decode") or torch.zeros(3, 4, 5))
-    monkeypatch.setattr(benchmark, "preprocess", lambda image: calls.append("preprocess") or image)
+    monkeypatch.setattr(benchmark, "preprocess", lambda image, **options: calls.append("preprocess") or image)
 
     def backend(batch):
         calls.append("engine")
@@ -354,3 +355,49 @@ def test_benchmark_logs_the_engine_hash_for_tensorrt_and_none_for_fp32(cpu_bench
 def test_benchmark_logs_torchs_cpu_thread_count(cpu_benchmark, monkeypatch):
     monkeypatch.setattr(benchmark.torch, "get_num_threads", lambda: 3)
     assert cpu_benchmark()["torch_num_threads"] == 3
+
+
+def test_the_full_image_check_runs_once_per_pooled_image_and_never_while_timing(cpu_benchmark, monkeypatch):
+    """Three pooled images, one warm-up and four timed iterations: the range check runs three times."""
+    checked = []
+    full_check = preprocess_module.check_pixel_range
+
+    def counting_check(image):
+        checked.append(image)
+        full_check(image)
+
+    monkeypatch.setattr(preprocess_module, "check_pixel_range", counting_check)
+    iterations = []
+    real_iteration = benchmark._iteration
+
+    def counting_iteration(*arguments):
+        iterations.append(len(checked))
+        return real_iteration(*arguments)
+
+    monkeypatch.setattr(benchmark, "_iteration", counting_iteration)
+    cpu_benchmark()
+    assert len(checked) == 3
+    assert iterations == [3] * 5
+
+
+def test_the_timed_iteration_checks_only_the_layout(tmp_path, monkeypatch):
+    def refuse(image):
+        raise AssertionError("the full-frame range check ran inside the timed iteration")
+
+    monkeypatch.setattr(preprocess_module, "check_image", refuse)
+    monkeypatch.setattr(preprocess_module, "check_pixel_range", refuse)
+    detector = load_detector(pretrained=False)
+    Image.new("RGB", (40, 30)).save(tmp_path / "image.jpg")
+    encoded = (tmp_path / "image.jpg").read_bytes()
+    times = benchmark._iteration(FakeBackend(detector), Postprocessor.from_torchvision(detector), encoded)
+    assert times.end_to_end > 0
+    monkeypatch.setattr(benchmark, "_decode", lambda encoded: torch.zeros(30, 40, 3))
+    with pytest.raises(ValueError, match="3 channels first"):
+        benchmark._iteration(FakeBackend(detector), Postprocessor.from_torchvision(detector), encoded)
+
+
+def test_a_pooled_image_out_of_range_is_named(monkeypatch):
+    monkeypatch.setattr(benchmark, "_decode", lambda encoded: torch.full((3, 4, 5), float(len(encoded))))
+    benchmark.check_pool([b"x"])
+    with pytest.raises(ValueError, match=r"pooled image 1: expected values in \[0, 1\], got values from 2 to 2"):
+        benchmark.check_pool([b"x", b"xy"])
