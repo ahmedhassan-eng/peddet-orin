@@ -280,6 +280,8 @@ def image_pool(images_dir: Path = IMAGES) -> list[bytes]:
 
 
 def _decode(encoded: bytes) -> torch.Tensor:
+    """preprocess.load_rgb's decode, from the bytes the timed loop holds. It stays a copy of its own so the timed
+    loop of the judged runs is unchanged; one shared decode is planned for 0.1.2."""
     with Image.open(io.BytesIO(encoded)) as image:
         pixels = np.asarray(image.convert("RGB"), dtype=np.uint8).copy()
     return torch.from_numpy(pixels).permute(2, 0, 1).float() / PIXEL_MAX

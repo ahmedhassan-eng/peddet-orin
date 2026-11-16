@@ -47,7 +47,8 @@ All notable changes to this project are recorded here. The format follows
 
 ### Changed
 
-- The published numbers changed. The results table is the median of the judged quieted runs at commit `025171d`;
+- The published numbers changed, the end-to-end latencies most: the FP16 end-to-end p50 went from 75.1 ms in
+  0.1.0 to 60.6 ms. The results table is the median of the judged quieted runs at commit `025171d`;
   0.1.0's table came from one run at `17a1ee2` on a host that was not quieted. That run stays in `runs/` and is
   shown apart, with its deviation from the median, and is not judged.
 - `src/` changes in the ways below. Two change what a run measures: INT8 engines are built with the FP16 flag as
@@ -224,6 +225,10 @@ All notable changes to this project are recorded here. The format follows
   block between its markers, not the results block alone.
 - `scripts/compare_logs.py` fails an INT8 build on another calibration path than the reference's.
 - `scripts/fetch_coco.py` removes the partial file when every download attempt fails.
+- The README states the main benchmark's postprocess settings, which the end-to-end time includes, and the 3 s
+  window the RAM rise is measured against; the builder flags sentence says the build logs record them from 0.1.1
+  on. `constraints/jetson-orin.txt` names the hashed install line the README uses.
+- `scripts/ci_local.sh` waits for its log's `tee` before it exits, so the log is never cut short.
 
 ## [0.1.0] - 2026-11-14
 

@@ -7,6 +7,7 @@ cd "$(dirname "$0")" && cd .. || exit 1
 LOG=${1:-.cache/ci-local/ci-local.log}
 mkdir -p .cache/ci-local "$(dirname "$LOG")"
 exec > >(tee "$LOG") 2>&1
+TEE_PID=$!
 # ci:versions
 VERSIONS="3.11 3.12"
 status=0
@@ -46,4 +47,7 @@ for version in $VERSIONS; do
   fi
 done
 echo "CI-LOCAL DONE $([ $status = 0 ] && echo PASS || echo FAIL)"
+# Close the pipe to tee and wait for it, so the log holds every line before the script exits.
+exec >&- 2>&-
+wait "$TEE_PID"
 exit $status

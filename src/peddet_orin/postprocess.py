@@ -6,9 +6,10 @@ after that lives here, outside any graph, and every precision goes through this
 same code, so accuracy differences between precisions can only come from the
 network outputs.
 
-The anchors and the box coder are torchvision's own objects, taken from an SSDLite
-model built without weights. The thresholds are read from that same model, which
-keeps this module from carrying a second copy of torchvision's configuration.
+The anchors and the box coder are torchvision's own objects, taken from the SSDLite
+model the caller passes, the loaded detector. The thresholds are read from that same
+model, which keeps this module from carrying a second copy of torchvision's
+configuration.
 """
 
 from __future__ import annotations
