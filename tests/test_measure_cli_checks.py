@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from peddet_orin import benchmark, evaluate, runlog
+from peddet_orin import benchmark, cli, evaluate, runlog
 from peddet_orin.model import load_detector
 
 SRC_DIR = Path(evaluate.__file__).resolve().parents[1]
@@ -119,7 +119,7 @@ def test_measure_corrupt_engine_is_refused(name, backend, tmp_path, capsys, monk
     make_data_dir(tmp_path)
     engine = tmp_path / "corrupt.engine"
     engine.write_bytes(b"not an engine")
-    monkeypatch.setattr(evaluate, "TensorRtBackend", backend)
+    monkeypatch.setattr(cli, "TensorRtBackend", backend)
     arguments = ["--precision", "fp16", "--data-dir", str(tmp_path), "--engine", str(engine)]
     error = fails_with_one_line(capsys, MODULES[name].main, arguments)
     assert "could not load engine" in error
@@ -131,7 +131,7 @@ def test_evaluate_engine_option_reaches_the_backend(tmp_path, capsys, monkeypatc
     engine = tmp_path / "custom.engine"
     engine.write_bytes(b"x")
     loaded = []
-    monkeypatch.setattr(evaluate, "TensorRtBackend", lambda path: loaded.append(path))
+    monkeypatch.setattr(cli, "TensorRtBackend", lambda path: loaded.append(path))
     fails_with_one_line(
         capsys, evaluate.main, ["--precision", "fp16", "--data-dir", str(tmp_path), "--engine", str(engine)]
     )
@@ -143,8 +143,8 @@ def test_measure_default_paths_are_under_the_repository_root():
         defaults = {action.dest: action.default for action in module.build_parser()._actions}
         assert defaults["data_dir"] == runlog.REPO_ROOT / "data"
         assert defaults["engine"] is None
-    assert evaluate.check_engine("prog", "fp32", None) is None
-    assert evaluate.default_engine("fp16") == runlog.REPO_ROOT / "artifacts" / "fp16.engine"
+    assert cli.check_engine("prog", "fp32", None) is None
+    assert cli.default_engine("fp16") == runlog.REPO_ROOT / "artifacts" / "fp16.engine"
 
 
 @pytest.mark.parametrize("name", sorted(MODULES))

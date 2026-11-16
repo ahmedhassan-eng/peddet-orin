@@ -23,7 +23,7 @@ All notable changes to this project are recorded here. The format follows
 - The published numbers changed. The results table is the median of the judged quieted runs at commit `025171d`;
   0.1.0's table came from one run at `17a1ee2` on a host that was not quieted. That run stays in `runs/` and is
   shown apart, with its deviation from the median, and is not judged.
-- `src/` changes in two ways. Each run log also records the numpy, Pillow, pycocotools and libjpeg versions,
+- `src/` changes in the ways below, none of which changes a computation. Each run log also records the numpy, Pillow, pycocotools and libjpeg versions,
   since JPEG decoding is inside every end-to-end iteration; the committed logs predate these facts and stay valid.
   And `peddet_orin.export` and `peddet_orin.engine_build` import ONNX Runtime where
   they use it, not at the top. On a host with no PCI bus id ONNX Runtime prints its own warning when it loads, so a
@@ -49,6 +49,9 @@ All notable changes to this project are recorded here. The format follows
   and fails when a named test does not exist; a test-name pattern counted them before.
 - `tests/test_pins_match_logs.py` fails when a pin in `constraints/jetson-orin.txt` for torch, torchvision,
   onnx or onnxruntime differs from what any judged run log records.
+- The command-line pieces that evaluate and benchmark share (data and engine paths, common options, the
+  one-line usage error, and the backend for each precision) move from `evaluate.py` to
+  `src/peddet_orin/cli.py`, so benchmark no longer imports them from evaluate.
 
 ### Security
 

@@ -25,7 +25,7 @@ import torch
 from PIL import Image
 
 from peddet_orin import debug, runlog
-from peddet_orin.evaluate import (
+from peddet_orin.cli import (
     IMAGES,
     IMAGES_RELATIVE,
     HelpFormatter,
