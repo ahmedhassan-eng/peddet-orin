@@ -468,3 +468,38 @@ def test_committed_logs_are_valid(path):
 def test_the_committed_logs_include_every_judged_run():
     assert {path.parent.name for path in RUNS} >= {"runs", "run3", "run4", "run5"}
     assert len(RUNS) >= 40
+
+
+def test_the_cuda_runtime_and_driver_are_read_from_the_loaded_runtime(monkeypatch):
+    import ctypes
+
+    from peddet_orin import cuda_native
+
+    class FakeRuntime:
+        @staticmethod
+        def cudaRuntimeGetVersion(pointer):
+            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_int)).contents.value = 13000
+            return 0
+
+        @staticmethod
+        def cudaDriverGetVersion(pointer):
+            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_int)).contents.value = 13020
+            return 0
+
+    monkeypatch.setattr(cuda_native, "_runtime", lambda: FakeRuntime)
+    assert runlog._cuda_versions() == ("13.0", "13.2")
+    facts = runlog.environment_facts()
+    assert (facts["cuda_runtime"], facts["cuda_driver"]) == ("13.0", "13.2")
+
+
+def test_an_unloadable_cuda_runtime_is_recorded_as_unreadable(monkeypatch):
+    from peddet_orin import cuda_native
+
+    def missing():
+        raise OSError("no CUDA runtime library found")
+
+    monkeypatch.setattr(cuda_native, "_runtime", missing)
+    assert runlog._cuda_versions() == (runlog.UNREADABLE, runlog.UNREADABLE)
+    broken = make_log()
+    broken["environment"]["cuda_runtime"] = 13
+    assert "fact is not a string: cuda_runtime" in runlog.validate_log(broken)

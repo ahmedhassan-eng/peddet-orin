@@ -17,6 +17,7 @@ to a checkout, never to the interpreter's installation tree.
 
 from __future__ import annotations
 
+import ctypes
 import json
 import math
 import os
@@ -100,6 +101,10 @@ REQUIRED_ENVIRONMENT = (
 # Recorded by every log from 0.1.1 on, and checked as strings when present; not required, so the committed logs
 # written before them stay valid. JPEG decoding is inside every end-to-end iteration, so its library is recorded.
 DECODE_ENVIRONMENT = ("numpy", "pillow", "libjpeg", "pycocotools")
+# The CUDA runtime and driver versions as the runtime library in the measuring process reports them. Facts are
+# collected when the log is written, after the run, so the library is the one the run already loaded: torch's for
+# PyTorch, the one TensorRT runs with for engines. Recorded from 0.1.1 on, not required.
+RUNTIME_ENVIRONMENT = ("cuda_runtime", "cuda_driver")
 
 
 def _utc_now() -> str:
@@ -158,6 +163,30 @@ def _libjpeg_version() -> str:
     return f"libjpeg {version}" if version else UNREADABLE
 
 
+def _cuda_version_text(value: int) -> str:
+    """CUDA's integer version, 1000 * major + 10 * minor, as "major.minor"."""
+    return f"{value // 1000}.{value % 1000 // 10}"
+
+
+def _cuda_versions() -> tuple[str, str]:
+    """The CUDA runtime and driver versions, or ``UNREADABLE`` for each that cannot be read (as on a CPU host)."""
+    try:
+        from peddet_orin import cuda_native
+
+        library = cuda_native._runtime()
+    except (ImportError, OSError):
+        return UNREADABLE, UNREADABLE
+    versions = []
+    for function in ("cudaRuntimeGetVersion", "cudaDriverGetVersion"):
+        value = ctypes.c_int(0)
+        try:
+            status = getattr(library, function)(ctypes.byref(value))
+        except AttributeError:
+            status = -1
+        versions.append(_cuda_version_text(value.value) if status == 0 and value.value > 0 else UNREADABLE)
+    return versions[0], versions[1]
+
+
 def _package_version() -> str:
     try:
         return metadata.version(PROJECT_NAME)
@@ -181,6 +210,7 @@ def environment_facts() -> dict[str, str]:
     facts["pillow"] = _module_version("PIL")
     facts["libjpeg"] = _libjpeg_version()
     facts["pycocotools"] = _distribution_version("pycocotools")
+    facts["cuda_runtime"], facts["cuda_driver"] = _cuda_versions()
     return facts
 
 
@@ -526,7 +556,7 @@ def validate_log(record: Any) -> list[str]:
         problems += [f"missing fact: {name}" for name in REQUIRED_ENVIRONMENT if name not in environment]
         problems += [
             f"fact is not a string: {name}"
-            for name in (*REQUIRED_ENVIRONMENT, *DECODE_ENVIRONMENT)
+            for name in (*REQUIRED_ENVIRONMENT, *DECODE_ENVIRONMENT, *RUNTIME_ENVIRONMENT)
             if name in environment and not isinstance(environment[name], str)
         ]
     times = {}
