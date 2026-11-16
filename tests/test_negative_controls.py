@@ -2,8 +2,8 @@
 """The README's negative-control sentence states the true coverage of the planted-defect registry.
 
 A test file counts as covered when a registry entry names one of its tests, and as carrying an in-file negative
-test when one of its test names says that a planted or bad input is detected, refused, rejected, blocked, found or
-fails. QUEUE.md names every test file that has neither.
+test when NEGATIVE_TESTS below names one of its tests that plants or feeds a bad input and checks that it is
+refused. QUEUE.md names every test file that has neither.
 """
 import re
 from pathlib import Path
@@ -13,9 +13,21 @@ import planted_defects
 REPO_ROOT = Path(__file__).resolve().parents[1]
 README = REPO_ROOT / "README.md"
 QUEUE = REPO_ROOT / "QUEUE.md"
-NEGATIVE_NAME = re.compile(
-    r"_(detected|refused|rejected|rejects|refuses|fails|fail|blocked|found|raises|is_out|not_exempt|reported)(_|$)"
-)
+# One in-file negative test for each test file that no registry entry names; each must exist in its file.
+NEGATIVE_TESTS = {
+    "tests/test_checkout_kinds.py": "test_a_shallow_clone_in_ci_still_fails_a_strict_run",
+    "tests/test_device_resources.py": "test_write_rejects_a_wrong_shape_with_the_same_byte_count",
+    "tests/test_internal_ids.py": "test_an_id_planted_in_any_tracked_path_is_found",
+    "tests/test_measure_cli_checks.py": "test_measure_corrupt_engine_is_refused",
+    "tests/test_negative_controls.py": "test_a_readme_sentence_with_one_number_changed_is_refused",
+    "tests/test_network_guard.py": "test_a_test_that_opens_a_socket_fails",
+    "tests/test_packaging_metadata.py": "test_an_unpinned_transitive_dependency_is_detected",
+    "tests/test_planted_defects.py": "test_a_stale_registry_entry_is_detected",
+    "tests/test_preprocess.py": "test_uint8_pixels_are_rejected",
+    "tests/test_repo_root.py": "test_pdorin_root_without_a_pyproject_is_refused",
+    "tests/test_strict_skips.py": "test_an_unexpected_skip_fails_a_strict_run",
+    "tests/test_weights.py": "test_a_weights_file_with_another_sha256_is_refused",
+}
 SENTENCE = re.compile(
     r"`tests/planted_defects\.py` registers (?P<n>\d+) planted defects.*?the release check requires all "
     r"(?P<caught>\d+) to be caught\. They cover (?P<x>\d+) of the (?P<y>\d+) test files, (?P<z>\d+) more carry "
@@ -27,16 +39,21 @@ def listed_test_files() -> list[Path]:
     return sorted((REPO_ROOT / "tests").glob("test_*.py"))
 
 
+def missing_negative_tests(files: list[Path], named: dict[str, str] = NEGATIVE_TESTS) -> list[str]:
+    """Each ``file::test`` in ``named`` whose file is not among ``files`` or does not define that test."""
+    present = {f"tests/{path.name}": set(re.findall(r"^def (test_\w+)", path.read_text(), re.M)) for path in files}
+    return [f"{name}::{test}" for name, test in sorted(named.items()) if test not in present.get(name, set())]
+
+
 def coverage(defects: list[dict], files: list[Path]) -> tuple[int, list[str], list[str], list[str]]:
     """The registry size, and the test files that are covered, that carry in-file negative tests, and the rest."""
     named = {defect["catches"].split("::", 1)[0] for defect in defects}
     covered, negative, rest = [], [], []
     for path in files:
         name = f"tests/{path.name}"
-        tests = re.findall(r"^def (test_\w+)", path.read_text(), re.M)
         if name in named:
             covered.append(name)
-        elif any(NEGATIVE_NAME.search(test) for test in tests):
+        elif name in NEGATIVE_TESTS:
             negative.append(name)
         else:
             rest.append(name)
@@ -80,8 +97,10 @@ def test_a_readme_sentence_with_one_number_changed_is_refused():
     assert count == len(planted_defects.DEFECTS)
 
 
-def test_ordinary_test_names_are_not_counted_as_negative_tests():
-    for name in ("test_write_then_read_round_trips", "test_slice_names_parse", "test_failover_is_logged"):
-        assert not NEGATIVE_NAME.search(name), name
-    for name in ("test_a_stale_entry_is_detected", "test_uint8_pixels_are_rejected", "test_an_empty_new_run_fails"):
-        assert NEGATIVE_NAME.search(name), name
+def test_every_named_negative_test_exists_in_its_file():
+    assert missing_negative_tests(listed_test_files()) == []
+
+
+def test_a_named_negative_test_that_does_not_exist_is_refused():
+    named = {**NEGATIVE_TESTS, "tests/test_weights.py": "test_no_such_test_is_refused"}
+    assert missing_negative_tests(listed_test_files(), named) == ["tests/test_weights.py::test_no_such_test_is_refused"]

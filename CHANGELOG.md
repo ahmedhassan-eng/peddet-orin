@@ -45,6 +45,8 @@ All notable changes to this project are recorded here. The format follows
   projects; `tests/test_agents_rule.py` now checks that every commit keeps its checkable parts, no trailer and no
   subject ending with a period, and refuses a message that breaks either.
 - `AGENTS.md` says the published numbers come from logs under `runs/` or `runs-repeat/`; it named `runs/` only.
+- `tests/test_negative_controls.py` counts the in-file negative tests from a named list, one test per file,
+  and fails when a named test does not exist; a test-name pattern counted them before.
 
 ### Security
 
