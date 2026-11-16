@@ -275,6 +275,23 @@ def test_each_build_has_one_valid_entropy_failure_form():
         ]
 
 
+def test_a_build_logs_builder_flags_are_optional_and_checked():
+    def problems(precision, **results):
+        return runlog.validate_log(make_log("build", precision, results=results))
+
+    assert problems("fp16", builder_flags=["FP16"]) == []
+    assert problems("int8", **INT8_BUILD, builder_flags=["FP16", "INT8"]) == []
+    assert problems("int8", **INT8_BUILD, builder_flags=["INT8"]) == [
+        "bad result: build builder_flags must be ['FP16', 'INT8'] for int8"
+    ]
+    assert problems("fp16", builder_flags=["FP16", "INT8"]) == [
+        "bad result: build builder_flags must be ['FP16'] for fp16"
+    ]
+    for bad in ("FP16", [], ["FP16", "FP16"], [16]):
+        assert "bad result: build builder_flags" in problems("fp16", builder_flags=bad), bad
+    assert "unexpected result: eval builder_flags" in runlog.validate_log(make_log(results={"builder_flags": ["FP16"]}))
+
+
 @pytest.mark.parametrize("kind", sorted(RESULTS))
 def test_each_required_result_is_enforced(kind):
     for key in RESULTS[kind]:

@@ -23,7 +23,8 @@ All notable changes to this project are recorded here. The format follows
 - The published numbers changed. The results table is the median of the judged quieted runs at commit `025171d`;
   0.1.0's table came from one run at `17a1ee2` on a host that was not quieted. That run stays in `runs/` and is
   shown apart, with its deviation from the median, and is not judged.
-- `src/` changes in the ways below, none of which changes a computation. Each run log also records the numpy, Pillow, pycocotools and libjpeg versions,
+- `src/` changes in the ways below. Only the INT8 builder flags change a computation; the published INT8 numbers
+  come from engines built with the INT8 flag alone, before that change, and were not re-measured. Each run log also records the numpy, Pillow, pycocotools and libjpeg versions,
   since JPEG decoding is inside every end-to-end iteration; the committed logs predate these facts and stay valid.
   And `peddet_orin.export` and `peddet_orin.engine_build` import ONNX Runtime where
   they use it, not at the top. On a host with no PCI bus id ONNX Runtime prints its own warning when it loads, so a
@@ -88,6 +89,10 @@ All notable changes to this project are recorded here. The format follows
   already follow it.
 - The tree is formatted with `ruff format`, and CI and `scripts/ci_local.sh` run `ruff format --check .` after
   `ruff check .`.
+- Both INT8 build routes, `IInt8EntropyCalibrator2` and the Q/DQ fallback, set TensorRT's `FP16` builder flag as
+  well as `INT8`, so a layer TensorRT does not run in INT8 runs in FP16, not FP32. The build log records the flags
+  as `builder_flags`, `["FP16"]` for FP16 and `["FP16", "INT8"]` for INT8, and the log check enforces them when
+  present; the committed logs predate the key and stay valid.
 
 ### Security
 

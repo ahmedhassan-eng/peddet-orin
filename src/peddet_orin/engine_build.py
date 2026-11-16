@@ -7,6 +7,10 @@ the resulting Q/DQ graph. There is no path that builds INT8 without calibration
 data, and the calibration images are checked against the committed sha256
 manifest before any build starts. The route taken is recorded in the run log and
 appears in the published table.
+
+Both INT8 routes set the FP16 builder flag as well as INT8, so a layer TensorRT
+does not run in INT8 runs in FP16 rather than FP32. The flags are recorded in the
+build log.
 """
 
 from __future__ import annotations
@@ -45,6 +49,9 @@ PRECISIONS = ("fp16", "int8")
 EXIT_BAD_INPUT = 2
 PROG = "python -m peddet_orin.engine_build"
 HASH_CHUNK_BYTES = 1 << 20
+# The BuilderFlag names each precision sets, as the build log records them. INT8 sets FP16 as well, so a layer
+# TensorRT does not run in INT8 runs in FP16, not FP32.
+BUILDER_FLAGS = runlog.BUILDER_FLAG_NAMES
 
 
 class InputError(ValueError):
@@ -187,9 +194,15 @@ def _build(onnx_path: Path, output: Path, configure) -> None:
     output.write_bytes(bytes(serialized))
 
 
+def _set_builder_flags(config, tensorrt, precision: str) -> None:
+    """Set each of the precision's builder flags on the config."""
+    for name in BUILDER_FLAGS[precision]:
+        config.set_flag(getattr(tensorrt.BuilderFlag, name))
+
+
 def build_fp16(onnx_path: Path, output: Path) -> None:
     def configure(config, tensorrt) -> None:
-        config.set_flag(tensorrt.BuilderFlag.FP16)
+        _set_builder_flags(config, tensorrt, "fp16")
 
     _build(onnx_path, output, configure)
 
@@ -201,7 +214,7 @@ def _build_int8_entropy(onnx_path: Path, output: Path, images: list[Path]) -> No
         nonlocal calibrator
         calibrator = _make_calibrator(images, output.parent / CALIBRATION_CACHE_NAME)
         config.int8_calibrator = calibrator
-        config.set_flag(tensorrt.BuilderFlag.INT8)
+        _set_builder_flags(config, tensorrt, "int8")
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message=CALIBRATOR_DEPRECATION_PATTERN)
@@ -245,7 +258,7 @@ def _build_int8_qdq(onnx_path: Path, output: Path, images: list[Path]) -> None:
     )
 
     def configure(config, tensorrt) -> None:
-        config.set_flag(tensorrt.BuilderFlag.INT8)
+        _set_builder_flags(config, tensorrt, "int8")
 
     _build(qdq_onnx, output, configure)
 
@@ -317,6 +330,7 @@ def main(argv: list[str] | None = None) -> int:
                 "calibration_manifest_sha256": manifest_digest,
                 "build_seconds": round(time.perf_counter() - started, 1),
                 "engine_bytes": output.stat().st_size,
+                "builder_flags": list(BUILDER_FLAGS[args.precision]),
             }
         )
     print(f"built {display_path(output)}")

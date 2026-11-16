@@ -2,6 +2,7 @@
 """The engine build's input checks, CLI and fallback rule, on the CPU without TensorRT."""
 
 import hashlib
+import types
 import warnings
 
 import onnxruntime.quantization
@@ -239,3 +240,72 @@ def test_the_qdq_fallback_quantizes_symmetrically_without_biases(tmp_path, monke
     monkeypatch.setattr(engine_build, "_build", lambda *a, **k: None)
     engine_build._build_int8_qdq(tmp_path / "in.onnx", tmp_path / "out.engine", [])
     assert seen["extra_options"] == {"QuantizeBias": False, "ActivationSymmetric": True, "WeightSymmetric": True}
+
+
+class FakeConfig:
+    """Stands in for a TensorRT builder config, recording each set_flag call."""
+
+    def __init__(self) -> None:
+        self.flags: list[str] = []
+        self.int8_calibrator = None
+
+    def set_flag(self, flag) -> None:
+        self.flags.append(flag)
+
+
+# Stands in for the tensorrt module as configure sees it: each BuilderFlag is its own name.
+FAKE_TENSORRT = types.SimpleNamespace(BuilderFlag=types.SimpleNamespace(FP16="FP16", INT8="INT8", FP32="FP32"))
+
+
+class FakeCalibrator:
+    released = False
+
+    def release(self) -> None:
+        self.released = True
+
+
+@pytest.fixture
+def configured(monkeypatch):
+    """Replace the TensorRT build with one that applies configure to a FakeConfig; return the configs made."""
+    configs: list[FakeConfig] = []
+
+    def fake_build(onnx_path, output, configure) -> None:
+        config = FakeConfig()
+        configure(config, FAKE_TENSORRT)
+        configs.append(config)
+
+    monkeypatch.setattr(engine_build, "_build", fake_build)
+    monkeypatch.setattr(engine_build, "_make_calibrator", lambda images, cache_path: FakeCalibrator())
+    monkeypatch.setattr(onnxruntime.quantization, "quantize_static", lambda *a, **k: None)
+    return configs
+
+
+def test_fp16_sets_only_the_fp16_flag(configured, tmp_path):
+    engine_build.build_fp16(tmp_path / "in.onnx", tmp_path / "fp16.engine")
+    assert [config.flags for config in configured] == [["FP16"]]
+
+
+def test_the_int8_entropy_build_sets_fp16_and_int8(configured, tmp_path):
+    engine_build._build_int8_entropy(tmp_path / "in.onnx", tmp_path / "int8.engine", [])
+    assert [config.flags for config in configured] == [["FP16", "INT8"]]
+    assert isinstance(configured[0].int8_calibrator, FakeCalibrator) and configured[0].int8_calibrator.released
+
+
+def test_the_int8_qdq_build_sets_fp16_and_int8(configured, tmp_path):
+    engine_build._build_int8_qdq(tmp_path / "in.onnx", tmp_path / "int8.engine", [])
+    assert [config.flags for config in configured] == [["FP16", "INT8"]]
+
+
+@pytest.mark.parametrize("precision", engine_build.PRECISIONS)
+def test_the_build_log_records_the_flags_the_build_set(precision, configured, calibration, tmp_path, monkeypatch):
+    RecordingLog.opened = []
+    monkeypatch.setattr(engine_build.runlog, "RunLog", RecordingLog)
+    output = tmp_path / "out" / f"{precision}.engine"
+    output.parent.mkdir()
+    output.write_bytes(b"engine")
+    onnx_path = tmp_path / "network.onnx"
+    onnx_path.write_bytes(b"onnx")
+    arguments = ["--precision", precision, "--onnx", str(onnx_path), "--output", str(output)]
+    assert engine_build.main([*arguments, "--calibration-dir", str(calibration)]) == 0
+    assert RecordingLog.opened[0].results["builder_flags"] == configured[0].flags
+    assert configured[0].flags == (["FP16", "INT8"] if precision == "int8" else ["FP16"])

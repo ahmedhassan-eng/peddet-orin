@@ -474,10 +474,22 @@ RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
         "matmul_allow_tf32": _is_bool,
     },
 }
-# Keys a kind may carry beyond its required ones.
+# Keys a kind may carry beyond its required ones, with the test each value must pass when present. Logs written
+# from 0.1.1 on carry them; the committed logs predate them and stay valid without them.
+OPTIONAL_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
+    "build": {
+        # The TensorRT builder flags the engine was built with, by their BuilderFlag names.
+        "builder_flags": lambda value: (
+            isinstance(value, list) and bool(value) and all(map(_is_string, value)) and len(set(value)) == len(value)
+        ),
+    },
+}
 # Logs written before 0.1.1 carry an inferred_slice, which gpu_check no longer records: no slice can be inferred
-# for a device that PyTorch itself says its build excludes.
-OPTIONAL_RESULTS: dict[str, frozenset[str]] = {"gpu_check": frozenset({"inferred_slice"})}
+# for a device that PyTorch itself says its build excludes. It is allowed unchecked.
+OPTIONAL_RESULTS: dict[str, frozenset[str]] = {
+    kind: frozenset(OPTIONAL_CHECKS.get(kind, {})) | ({"inferred_slice"} if kind == "gpu_check" else set())
+    for kind in RESULT_CHECKS
+}
 
 
 # A build log's sentinels: "-" for a field that does not apply to its precision, and NO_ENTROPY_FAILURE for an INT8
@@ -485,6 +497,9 @@ OPTIONAL_RESULTS: dict[str, frozenset[str]] = {"gpu_check": frozenset({"inferred
 NOT_APPLICABLE = "-"
 NO_ENTROPY_FAILURE = ""
 INT8_ENTROPY_PATH = "IInt8EntropyCalibrator2"
+# The TensorRT builder flags each engine precision sets. INT8 sets FP16 too, so a layer TensorRT does not run in INT8
+# runs in FP16, not FP32.
+BUILDER_FLAG_NAMES: dict[str, list[str]] = {"fp16": ["FP16"], "int8": ["FP16", "INT8"]}
 
 
 def _cross_field_problems(kind: str, precision: Any, results: dict) -> list[str]:
@@ -517,6 +532,9 @@ def _cross_field_problems(kind: str, precision: Any, results: dict) -> list[str]
                 problems.append("bad result: build int8_path must be - without int8")
             if failure not in (None, NOT_APPLICABLE):
                 problems.append("bad result: build entropy_failure must be - without int8")
+        flags = results.get("builder_flags")
+        if isinstance(flags, list) and precision in BUILDER_FLAG_NAMES and flags != BUILDER_FLAG_NAMES[precision]:
+            problems.append(f"bad result: build builder_flags must be {BUILDER_FLAG_NAMES[precision]} for {precision}")
     return problems
 
 
@@ -530,6 +548,7 @@ def _results_problems(kind: Any, precision: Any, results: Any) -> list[str]:
     problems = [f"missing result: {kind} {key}" for key in checks if key not in results]
     allowed = set(checks) | OPTIONAL_RESULTS.get(kind, frozenset())
     problems += [f"unexpected result: {kind} {key}" for key in sorted(map(str, set(results) - allowed))]
+    checks = {**checks, **OPTIONAL_CHECKS.get(kind, {})}
     problems += [
         f"bad result: {kind} {key}" for key, check in checks.items() if key in results and not check(results[key])
     ]
