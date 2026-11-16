@@ -119,6 +119,13 @@ All notable changes to this project are recorded here. The format follows
   `builder_flags` `[]` and a new optional `cleared_builder_flags`, `["TF32"]` (`[]` for FP16 and INT8). evaluate and
   benchmark accept `--precision fp32-trt`; `fp32` stays PyTorch, the PyTorch baseline, so the committed logs keep
   their meaning. `tests/test_gpu.py` gains a sixth GPU test, which builds the engine and checks it against the CPU.
+- The results table names the PyTorch FP32 row `GPU, PyTorch FP32 (PyTorch baseline)` and gains a
+  `GPU, TensorRT FP32 (precision baseline)` row when the judged runs carry TensorRT FP32 logs. The committed judged
+  runs have none, so the row is left out and one generated note says it is measured from the next judged runs on;
+  judged runs that carry it in some runs and not others, or only some of its logs, stop `scripts/generate_table.py`.
+  `scripts/compare_logs.py` judges TensorRT FP32 against R-11's FP32 tolerances once the reference has it, AP within
+  0.10 points, and reports it without judging until then. The README's sentence on 0.1.1's `src/` changes no longer
+  says none changes a computation: two do, and neither was re-measured.
 
 ### Security
 

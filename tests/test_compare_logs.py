@@ -54,8 +54,8 @@ def line(lines, kind, precision, metric):
 
 def test_the_tolerances_are_one_dict_with_the_stated_values():
     assert compare_logs.TOLERANCES == {
-        "ap": {"points": {"fp32": 0.10, "fp16": 0.10, "int8": 0.50}},
-        "ap50": {"points": {"fp32": 0.10, "fp16": 0.10, "int8": 0.50}},
+        "ap": {"points": {"fp32": 0.10, "fp32-trt": 0.10, "fp16": 0.10, "int8": 0.50}},
+        "ap50": {"points": {"fp32": 0.10, "fp32-trt": 0.10, "fp16": 0.10, "int8": 0.50}},
         "engine_p50_ms": {"relative": 0.10},
         "end_to_end_p50_ms": {"relative": 0.15},
         "avg_power_w": {"relative": 0.10},
@@ -197,3 +197,39 @@ def test_main_compares_against_the_reference_and_sets_the_status(tmp_path, capsy
     assert compare_logs.main([str(new)]) == 0
     assert capsys.readouterr().out.splitlines()[-1] == "COMPARE DONE PASS"
     assert compare_logs.main([str(write(tmp_path / "partial", complete(skip={("eval", "fp32")})))]) == 1
+
+
+def tensorrt_fp32(ap=0.3000, end_to_end=10.0) -> list[dict]:
+    """An eval and a benchmark log for TensorRT FP32."""
+    return [
+        make_log("eval", "fp32-trt", results={"ap": ap, "ap50": 0.5000}),
+        make_log(
+            "benchmark",
+            "fp32-trt",
+            results={"engine": latency(8.0), "end_to_end": latency(end_to_end), "avg_power_w": 8.0},
+        ),
+    ]
+
+
+def test_tensorrt_fp32_is_reported_not_judged_while_the_reference_predates_it(tmp_path):
+    (tmp_path / "with").mkdir()
+    status, lines = run(tmp_path, complete())
+    assert status == 0 and not any(" fp32-trt " in item for item in lines)
+    status, lines = run(tmp_path / "with", [*complete(), *tensorrt_fp32(ap=0.10)])
+    assert status == 0
+    assert line(lines, "eval", "fp32-trt", "ap").endswith(" REPORTED")
+    assert line(lines, "benchmark", "fp32-trt", "end_to_end_p50_ms").startswith(
+        "COMPARE benchmark fp32-trt end_to_end_p50_ms published=missing new=10.00"
+    )
+
+
+def test_tensorrt_fp32_is_judged_once_the_reference_has_it(tmp_path):
+    for name in ("within", "outside", "without"):
+        (tmp_path / name).mkdir()
+    reference = published(tmp_path, [*complete(), *tensorrt_fp32()])
+    status, lines = run(tmp_path / "within", [*complete(), *tensorrt_fp32(ap=0.3009)], reference)
+    assert status == 0 and line(lines, "eval", "fp32-trt", "ap").endswith(" tol=0.10 OK")
+    status, lines = run(tmp_path / "outside", [*complete(), *tensorrt_fp32(ap=0.3020)], reference)
+    assert status == 1 and line(lines, "eval", "fp32-trt", "ap").endswith(" tol=0.10 OUT")
+    status, lines = run(tmp_path / "without", complete(), reference)
+    assert status == 1 and line(lines, "eval", "fp32-trt", "log").endswith("new=missing delta=n/a tol=- OUT")

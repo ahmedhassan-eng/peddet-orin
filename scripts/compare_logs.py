@@ -32,8 +32,8 @@ import generate_table
 # absolute difference in AP points (0-100 scale), per precision; "relative" is a
 # fraction of the published value.
 TOLERANCES: dict[str, dict] = {
-    "ap": {"points": {"fp32": 0.10, "fp16": 0.10, "int8": 0.50}},
-    "ap50": {"points": {"fp32": 0.10, "fp16": 0.10, "int8": 0.50}},
+    "ap": {"points": {"fp32": 0.10, "fp32-trt": 0.10, "fp16": 0.10, "int8": 0.50}},
+    "ap50": {"points": {"fp32": 0.10, "fp32-trt": 0.10, "fp16": 0.10, "int8": 0.50}},
     "engine_p50_ms": {"relative": 0.10},
     "end_to_end_p50_ms": {"relative": 0.15},
     "avg_power_w": {"relative": 0.10},
@@ -132,17 +132,25 @@ def compare(new_dir: Path, published_logs: dict | None = None, committed: set[tu
         failures += 1
         lines.append(f"COMPARE - - commit published=- new={','.join(c[:7] for c in commits)} delta=n/a tol=- OUT")
     for kind in KINDS:
-        for precision in generate_table.PRECISIONS:
+        for precision in generate_table.TABLE_PRECISIONS:
             new = _newest(new_logs, kind, precision)
+            published = published_logs.get((kind, precision))
+            # A precision the reference predates, TensorRT FP32 today, is reported when new logs carry it and is
+            # judged once the reference has it.
+            judged = precision in generate_table.PRECISIONS or published is not None
+            if not judged and new is None:
+                continue
             if new is None:
                 failures += 1
                 lines.append(f"COMPARE {kind} {precision} log published=- new=missing delta=n/a tol=- OUT")
                 continue
             if new.get("dirty") is not False:
-                failures += 1
-                lines.append(f"COMPARE {kind} {precision} log published=- new=dirty delta=n/a tol=- OUT")
+                failures += judged
+                lines.append(
+                    f"COMPARE {kind} {precision} log published=- new=dirty delta=n/a tol=- "
+                    f"{'OUT' if judged else 'REPORTED'}"
+                )
                 continue
-            published = published_logs.get((kind, precision))
             if published and _setup(new) != _setup(published):
                 failures += 1
                 shown = f"published={_setup(published)} new={_setup(new)}"
@@ -151,6 +159,7 @@ def compare(new_dir: Path, published_logs: dict | None = None, committed: set[tu
                 new_value = read(new["results"])
                 published_value = read(published["results"]) if published else "missing"
                 delta, tolerance, verdict = judge(metric, precision, published_value, new_value)
+                verdict = verdict if judged else "REPORTED"
                 failures += verdict == "OUT"
                 lines.append(
                     f"COMPARE {kind} {precision} {metric} published={_shown(published_value)} "

@@ -7,6 +7,8 @@ With judged runs under ``runs-repeat/``, each cell is the median over them; the 
 apart and not judged. Without them, the newest clean log of each kind and precision in ``runs/`` supplies the
 cells. A log made from a dirty tree is skipped, with a line on stderr. The logs that feed the table must come from
 one commit, and each row's evaluation and benchmark must name the same runtime; otherwise the script exits non-zero.
+TensorRT FP32 has a row only where its logs are present: the committed judged runs predate it, and a judged set
+that carries it in some runs and not others stops the script.
 """
 
 from __future__ import annotations
@@ -30,8 +32,21 @@ BEGIN_MARKER = "<!-- results:begin -->"
 END_MARKER = "<!-- results:end -->"
 INT8_MARKERS = ("<!-- int8:begin -->", "<!-- int8:end -->")
 REPEAT_MARKERS = ("<!-- repeats:begin -->", "<!-- repeats:end -->")
+# The precisions every judged run carries: PyTorch FP32, the PyTorch baseline, and TensorRT FP16 and INT8.
 PRECISIONS = ("fp32", "fp16", "int8")
-PRECISION_NAMES = {"fp32": "FP32", "fp16": "FP16", "int8": "INT8"}
+# TensorRT FP32, the precision baseline. The committed judged runs predate it; from the next judged runs on, each
+# carries it, and the table shows its row.
+TENSORRT_FP32 = "fp32-trt"
+# Every precision the table can show, in row order.
+TABLE_PRECISIONS = ("fp32", TENSORRT_FP32, "fp16", "int8")
+PRECISION_NAMES = {"fp32": "FP32", TENSORRT_FP32: "TensorRT FP32", "fp16": "FP16", "int8": "INT8"}
+# The precision a row's first cell names after its device and framework, and what the row is a baseline for.
+ROW_PRECISION = {TENSORRT_FP32: "FP32"}
+BASELINES = {"fp32": " (PyTorch baseline)", TENSORRT_FP32: " (precision baseline)"}
+TENSORRT_FP32_PENDING = (
+    "TensorRT FP32, the precision baseline, is measured from the next judged runs on; these logs have none of it, so "
+    "its row is not shown."
+)
 INT8_DROP_LIMIT_POINTS = 2.0
 POINTS = 100.0
 HZ_PER_MHZ = 1_000_000
@@ -81,6 +96,35 @@ WANTED = (
     ("build", "int8"),
     ("gpu_check", "fp32"),
 )
+# Groups of logs the committed judged runs predate. Each group is absent from every judged run or complete in every
+# one; anything between stops the script, so a row or block never mixes runs that measured it with runs that did not.
+OPTIONAL_GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
+    "TensorRT FP32": (("benchmark", TENSORRT_FP32), ("eval", TENSORRT_FP32), ("build", TENSORRT_FP32)),
+}
+
+
+def measured(chosen: dict) -> list[str]:
+    """The precisions with a row: the three every run carries, and TensorRT FP32 when any of its logs is present."""
+    return [
+        precision
+        for precision in TABLE_PRECISIONS
+        if precision in PRECISIONS or any(key in chosen for key in OPTIONAL_GROUPS["TensorRT FP32"])
+    ]
+
+
+def check_groups(runs: list[tuple[str, dict]]) -> None:
+    """Stop with ``TableError`` unless each optional group is absent from every judged run or complete in each."""
+    for group, keys in OPTIONAL_GROUPS.items():
+        complete = []
+        for name, chosen in runs:
+            have = [key in chosen for key in keys]
+            if any(have) and not all(have):
+                absent = [f"{kind} {precision}" for kind, precision in keys if (kind, precision) not in chosen]
+                missing = ", ".join(absent)
+                raise TableError(f"judged run {name} has some {group} logs but no clean log for {missing}")
+            complete.append(all(have))
+        if any(complete) and not all(complete):
+            raise TableError(f"{group} logs are in {sum(complete)} of the {len(runs)} judged runs, not all or none")
 
 
 def energy_per_frame_j(results: dict) -> float | str:
@@ -103,11 +147,12 @@ def _with_energy(log: dict) -> dict:
 def select(logs: list[dict]) -> dict[tuple[str, str], dict]:
     """Pick the logs that feed the block, keyed by kind and precision, and check they agree. Each benchmark log
     gains its energy per frame, so a median over runs takes the median of each run's figure."""
-    chosen = {key: _with_energy(log) for key in WANTED if (log := latest(logs, *key)) is not None}
+    wanted = (*WANTED, *(key for keys in OPTIONAL_GROUPS.values() for key in keys))
+    chosen = {key: _with_energy(log) for key in wanted if (log := latest(logs, *key)) is not None}
     commits = sorted({log["commit"] for log in chosen.values()})
     if len(commits) > 1:
         raise TableError(f"the logs feeding the table come from {len(commits)} commits: {', '.join(commits)}")
-    for precision in PRECISIONS:
+    for precision in TABLE_PRECISIONS:
         benchmark, evaluation = chosen.get(("benchmark", precision)), chosen.get(("eval", precision))
         if benchmark and evaluation and benchmark["results"]["runtime"] != evaluation["results"]["runtime"]:
             raise TableError(
@@ -141,7 +186,8 @@ def _row(chosen: dict, precision: str) -> str:
         int8_path = "-"
     runtime = (timing or scores or {}).get("runtime", MISSING)
     cells = [
-        f"{DEVICE_AND_FRAMEWORK.get(runtime, runtime)} {PRECISION_NAMES[precision]}",
+        f"{DEVICE_AND_FRAMEWORK.get(runtime, runtime)} {ROW_PRECISION.get(precision, PRECISION_NAMES[precision])}"
+        f"{BASELINES.get(precision, '')}",
         _latency(timing["engine"]) if timing else MISSING,
         _number(timing["engine"]["fps"], 1) if timing else MISSING,
         _latency(timing["end_to_end"]) if timing else MISSING,
@@ -194,7 +240,7 @@ def _notes(chosen: dict) -> list[str]:
             )
         else:
             notes.append(f"INT8 person AP differs from FP16 by {-drop:+.2f} points.")
-    for precision in PRECISIONS:
+    for precision in measured(chosen):
         benchmark = chosen.get(("benchmark", precision))
         if benchmark:
             results = benchmark["results"]
@@ -297,6 +343,7 @@ def judged_runs(repeats_dir: Path) -> list[tuple[Path, dict]]:
         if missing:
             raise TableError(f"judged run {path.name} has no clean log for {', '.join(missing)}")
         require_quieted(path, chosen)
+    check_groups([(path.name, chosen) for path, chosen in runs])
     return runs
 
 
@@ -327,7 +374,7 @@ def _ranges(runs: list[tuple[str, dict]], precision: str) -> str | None:
 
 
 def _benchmarks(chosen: dict) -> list[dict]:
-    return [chosen[key]["results"] for precision in PRECISIONS if (key := ("benchmark", precision)) in chosen]
+    return [chosen[key]["results"] for precision in measured(chosen) if (key := ("benchmark", precision)) in chosen]
 
 
 def _maxima(results: dict) -> tuple:
@@ -400,9 +447,10 @@ def build_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> s
     """
     chosen, runs = headline(runs_dir, repeats_dir)
     divider = "|" + "---|" * HEADER.count(" | ") + "---|"
-    rows = [_row(chosen, precision) for precision in PRECISIONS]
+    rows = [_row(chosen, precision) for precision in measured(chosen)]
+    pending = [] if TENSORRT_FP32 in measured(chosen) else [TENSORRT_FP32_PENDING]
     if not runs:
-        notes = [f"- {note}" for note in _notes(chosen)]
+        notes = [f"- {note}" for note in [*pending, *_notes(chosen)]]
         return "\n".join([HEADER, divider, *rows, "", *notes]).strip()
     commit, version = provenance(runs)
     notes = [
@@ -412,10 +460,11 @@ def build_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> s
         f"The judged runs were made at commit `{commit[:7]}` with package version {version}, as their logs record.",
         "Memory, swap and temperature are recorded for the judged runs only, over each whole benchmark job, warm-up "
         "included; the earlier runs have no such record.",
+        *pending,
         *[note for note in _notes(chosen) if note.startswith("INT8 person AP")],
         int8_ap_sentence(runs, select(load_logs(runs_dir))),
         power_mode_sentence(runs, select(load_logs(runs_dir))),
-        *[line for precision in PRECISIONS if (line := _ranges(runs, precision))],
+        *[line for precision in measured(chosen) if (line := _ranges(runs, precision))],
     ]
     for name, run in runs:
         notes += [f"{name}: {note}" for note in _notes(run) if not note.startswith("INT8 person AP")]
@@ -516,11 +565,11 @@ def _samples(path: Path) -> list[dict[str, str]]:
     return rows
 
 
-def system_record(run_dir: Path) -> dict[str, dict]:
+def system_record(run_dir: Path, precisions: tuple[str, ...] | list[str] = PRECISIONS) -> dict[str, dict]:
     """Per benchmark job of a recorded run: swap used at its start, its swap-out delta, its lowest available memory
     and the highest reading of each thermal zone, from ``sysmon/*bench_<precision>.txt``."""
     record = {}
-    for precision in PRECISIONS:
+    for precision in precisions:
         files = sorted((run_dir / "sysmon").glob(f"*bench_{precision}.txt"))
         rows = _samples(files[0]) if len(files) == 1 else []
         if not rows:
@@ -628,12 +677,12 @@ def first_sample(run_dir: Path) -> dict[str, str] | None:
     return None
 
 
-def _swap_clean(record: dict[str, dict]) -> bool:
-    """Swap used 0 at each benchmark job's start and no page swapped out during it, for all three precisions.
+def _swap_clean(record: dict[str, dict], precisions: list[str]) -> bool:
+    """Swap used 0 at each benchmark job's start and no page swapped out during it, for every measured precision.
 
     A precision missing from the record is not clean either; ``host_state`` names it as missing before calling this.
     """
-    return len(record) == len(PRECISIONS) and all(
+    return set(record) == set(precisions) and all(
         entry["swap_used_kb_at_start"] == 0 and entry["pswpout_delta"] == 0 for entry in record.values()
     )
 
@@ -727,9 +776,10 @@ def host_state(run_dir: Path | None, chosen: dict) -> str:
     Without one, it is not quieted when every benchmark's load before timing is at or above the gate's bound;
     otherwise its state is not recorded.
     """
+    precisions = measured(chosen)
     loads = [
         chosen[("benchmark", precision)]["results"]["cpu_load_1min_before_timing"]
-        for precision in PRECISIONS
+        for precision in precisions
         if ("benchmark", precision) in chosen
     ]
     quiet = run_dir / "quiet.txt" if run_dir is not None else None
@@ -737,13 +787,13 @@ def host_state(run_dir: Path | None, chosen: dict) -> str:
         gates = _quiet_gates(quiet)
         passed = bool(gates) and all(verdicts == ["PASS"] for verdicts in gates.values())
         state = "quieted, every QUIET gate passed" if passed else "not quieted, a QUIET gate did not pass"
-        record = system_record(run_dir) if passed and is_recorded(run_dir) else None
+        record = system_record(run_dir, precisions) if passed and is_recorded(run_dir) else None
         unsampled = [
-            PRECISION_NAMES[precision] for precision in PRECISIONS if record is not None and precision not in record
+            PRECISION_NAMES[precision] for precision in precisions if record is not None and precision not in record
         ]
         if unsampled:
             state = f"not quieted, no single sysmon file with samples for the {', '.join(unsampled)} benchmark job"
-        elif record is not None and not _swap_clean(record):
+        elif record is not None and not _swap_clean(record, precisions):
             state = "not quieted, swap was in use or pages were swapped out during a benchmark job"
         elif not is_recorded(run_dir):
             state += ", recorded before the memory, swap and temperature reads"
@@ -769,12 +819,12 @@ def _deviation(compare_logs, metric: str, precision: str, median: object, value:
     return f"{value:.2f} ({_signed(float(delta.rstrip('%')), 1, '%') if delta.endswith('%') else delta})"
 
 
-def _system_lines(runs: list[Path]) -> list[str]:
+def _system_lines(runs: list[Path], precisions: list[str]) -> list[str]:
     """Per judged run and benchmark: swap at the job's start, swap-outs during it, lowest free memory, zone peaks."""
     rows = []
     for path in runs:
-        record = system_record(path)
-        for precision in PRECISIONS:
+        record = system_record(path, precisions)
+        for precision in precisions:
             entry = record.get(precision)
             if entry is None:
                 rows.append(f"| {path.name} | {PRECISION_NAMES[precision]} | missing | missing | missing | missing |")
@@ -806,7 +856,9 @@ def _system_lines(runs: list[Path]) -> list[str]:
     if len(intervals) != 1:
         raise TableError(f"the judged runs' samplers name {len(intervals)} intervals: {', '.join(sorted(intervals))}")
     interval = intervals.pop()
-    zones = sorted({zone for path in runs for entry in system_record(path).values() for zone in entry["max_temp_c"]})
+    zones = sorted(
+        {zone for path in runs for entry in system_record(path, precisions).values() for zone in entry["max_temp_c"]}
+    )
     return [
         "",
         "Each judged run's state before any measurement, from the first sample of its first GPU job:",
@@ -872,7 +924,7 @@ def build_repeat_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
     ]
     missed = []
     for kind in compare_logs.KINDS:
-        for precision in PRECISIONS:
+        for precision in measured(median):
             base = median.get((kind, precision))
             if base is None:
                 continue
@@ -910,7 +962,7 @@ def build_repeat_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
         if not missed
         else "; ".join(f"R-11 not met for {name}" for name in missed) + ".",
     ]
-    lines += _system_lines([path for path in runs if is_recorded(path)])
+    lines += _system_lines([path for path in runs if is_recorded(path)], measured(median))
     return "\n".join(lines)
 
 

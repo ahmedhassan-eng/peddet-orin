@@ -576,3 +576,62 @@ def test_the_judged_runs_paragraph_ends_before_the_gate_paragraph():
     block = generate_table.build_repeat_block()
     first, second, *_ = block.split("\n\n")
     assert first.endswith("and not judged.") and second.startswith("Each judged run's QUIET gate")
+
+
+def _add_tensorrt_fp32(run_dir, kinds=("benchmark", "eval", "build")):
+    """Copy a run's FP16 logs of the given kinds as TensorRT FP32 logs, with their runtime unchanged."""
+    for kind in kinds:
+        (source,) = sorted(run_dir.glob(f"{kind}_fp16_*.json"))
+        log = json.loads(source.read_text())
+        log["precision"] = "fp32-trt"
+        (run_dir / source.name.replace("_fp16_", "_fp32-trt_")).write_text(json.dumps(log))
+
+
+def _judged(tmp_path, names=("run1", "run2")):
+    for name in names:
+        _copy_runs(generate_table.RUNS_DIR, tmp_path / name)
+        (tmp_path / name / "quiet.txt").write_text(QUIET_PASSED)
+
+
+def test_without_tensorrt_fp32_logs_its_row_is_left_out_with_one_note(tmp_path):
+    _judged(tmp_path)
+    block = generate_table.build_block(generate_table.RUNS_DIR, tmp_path)
+    assert "| GPU, PyTorch FP32 (PyTorch baseline) |" in block
+    assert "TensorRT FP32" not in "".join(line for line in block.splitlines() if line.startswith("| GPU"))
+    assert block.count(generate_table.TENSORRT_FP32_PENDING) == 1
+    readme = generate_table.README.read_text()
+    assert readme.count(generate_table.TENSORRT_FP32_PENDING) == 1
+
+
+def test_tensorrt_fp32_in_every_judged_run_gives_the_precision_baseline_row(tmp_path):
+    _judged(tmp_path)
+    for name in ("run1", "run2"):
+        _add_tensorrt_fp32(tmp_path / name)
+    block = generate_table.build_block(generate_table.RUNS_DIR, tmp_path)
+    rows = [line for line in block.splitlines() if line.startswith("| GPU")]
+    assert [row.split(" | ")[0] for row in rows] == [
+        "| GPU, PyTorch FP32 (PyTorch baseline)",
+        "| GPU, TensorRT FP32 (precision baseline)",
+        "| GPU, TensorRT FP16",
+        "| GPU, TensorRT INT8",
+    ]
+    assert generate_table.TENSORRT_FP32_PENDING not in block
+    assert "TensorRT FP32 min-max over the 2 runs: ap " in block
+    repeat = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
+    assert "| ap | TensorRT FP32 |" in repeat and "| engine_p50_ms | TensorRT FP32 |" in repeat
+
+
+def test_tensorrt_fp32_in_only_some_judged_runs_stops_the_generator(tmp_path):
+    _judged(tmp_path)
+    _add_tensorrt_fp32(tmp_path / "run2")
+    for build in (generate_table.build_block, generate_table.build_repeat_block):
+        with pytest.raises(generate_table.TableError, match="TensorRT FP32 logs are in 1 of the 2 judged runs"):
+            build(generate_table.RUNS_DIR, tmp_path)
+
+
+def test_a_judged_run_with_part_of_tensorrt_fp32_stops_the_generator(tmp_path):
+    _judged(tmp_path)
+    _add_tensorrt_fp32(tmp_path / "run1")
+    _add_tensorrt_fp32(tmp_path / "run2", kinds=("benchmark", "eval"))
+    with pytest.raises(generate_table.TableError, match="judged run run2 has some TensorRT FP32 logs but no clean log"):
+        generate_table.build_block(generate_table.RUNS_DIR, tmp_path)

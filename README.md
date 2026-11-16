@@ -1,21 +1,22 @@
 # peddet-orin
 
-Person detection on a Jetson Orin Nano Super with torchvision's SSDLite320 MobileNetV3-Large and its COCO weights, measured at three precisions: FP32 in PyTorch, and FP16 and INT8 in TensorRT. The benchmark reports accuracy on COCO 2017 val, latency, frames per second, memory and power. The headline numbers are the median of the judged runs' JSON logs under `runs-repeat/`, which also hold each run's QUIET gate and sampler files; the earlier run's logs are in `runs/`, and a test fails if the table and the logs disagree. [Results](#results) and [Limitations](#limitations) follow; the hardware and software, how the judged runs were checked, the Quickstart and how to reproduce the results come after them.
+Person detection on a Jetson Orin Nano Super with torchvision's SSDLite320 MobileNetV3-Large and its COCO weights, measured at FP32 in PyTorch, the PyTorch baseline, and at FP16 and INT8 in TensorRT; TensorRT FP32, the precision baseline, is measured from the next judged runs on. The benchmark reports accuracy on COCO 2017 val, latency, frames per second, memory and power. The headline numbers are the median of the judged runs' JSON logs under `runs-repeat/`, which also hold each run's QUIET gate and sampler files; the earlier run's logs are in `runs/`, and a test fails if the table and the logs disagree. [Results](#results) and [Limitations](#limitations) follow; the hardware and software, how the judged runs were checked, the Quickstart and how to reproduce the results come after them.
 
 ## Results
 
-Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. FPS is 1 / mean latency over the serial batch-1 iterations, not a sustained throughput with several requests in flight. Power is the mean board input over the whole timed loop, which ran at the end-to-end rate, so it sits with the end-to-end columns: energy per frame is each run's power divided by its end-to-end FPS, and the board never ran at the engine FPS while power was read. All precisions use the same postprocess. Each benchmark pools three timed repeats of its loop, and the notes give the range of the per-repeat medians. Accuracy is person AP on the 5000 COCO val2017 images, from pycocotools with `catIds=[1]`.
+Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. FPS is 1 / mean latency over the serial batch-1 iterations, not a sustained throughput with several requests in flight. Power is the mean board input over the whole timed loop, which ran at the end-to-end rate, so it sits with the end-to-end columns: energy per frame is each run's power divided by its end-to-end FPS, and the board never ran at the engine FPS while power was read. The PyTorch FP32 row is the PyTorch baseline: the same network in PyTorch. The TensorRT FP32 row, once judged runs carry it, is the precision baseline: the same TensorRT runtime as FP16 and INT8, built with neither flag and with TF32 cleared, so FP16 and INT8 differ from it in precision alone. All precisions use the same postprocess. Each benchmark pools three timed repeats of its loop, and the notes give the range of the per-repeat medians. Accuracy is person AP on the 5000 COCO val2017 images, from pycocotools with `catIds=[1]`.
 
 <!-- results:begin -->
 | Device and precision | Engine p50/p90/p99 (ms) | Engine FPS | End-to-end p50/p90/p99 (ms) | End-to-end FPS | Avg power VDD_IN (W) | End-to-end energy per frame (J) | Peak process RSS (MiB) | Person AP@[.5:.95] | Person AP50 | INT8 path |
 |---|---|---|---|---|---|---|---|---|---|---|
-| GPU, PyTorch FP32 | 29.8 / 30.2 / 31.9 | 33.5 | 87.1 / 99.9 / 106.2 | 11.5 | 7.6 | 0.655 | 1219 | 28.01 | 49.50 | - |
+| GPU, PyTorch FP32 (PyTorch baseline) | 29.8 / 30.2 / 31.9 | 33.5 | 87.1 / 99.9 / 106.2 | 11.5 | 7.6 | 0.655 | 1219 | 28.01 | 49.50 | - |
 | GPU, TensorRT FP16 | 3.8 / 3.9 / 4.0 | 263.0 | 60.6 / 73.8 / 80.4 | 16.7 | 7.1 | 0.428 | 1195 | 28.01 | 49.49 | - |
 | GPU, TensorRT INT8 | 3.6 / 3.7 / 3.8 | 276.2 | 64.8 / 77.5 / 84.5 | 15.7 | 7.1 | 0.453 | 1102 | 26.74 | 48.14 | IInt8EntropyCalibrator2 |
 
 - Each cell is the median over the n = 3 quieted runs in `runs-repeat/` (run3, run4, run5), this release's count; 0.2.0 plans 5 or more runs.
 - The judged runs were made at commit `025171d` with package version 0.1.0, as their logs record.
 - Memory, swap and temperature are recorded for the judged runs only, over each whole benchmark job, warm-up included; the earlier runs have no such record.
+- TensorRT FP32, the precision baseline, is measured from the next judged runs on; these logs have none of it, so its row is not shown.
 - INT8 person AP differs from FP16 by -1.27 points.
 - INT8 person AP is 26.74 in each of the 3 judged runs and 26.83 in the earlier run; each run builds its own INT8 engine, so each score comes from a separate build.
 - The judged runs' power mode was not read: 9 of their 9 benchmark logs record `UNREADABLE`, which a log records when `nvpmodel` is not found on PATH or `nvpmodel -q` fails, and the host's run script adds no system sbin directory to PATH. The evidence the logs hold is the clock maxima of every judged benchmark: GPU 1020 MHz, CPU policy0 1728 MHz, policy4 1728 MHz, the same as in each of the earlier run's 3 benchmarks, whose power mode reads `NV Power Mode: MAXN_SUPER 2`.
@@ -45,7 +46,7 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 - run5: PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
 <!-- results:end -->
 
-The FP32 row runs PyTorch on the GPU with TF32 turned off for cuDNN and matmul, so it is FP32 throughout. PyTorch warns on first CUDA use that its published 2.14.1+cu130 wheels do not support this board's compute capability, 8.7; the notes quote the warning's first line, the `gpu_check` log holds all of it, and the code does not hide it. Which kernel image the driver runs is not reported. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable: it compares a matmul and NMS against the CPU, and `tests/test_gpu.py` compares a full forward pass.
+The PyTorch FP32 row runs PyTorch on the GPU with TF32 turned off for cuDNN and matmul, so it is FP32 throughout. PyTorch warns on first CUDA use that its published 2.14.1+cu130 wheels do not support this board's compute capability, 8.7; the notes quote the warning's first line, the `gpu_check` log holds all of it, and the code does not hide it. Which kernel image the driver runs is not reported. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable: it compares a matmul and NMS against the CPU, and `tests/test_gpu.py` compares a full forward pass.
 
 Peak process RSS does not fully capture memory allocated on the device. System RAM rise, the highest system-wide RAM during timing minus the mean just before, is in the logs but not in the table: it includes any other activity on the board and does not reproduce between runs.
 
@@ -59,7 +60,7 @@ Over the median of the 3 quieted runs, the INT8 engine p50 is lower than FP16's,
 - The export uses PyTorch's TorchScript-based ONNX exporter, which PyTorch has deprecated; `pyproject.toml` bounds torch below 2.15 for that reason.
 - CI runs on x86_64 CPUs only. The aarch64 build, the GPU tests and TensorRT run only on the Jetson, by hand, before a release.
 - Batch size 1 only.
-- FP32 runs in PyTorch and FP16 and INT8 in TensorRT, so the gap between FP32 and the other two is runtime and precision together, not precision alone.
+- PyTorch FP32 runs in PyTorch and FP16 and INT8 in TensorRT, so the gap between the PyTorch baseline and the other two is runtime and precision together, not precision alone. TensorRT FP32, the precision baseline that separates the two, is not in the committed judged runs.
 - `jetson_clocks` is not run, memory clocks are not read, and a tegrastats reader thread runs in the timed process. For the judged runs, the QUIET gates and the measurement window excluded what the repeat block and the Provenance notes name: the board's other scheduled jobs and loop services, sessions over their CPU budget or not allowed, swap use and swap-outs, available memory under the bound, and a load1 at or above the gate's bound. They did not exclude the operating system's own processes or the tegrastats reader, so latencies still vary between runs, as the min-max notes show. The earlier run in `runs/` had no such gate.
 - The system RAM rise in each benchmark log is reported per run and not judged.
 - Power is the average of `tegrastats` VDD_IN readings during the timed end-to-end loop. It is the whole board's input power, not the GPU's alone, and no power was read for inference alone, so there is no energy figure at the engine rate.
@@ -194,7 +195,7 @@ RAM was not a constraint in runs 3-5: the lowest available memory during any job
 
 ### Provenance
 
-- Each cell is the median over the judged quieted runs listed in the notes, on one board; the notes name the commit and package version their logs record. A benchmark pools three timed repeats of its loop. That commit's `src/` is the same as at `17a1ee2`, where 0.1.0's table was measured from one run on a host that was not quieted, and 0.1.1's changes to `src/`, each listed in `CHANGELOG.md`, change no computation: among them, it loads ONNX Runtime where it is used, and each run log also records the numpy, Pillow, pycocotools and libjpeg versions. So the code that produced the measured numbers computes what the released code computes. The judged runs ran the code before this change, with ONNX Runtime loaded in the measuring process; the peak process RSS in the table includes it and was not re-measured; the timings and accuracy do not depend on it. The run log still loads ONNX Runtime to record its version, so a benchmark run of the released code loads it too, once its input checks have passed.
+- Each cell is the median over the judged quieted runs listed in the notes, on one board; the notes name the commit and package version their logs record. A benchmark pools three timed repeats of its loop. That commit's `src/` is the same as at `17a1ee2`, where 0.1.0's table was measured from one run on a host that was not quieted, and 0.1.1's changes to `src/` are each listed in `CHANGELOG.md`. Two of them change what a run measures, and neither was re-measured: INT8 engines are built with the FP16 flag as well as INT8, so the published INT8 numbers come from engines built with INT8 alone; and the benchmark's full-frame image check moves out of its timed loop, so the published end-to-end times include it. The others add records or change no computation: among them, the logs record per-stage times, engine hashes and the postprocess settings, it loads ONNX Runtime where it is used, and each run log also records the numpy, Pillow, pycocotools and libjpeg versions. The judged runs ran the code before this change, with ONNX Runtime loaded in the measuring process; the peak process RSS in the table includes it and was not re-measured; the timings and accuracy do not depend on it. The run log still loads ONNX Runtime to record its version, so a benchmark run of the released code loads it too, once its input checks have passed.
 - Every log records its commit, whether the tree was dirty, the start and end times, the Jetson Linux release string, and the Python, PyTorch, torchvision, CUDA, TensorRT, ONNX, ONNX Runtime and peddet-orin versions, and from 0.1.1 on the numpy, Pillow, pycocotools and libjpeg versions. The table uses only clean logs, all from one commit.
 - The power mode in each benchmark note is what `nvpmodel -q` reported, or `UNREADABLE` when it was not read; the notes say which for the judged runs. `jetson_clocks` was not run, since it needs root. During timing a separate process samples the GPU's devfreq clock and each CPU frequency policy's clock every 200 ms; the notes give each governor and how many samples were at that clock's maximum. Memory clocks are not read.
 - The one-minute load average in the notes is read just before timing starts, so it shows what else was running then. The number of other GPU processes could not be read, and is recorded as `UNREADABLE`.
@@ -260,21 +261,24 @@ python -m peddet_orin.gpu_check
 python -m peddet_orin.export
 python -m peddet_orin.engine_build --precision fp16
 python -m peddet_orin.engine_build --precision int8
+python -m peddet_orin.engine_build --precision fp32-trt
 
 python -m peddet_orin.evaluate --precision fp32
 python -m peddet_orin.evaluate --precision fp16
 python -m peddet_orin.evaluate --precision int8
+python -m peddet_orin.evaluate --precision fp32-trt
 
 python -m peddet_orin.benchmark --precision fp32
 python -m peddet_orin.benchmark --precision fp16
 python -m peddet_orin.benchmark --precision int8
+python -m peddet_orin.benchmark --precision fp32-trt
 
 python scripts/compare_logs.py runs
 ```
 
 Each command writes a JSON log to `runs/`. The results table is built from the judged runs committed under `runs-repeat/`, and `python scripts/generate_table.py --write` rebuilds it from them; a re-measure does not run it, since it would show the re-measure's logs in `runs/` as the earlier run. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
 
-The last command checks the re-measure against the published numbers. `python scripts/compare_logs.py <runs dir>` leaves out the logs committed under `runs/` and `runs-repeat/`, so the committed logs never stand in for a missing or failed one. It compares the newest eval and benchmark log of each precision with what the results table is built from, the median of the judged runs, applies the tolerances of `PRD.md` R-11 and prints one line per metric. It fails a precision with no new log, a dirty newest log, a log run with another runtime or other iteration counts, and new logs from more than one commit. Set `PDORIN_DEBUG=1` to turn on diagnostic logging and profiling.
+The last command checks the re-measure against the published numbers. `python scripts/compare_logs.py <runs dir>` leaves out the logs committed under `runs/` and `runs-repeat/`, so the committed logs never stand in for a missing or failed one. It compares the newest eval and benchmark log of each precision with what the results table is built from, the median of the judged runs, applies the tolerances of `PRD.md` R-11 and prints one line per metric. TensorRT FP32 is reported, not judged, while the judged runs have no logs for it, and judged once they do. It fails a precision with no new log, a dirty newest log, a log run with another runtime or other iteration counts, and new logs from more than one commit. Set `PDORIN_DEBUG=1` to turn on diagnostic logging and profiling.
 
 ## Continuous integration
 

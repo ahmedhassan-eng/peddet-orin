@@ -13,9 +13,11 @@ EMPTY_BLOCK = "\n".join(
         "End-to-end FPS | Avg power VDD_IN (W) | End-to-end energy per frame (J) | Peak process RSS (MiB) | "
         "Person AP@[.5:.95] | Person AP50 | INT8 path |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
-        "| n/a FP32 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |",
+        "| n/a FP32 (PyTorch baseline) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |",
         "| n/a FP16 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |",
         "| n/a INT8 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |",
+        "",
+        f"- {generate_table.TENSORRT_FP32_PENDING}",
     ]
 )
 
