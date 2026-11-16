@@ -848,14 +848,17 @@ def build_repeat_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
         else ""
     )
     lines = [
-        f"R-11 is judged among the {len(runs)} quieted runs {', '.join(names)} in `runs-repeat/`, at commit "
-        f"{', '.join(f'`{commit[:7]}`' for commit in commits)}: a metric is IN when every judged run is within its "
-        f"tolerance of their median, and OUT otherwise. The tolerances are the `PRD.md` values in "
-        f"`scripts/compare_logs.py`, unchanged. The spread comes from {len(runs)} runs on one board, which is not a "
-        f"population. avg_power_w is the board's input power, VDD_IN, as its sensor measures it. "
-        f"The earlier run in `runs/`, at {', '.join(f'`{c}`' for c in earlier_commits)}, gave 0.1.0's table"
-        f"{also}; "
-        f"{'they are' if apart_runs else 'it is'} shown apart with the deviation from the median and not judged.",
+        f"R-11 checks that the {len(runs)} quieted runs {', '.join(names)} in `runs-repeat/`, at commit "
+        f"{', '.join(f'`{commit[:7]}`' for commit in commits)}, agree with their median: a metric is IN when every "
+        f"judged run is within its tolerance of the median, and OUT otherwise. Each run is part of the median it is "
+        f"judged against, so this is the judged runs' consistency, not a re-measure from a fresh clone; "
+        f"`scripts/compare_logs.py` checks a re-measure against the same median and tolerances. The tolerances are "
+        f"the `PRD.md` values in `scripts/compare_logs.py`, unchanged. The spread comes from {len(runs)} runs on one "
+        f"board, which is not a population. avg_power_w is the board's input power, VDD_IN, as its sensor measures "
+        f"it. The earlier run in `runs/`, at {', '.join(f'`{c}`' for c in earlier_commits)}, gave 0.1.0's table "
+        f"without the quieting{also}; "
+        f"{'they are' if apart_runs else 'it is'} shown apart with the deviation from the median, which is what the "
+        f"quieting is worth, and not judged.",
         "",
         *gate_lines(runs),
         "",

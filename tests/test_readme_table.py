@@ -64,7 +64,7 @@ def test_the_repeat_block_judges_every_further_run_against_the_prd_tolerances(tm
     for name in ("run1", "run2", "run3"):
         (tmp_path / name / "quiet.txt").write_text(QUIET_PASSED)
     block = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
-    assert "judged among the 3 quieted runs" in block and "| OUT |" not in block
+    assert "R-11 checks that the 3 quieted runs" in block and "| OUT |" not in block
     assert "3 runs on one board, which is not a population" in block
     assert "- earlier run (`runs/`): not quieted, load before every benchmark at or above" in block
     assert "- run1: quieted, every QUIET gate passed, recorded before the memory, swap and temperature reads;" in block
@@ -218,7 +218,7 @@ def test_recorded_runs_are_judged_and_unrecorded_ones_shown_apart(tmp_path):
     for name in ("run3", "run4", "run5"):
         _sysmon(tmp_path / name)
     block = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
-    assert "judged among the 3 quieted runs run3, run4, run5" in block
+    assert "R-11 checks that the 3 quieted runs run3, run4, run5" in block
     assert "runs run1, run2 were quieted but recorded before the memory, swap and temperature reads" in block
     assert "- run3: quieted, every QUIET gate passed;" in block
     header = next(line for line in block.splitlines() if line.startswith("| Metric |"))

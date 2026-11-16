@@ -39,6 +39,10 @@ All notable changes to this project are recorded here. The format follows
   failed re-measure log, and it fails a dirty newest log, a log run with another runtime or other iteration counts,
   and new logs from more than one commit. The README's reproduce steps end with `python scripts/compare_logs.py runs`
   instead of `generate_table.py --write`, which would show a re-measure as the earlier run.
+- `PRD.md` R-11 says what it checks: that the judged runs agree with their median within its tolerances, which is
+  their consistency, not a re-measure from a fresh clone. The README lists the quieting, the power mode and the GPU
+  governor as prerequisites for a comparable re-measure, describes how the judged runs applied them, and states
+  the earlier unquieted run's deviation as what the quieting is worth.
 - The results table gives end-to-end energy per frame, each run's mean power over the timed loop divided by its
   end-to-end FPS, then the median. Power and energy sit with the end-to-end columns and engine FPS with the engine
   latency: power was sampled over the end-to-end loop, never at the engine rate.

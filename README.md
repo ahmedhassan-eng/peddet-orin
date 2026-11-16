@@ -90,7 +90,7 @@ The CPU tests also run on any Linux machine with Python 3.11 or 3.12. See "Conti
 How the median in [Results](#results) was judged, with the gate, memory, swap, temperature and sampler records of each judged run, all generated from the logs and host records in `runs-repeat/`.
 
 <!-- repeats:begin -->
-R-11 is judged among the 3 quieted runs run3, run4, run5 in `runs-repeat/`, at commit `025171d`: a metric is IN when every judged run is within its tolerance of their median, and OUT otherwise. The tolerances are the `PRD.md` values in `scripts/compare_logs.py`, unchanged. The spread comes from 3 runs on one board, which is not a population. avg_power_w is the board's input power, VDD_IN, as its sensor measures it. The earlier run in `runs/`, at `17a1ee2`, gave 0.1.0's table; it is shown apart with the deviation from the median and not judged.
+R-11 checks that the 3 quieted runs run3, run4, run5 in `runs-repeat/`, at commit `025171d`, agree with their median: a metric is IN when every judged run is within its tolerance of the median, and OUT otherwise. Each run is part of the median it is judged against, so this is the judged runs' consistency, not a re-measure from a fresh clone; `scripts/compare_logs.py` checks a re-measure against the same median and tolerances. The tolerances are the `PRD.md` values in `scripts/compare_logs.py`, unchanged. The spread comes from 3 runs on one board, which is not a population. avg_power_w is the board's input power, VDD_IN, as its sensor measures it. The earlier run in `runs/`, at `17a1ee2`, gave 0.1.0's table without the quieting; it is shown apart with the deviation from the median, which is what the quieting is worth, and not judged.
 
 Each judged run's QUIET gate ran at its start and before each benchmark, after a settle; each gate passed on the try shown, and its passing line records: 0 scheduled jobs or path units active other than the ones allowed by name, 0 sessions over their CPU budget or not allowed, 0 loop services active, 0 kB of swap used, 0 pages swapped out during the settle; 3 scheduled jobs allowed by name; load1 below 1.0; available memory at least 5859375 kB.
 
@@ -241,6 +241,15 @@ python -m peddet_orin.engine_build --precision fp16
 ## Reproduce the results
 
 After the quickstart, fetch the data over HTTPS, check the GPU, then build and measure. `nvpmodel` and `tegrastats` must be on `PATH`; `nvpmodel` lives in the system sbin directory, which a user's `PATH` may leave out. A log records `UNREADABLE` for anything it cannot read, so a `power_mode` of `UNREADABLE` usually means `nvpmodel` was not found; it is also recorded when `nvpmodel -q` fails, times out or prints nothing. Run the measurements from a clean tree, one at a time, with nothing else using the GPU.
+
+The judged runs were measured on a quieted board, and a re-measure is comparable with them only under the same conditions. These are prerequisites, not steps the commands take:
+
+- Power mode `MAXN_SUPER` (`sudo nvpmodel -m 2`), with `nvpmodel` on `PATH` so every log records it.
+- The GPU's devfreq governor reads `performance`, as every judged log records; the CPU governors are left at `schedutil`. `jetson_clocks` is not run.
+- Swap off; the docker, containerd, snapd, fwupd and jtop services stopped; no scheduled job, automated session or other GPU process running.
+- Before each benchmark, after a 120 s settle: a one-minute load average below 1.0, no swap in use and none swapped out, and at least 6.0 x 10^9 bytes of available memory.
+
+The judged runs were made that way: a root setup block applied the first three items, and a run script outside this repository ran the commands below once per run, checked the last item before each benchmark as a QUIET gate, and recorded each gate's terms in `runs-repeat/<run>/quiet.txt`. The earlier run in `runs/` was made without the quieting; its deviation from the judged median, shown in the repeat block, is what the quieting is worth, up to 24% on the FP16 end-to-end p50.
 
 ```sh
 python scripts/fetch_coco.py annotations
