@@ -70,7 +70,14 @@ Over the median of the 3 quieted runs, the INT8 engine p50 is lower than FP16's,
 - `jetson_clocks` is not run, memory clocks are not read, and a tegrastats reader thread runs in the timed process. For the judged runs, the QUIET gates and the measurement window excluded what the repeat block and the Provenance notes name: the board's other scheduled jobs and loop services, sessions over their CPU budget or not allowed, swap use and swap-outs, available memory under the bound, and a load1 at or above the gate's bound. They did not exclude the operating system's own processes or the tegrastats reader, so latencies still vary between runs, as the min-max notes show. The earlier run in `runs/` had no such gate.
 - The system RAM rise in each benchmark log is reported per run and not judged.
 - Power is the average of `tegrastats` VDD_IN readings during the timed end-to-end loop. It is the whole board's input power, not the GPU's alone, and no power was read for inference alone, so there is no energy figure at the engine rate.
+- Energy per frame divides that whole-board power by the end-to-end rate, so it includes the board's idle draw. The logs do not record the idle power, so no energy above idle is given.
+- Engine time is measured on the CPU around each inference call and includes the synchronous copies to and from device memory; no GPU-only kernel time is recorded. The per-stage engine time in each benchmark log is the nearest figure.
 - INT8 is calibrated on one set, 500 seeded train2017 images. INT8 accuracy with another calibration set was not measured here.
+- INT8 uses TensorRT's `IInt8EntropyCalibrator2`, which TensorRT deprecated in 10.1 in favour of explicit quantization; it still builds with 10.16.2.10, and its deprecation warning is filtered from the build output.
+- The INT8 GPU tests check that each engine builds, runs and gives outputs of the expected shapes with finite values; INT8 accuracy is measured by the COCO evaluation, not by those tests.
+- The ONNX export is checked against PyTorch on seeded random input, not on real images.
+- The COCO archives are checked against the MD5 sums COCO publishes, which are not collision-resistant; the 500 calibration images are each checked by sha256 against `manifests/calibration_train2017.sha256`.
+- `scripts/compare_logs.py` prints each value to two decimals but judges the unrounded values, so a line can read as exactly at its tolerance and still be `OUT`.
 - Person-only fine-tuning was tried and not shipped. See `QUEUE.md`.
 
 ## Hardware and software
