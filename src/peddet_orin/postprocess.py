@@ -26,6 +26,10 @@ from peddet_orin.preprocess import INPUT_SHAPE, INPUT_SIZE
 BACKGROUND_LABEL = 0
 PERSON_LABEL = 1
 LOGITS_DIM = -1
+# The deployment-style postprocess keeps the person class only, with one fixed score threshold. 0.5 is a fixed
+# midpoint chosen before any deployment-style run; it is not tuned on the results. Everything else is torchvision's.
+DEPLOY_SCORE_THRESHOLD = 0.5
+DEPLOY_LABELS = (PERSON_LABEL,)
 
 
 @dataclass
@@ -49,6 +53,7 @@ class Postprocessor:
         detections_per_image: int,
         top_k_per_class: int,
         num_classes: int | None = None,
+        kept_labels: tuple[int, ...] | None = None,
     ) -> None:
         self.anchors = anchors
         self.box_coder = box_coder
@@ -58,6 +63,8 @@ class Postprocessor:
         self.top_k_per_class = top_k_per_class
         # The classes the head scores, background included; recorded in benchmark logs, not used to decode.
         self.num_classes = num_classes
+        # The labels kept, or None for every class but background.
+        self.kept_labels = kept_labels
 
     @classmethod
     def from_torchvision(cls, model) -> Postprocessor:
@@ -75,6 +82,19 @@ class Postprocessor:
             detections_per_image=model.detections_per_img,
             top_k_per_class=model.topk_candidates,
             num_classes=model.head.classification_head.num_columns,
+        )
+
+    def for_deployment(self) -> Postprocessor:
+        """The deployment-style postprocess: the person class only, at ``DEPLOY_SCORE_THRESHOLD``, the rest as is."""
+        return Postprocessor(
+            anchors=self.anchors,
+            box_coder=self.box_coder,
+            score_threshold=DEPLOY_SCORE_THRESHOLD,
+            nms_iou_threshold=self.nms_iou_threshold,
+            detections_per_image=self.detections_per_image,
+            top_k_per_class=self.top_k_per_class,
+            num_classes=self.num_classes,
+            kept_labels=DEPLOY_LABELS,
         )
 
     def check_inputs(
@@ -110,7 +130,7 @@ class Postprocessor:
 
         kept_boxes, kept_scores, kept_labels = [], [], []
         for label in range(scores.shape[LOGITS_DIM]):
-            if label == BACKGROUND_LABEL:
+            if label == BACKGROUND_LABEL or (self.kept_labels is not None and label not in self.kept_labels):
                 continue
             class_scores = scores[:, label]
             mask = class_scores > self.score_threshold

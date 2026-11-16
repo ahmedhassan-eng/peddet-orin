@@ -398,6 +398,39 @@ def test_a_measurements_torch_thread_count_is_optional_and_checked(kind):
     )
 
 
+DEPLOY_RESULTS = {
+    **RESULTS["benchmark"],
+    "stages": STAGES,
+    "postprocess_settings": dict(SETTINGS, score_threshold=0.5, kept_labels=[1]),
+    "engine_sha256": ENGINE_SHA256,
+    "torch_num_threads": 6,
+}
+
+
+def deploy_log(precision="fp16", **results) -> dict:
+    log = make_log("benchmark", precision, results={**DEPLOY_RESULTS, **results})
+    log["kind"] = "benchmark_deploy"
+    return log
+
+
+def test_a_deploy_benchmark_log_needs_the_benchmark_results_and_its_kept_labels():
+    assert runlog.validate_log(deploy_log()) == []
+    assert runlog.validate_log(deploy_log("fp32", engine_sha256="-")) == []
+    broken = deploy_log()
+    del broken["results"]["stages"]
+    assert runlog.validate_log(broken) == ["missing result: benchmark_deploy stages"]
+    standard = dict(SETTINGS, score_threshold=0.5)
+    assert runlog.validate_log(deploy_log(postprocess_settings=standard)) == [
+        "bad result: benchmark_deploy postprocess_settings"
+    ]
+    for labels in ([], [0], [1, 1], "1"):
+        settings = dict(SETTINGS, kept_labels=labels)
+        assert runlog.validate_log(deploy_log(postprocess_settings=settings)), labels
+    assert runlog.validate_log(deploy_log(engine_p50_ms_per_repeat=[4.0])) == [
+        "bad result: benchmark_deploy engine_p50_ms_per_repeat does not hold one value per repeat"
+    ]
+
+
 @pytest.mark.parametrize("kind", sorted(RESULTS))
 def test_each_required_result_is_enforced(kind):
     for key in RESULTS[kind]:

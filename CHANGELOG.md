@@ -126,6 +126,12 @@ All notable changes to this project are recorded here. The format follows
   `scripts/compare_logs.py` judges TensorRT FP32 against R-11's FP32 tolerances once the reference has it, AP within
   0.10 points, and reports it without judging until then. The README's sentence on 0.1.1's `src/` changes no longer
   says none changes a computation: two do, and neither was re-measured.
+- `python -m peddet_orin.benchmark --precision <p> --postprocess deploy` runs a deployment-style benchmark: the
+  postprocess keeps the person class only, COCO category 1, at one fixed score threshold, 0.5, a fixed midpoint
+  chosen before any deployment-style run and not tuned on the results; the rest is torchvision's settings. It
+  writes a log of its own kind, `benchmark_deploy`, whose results are the benchmark's with `stages`,
+  `postprocess_settings` (with `kept_labels`), `engine_sha256` and `torch_num_threads` required. `--postprocess`
+  defaults to `standard`, the main benchmark, which is unchanged.
 
 ### Security
 

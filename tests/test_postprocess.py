@@ -7,7 +7,7 @@ from torchvision.models.detection._utils import BoxCoder
 
 from helpers import lively_detector
 from peddet_orin.model import SsdNetwork
-from peddet_orin.postprocess import Postprocessor
+from peddet_orin.postprocess import DEPLOY_SCORE_THRESHOLD, Postprocessor
 from peddet_orin.preprocess import INPUT_SIZE, preprocess
 
 CODER_WEIGHTS = (10.0, 10.0, 5.0, 5.0)
@@ -124,3 +124,21 @@ def test_pipeline_equals_torchvision_detector(detector):
     assert torch.allclose(found.boxes, expected["boxes"], atol=1e-3)
     assert torch.allclose(found.scores, expected["scores"], atol=1e-5)
     assert torch.equal(found.labels, expected["labels"])
+
+
+def test_the_deployment_postprocess_keeps_only_people_above_one_half():
+    deploy = make_postprocessor().for_deployment()
+    assert (deploy.score_threshold, deploy.kept_labels) == (DEPLOY_SCORE_THRESHOLD, (PERSON,)) == (0.5, (1,))
+    assert (deploy.nms_iou_threshold, deploy.top_k_per_class, deploy.detections_per_image) == (
+        NMS_THRESHOLD,
+        TOP_K,
+        MAX_DETECTIONS,
+    )
+    found = deploy(zero_regression(), logits_for([PERSON, OTHER, OTHER]), INPUT_SIZE)
+    assert found.labels.tolist() == [PERSON]
+    # A person scored 0.4 is kept by the standard postprocess at 0.001 and dropped at the deployment threshold.
+    logits = torch.zeros(1, 3, 3)
+    logits[0, :, PERSON] = torch.log(torch.tensor(0.4 / 0.3))
+    standard = Postprocessor(ANCHORS, BoxCoder(CODER_WEIGHTS), 0.001, NMS_THRESHOLD, MAX_DETECTIONS, TOP_K)
+    assert standard(zero_regression(), logits, INPUT_SIZE).labels.numel() > 0
+    assert standard.for_deployment()(zero_regression(), logits, INPUT_SIZE).labels.numel() == 0

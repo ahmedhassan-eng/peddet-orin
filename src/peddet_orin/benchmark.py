@@ -83,6 +83,11 @@ MW_PER_W = 1e3
 VDD_IN_PATTERN = re.compile(r"VDD_IN (\d+)mW")
 GPU_BUSY_PATTERN = re.compile(r"GR3D_FREQ (\d+)%")
 RAM_PATTERN = re.compile(r"RAM (\d+)/\d+MB")
+# The postprocess a benchmark runs, and the log kind it writes. The deployment-style run is its own kind, so the
+# results table and compare_logs never take it for the main benchmark.
+STANDARD = "standard"
+DEPLOY = "deploy"
+LOG_KINDS = {STANDARD: "benchmark", DEPLOY: runlog.DEPLOY_BENCHMARK_KIND}
 
 
 class TegrastatsSampler:
@@ -336,15 +341,18 @@ def stage_summaries(timed: list[IterationTimes]) -> dict[str, dict[str, float]]:
     return {stage: _summary([getattr(times, stage) for times in timed]) for stage in runlog.BENCHMARK_STAGES}
 
 
-def postprocess_settings(postprocess: Postprocessor) -> dict[str, float | int]:
-    """The postprocess settings every timed iteration ran with."""
-    return {
+def postprocess_settings(postprocess: Postprocessor) -> dict[str, float | int | list[int]]:
+    """The postprocess settings every timed iteration ran with; ``kept_labels`` only when it keeps some classes."""
+    settings: dict[str, float | int | list[int]] = {
         "score_threshold": float(postprocess.score_threshold),
         "nms_iou_threshold": float(postprocess.nms_iou_threshold),
         "top_k_per_class": int(postprocess.top_k_per_class),
         "detections_per_image": int(postprocess.detections_per_image),
         "num_classes": int(postprocess.num_classes),
     }
+    if postprocess.kept_labels is not None:
+        settings["kept_labels"] = [int(label) for label in postprocess.kept_labels]
+    return settings
 
 
 def _mean_or_unreadable(values: list[int], scale: float = 1.0) -> float | str:
@@ -374,6 +382,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--iterations", type=_count(1), default=TIMED_ITERATIONS, help="timed iterations per repeat")
     parser.add_argument("--warmup", type=_count(0), default=WARMUP_ITERATIONS, help="untimed iterations before timing")
     parser.add_argument("--repeats", type=_count(1), default=REPEATS, help="times the timed loop runs after warm-up")
+    parser.add_argument(
+        "--postprocess",
+        choices=tuple(LOG_KINDS),
+        default=STANDARD,
+        help="standard: every class at torchvision's settings, the main benchmark; deploy: the person class only at "
+        "a fixed score threshold of 0.5, logged as its own kind",
+    )
     return parser
 
 
@@ -394,12 +409,14 @@ def main(argv: list[str] | None = None) -> int:
     check_device(parser.prog, args.precision, args.device)
 
     counts = {"warmup": args.warmup, "timed": args.iterations, "repeats": args.repeats, "batch": 1}
-    with runlog.RunLog("benchmark", args.precision, BENCHMARK_SEED, counts) as log:
+    with runlog.RunLog(LOG_KINDS[args.postprocess], args.precision, BENCHMARK_SEED, counts) as log:
         engine_digest = engine_sha256(engine_path)
         threads = torch.get_num_threads()
         order = np.random.default_rng(BENCHMARK_SEED)
         detector = load_detector(pretrained=True)
         postprocess = Postprocessor.from_torchvision(detector)
+        if args.postprocess == DEPLOY:
+            postprocess = postprocess.for_deployment()
         backend = load_backend(parser.prog, args.precision, args.device, detector, engine_path)
 
         for index in range(args.warmup):
@@ -459,7 +476,7 @@ def main(argv: list[str] | None = None) -> int:
                 "torch_num_threads": threads,
             }
         )
-    print(f"{args.precision}: end-to-end p50 {log.results['end_to_end']['p50_ms']:.2f} ms")
+    print(f"{args.precision} {args.postprocess}: end-to-end p50 {log.results['end_to_end']['p50_ms']:.2f} ms")
     return 0
 
 

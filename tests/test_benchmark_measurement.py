@@ -403,3 +403,22 @@ def test_a_pooled_image_out_of_range_is_named(monkeypatch):
     benchmark.check_pool([b"x"])
     with pytest.raises(ValueError, match=r"pooled image 1: expected values in \[0, 1\], got values from 2 to 2"):
         benchmark.check_pool([b"x", b"xy"])
+
+
+def test_the_deploy_postprocess_writes_its_own_log_kind(cpu_benchmark, monkeypatch):
+    written = []
+    capture = runlog.RunLog._write
+
+    def recording(self):
+        written.append(self)
+        return capture(self)
+
+    monkeypatch.setattr(runlog.RunLog, "_write", recording)
+    results = cpu_benchmark("--postprocess", "deploy")
+    assert written[0].kind == "benchmark_deploy" and set(results) == RESULT_KEYS
+    assert results["postprocess_settings"]["kept_labels"] == [1]
+    assert results["postprocess_settings"]["score_threshold"] == 0.5
+    assert runlog.RESULT_CHECKS["benchmark_deploy"]["postprocess_settings"](results["postprocess_settings"])
+    cpu_benchmark()
+    assert written[1].kind == "benchmark" and "kept_labels" not in written[1].results["postprocess_settings"]
+    assert benchmark.build_parser().parse_args(["--precision", "fp16"]).postprocess == "standard"

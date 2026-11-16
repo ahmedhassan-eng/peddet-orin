@@ -393,14 +393,26 @@ def _is_stages(value: Any) -> bool:
 
 
 def _is_postprocess_settings(value: Any) -> bool:
+    """The settings, with ``kept_labels``, a non-empty list of distinct labels, only for a postprocess that keeps
+    some classes."""
     thresholds = ("score_threshold", "nms_iou_threshold")
     counts = ("top_k_per_class", "detections_per_image", "num_classes")
+    if not isinstance(value, dict):
+        return False
+    labels = value.get("kept_labels", [1])
     return (
-        isinstance(value, dict)
-        and set(value) == {*thresholds, *counts}
+        set(value) - {"kept_labels"} == {*thresholds, *counts}
         and all(_is_fraction(value[key]) for key in thresholds)
         and all(_is_integer(value[key]) and value[key] >= 1 for key in counts)
+        and isinstance(labels, list)
+        and bool(labels)
+        and all(_is_integer(label) and label >= 1 for label in labels)
+        and len(set(labels)) == len(labels)
     )
+
+
+def _is_deploy_settings(value: Any) -> bool:
+    return _is_postprocess_settings(value) and "kept_labels" in value
 
 
 def _is_flag_list(value: Any) -> bool:
@@ -528,6 +540,15 @@ OPTIONAL_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
         "cleared_builder_flags": lambda value: _is_flag_list(value),
     },
 }
+# The deployment-style benchmark: the benchmark's results, from a postprocess that keeps only some classes. It is new
+# in 0.1.1, so the results the main benchmark carries as optional are required of it.
+DEPLOY_BENCHMARK_KIND = "benchmark_deploy"
+RESULT_CHECKS[DEPLOY_BENCHMARK_KIND] = {
+    **RESULT_CHECKS["benchmark"],
+    **OPTIONAL_CHECKS["benchmark"],
+    "postprocess_settings": _is_deploy_settings,
+}
+BENCHMARK_KINDS = ("benchmark", DEPLOY_BENCHMARK_KIND)
 # Logs written before 0.1.1 carry an inferred_slice, which gpu_check no longer records: no slice can be inferred
 # for a device that PyTorch itself says its build excludes. It is allowed unchecked.
 OPTIONAL_RESULTS: dict[str, frozenset[str]] = {
@@ -559,7 +580,7 @@ def _identity_problems(kind: str, precision: Any, results: dict) -> list[str]:
     problems = []
     engine = results.get("engine_sha256")
     if isinstance(engine, str):
-        if kind in ("eval", "benchmark") and precision == PYTORCH_PRECISION:
+        if kind in ("eval", *BENCHMARK_KINDS) and precision == PYTORCH_PRECISION:
             if engine != NOT_APPLICABLE:
                 problems.append(f"bad result: {kind} engine_sha256 must be - for {PYTORCH_PRECISION}")
         elif not SHA256_PATTERN.fullmatch(engine):
@@ -579,10 +600,10 @@ def _cross_field_problems(kind: str, precision: Any, results: dict) -> list[str]
     if kind == "eval" and _is_number(results.get("ap")) and _is_number(results.get("ap50")):
         if results["ap"] > results["ap50"]:
             problems.append("bad result: eval ap is above ap50")
-    if kind == "benchmark" and _is_integer(results.get("repeats")):
+    if kind in BENCHMARK_KINDS and _is_integer(results.get("repeats")):
         for key in ("engine_p50_ms_per_repeat", "end_to_end_p50_ms_per_repeat"):
             if isinstance(results.get(key), list) and len(results[key]) != results["repeats"]:
-                problems.append(f"bad result: benchmark {key} does not hold one value per repeat")
+                problems.append(f"bad result: {kind} {key} does not hold one value per repeat")
     if kind == "build":
         manifest = results.get("calibration_manifest_sha256")
         route = results.get("int8_path")
