@@ -149,6 +149,35 @@ def test_the_headline_is_the_median_of_the_repeat_runs(tmp_path):
     assert "- run1: FP16 benchmark:" in block and "FP16 min-max over the 3 runs:" in block
 
 
+def _benchmark_dir(directory, power, fps):
+    directory.mkdir()
+    end_to_end = {"p50_ms": 1000.0 / fps, "p90_ms": 1000.0 / fps, "p99_ms": 1000.0 / fps, "fps": fps}
+    log = make_log("benchmark", "fp16", results={"avg_power_w": power, "end_to_end": end_to_end})
+    (directory / "benchmark.json").write_text(json.dumps(log))
+    return generate_table.select(generate_table.load_logs(directory))
+
+
+def test_energy_per_frame_is_power_over_the_end_to_end_rate(tmp_path):
+    chosen = _benchmark_dir(tmp_path / "one", 7.25, 20.0)
+    assert chosen[("benchmark", "fp16")]["results"][generate_table.ENERGY] == pytest.approx(0.3625)
+    row = generate_table._row(chosen, "fp16").split(" | ")
+    header = generate_table.HEADER.split(" | ")
+    assert row[header.index("End-to-end energy per frame (J)")] == "0.362"
+    # Engine FPS stays beside the engine latency, apart from power, which sits with the end-to-end columns.
+    assert header.index("Engine FPS") == header.index("Engine p50/p90/p99 (ms)") + 1
+    assert header.index("Avg power VDD_IN (W)") == header.index("End-to-end FPS") + 1
+    unread = _benchmark_dir(tmp_path / "two", "UNREADABLE", 20.0)
+    assert unread[("benchmark", "fp16")]["results"][generate_table.ENERGY] == "UNREADABLE"
+
+
+def test_the_energy_median_is_the_median_of_each_runs_figure(tmp_path):
+    # Per run: 6/10 = 0.6, 7/30 = 0.233 and 9/14 = 0.643, median 0.6; the medians' ratio, 7/14 = 0.5, is not it.
+    runs = [_benchmark_dir(tmp_path / f"run{n}", power, fps) for n, (power, fps) in enumerate(
+        [(6.0, 10.0), (7.0, 30.0), (9.0, 14.0)])]
+    medians = generate_table.median_chosen(runs)
+    assert medians[("benchmark", "fp16")]["results"][generate_table.ENERGY] == pytest.approx(0.6)
+
+
 def test_a_runs_directory_without_repeats_gives_the_single_run_table(tmp_path):
     for index, log in enumerate([make_log("eval", "fp16"), make_log("benchmark", "fp16")]):
         (tmp_path / f"{index}.json").write_text(json.dumps(log))

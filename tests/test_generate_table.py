@@ -8,13 +8,13 @@ from test_run_logs import COMMIT, make_log
 OTHER_COMMIT = "f" * 40
 EMPTY_BLOCK = "\n".join(
     [
-        "| Device and precision | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | "
-        "End-to-end FPS | Peak process RSS (MiB) | Avg power VDD_IN (W) | Person AP@[.5:.95] | Person AP50 | "
-        "INT8 path |",
-        "|---|---|---|---|---|---|---|---|---|---|",
-        "| n/a FP32 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |",
-        "| n/a FP16 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |",
-        "| n/a INT8 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |",
+        "| Device and precision | Engine p50/p90/p99 (ms) | Engine FPS | End-to-end p50/p90/p99 (ms) | "
+        "End-to-end FPS | Avg power VDD_IN (W) | End-to-end energy per frame (J) | Peak process RSS (MiB) | "
+        "Person AP@[.5:.95] | Person AP50 | INT8 path |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "| n/a FP32 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |",
+        "| n/a FP16 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - |",
+        "| n/a INT8 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |",
     ]
 )
 

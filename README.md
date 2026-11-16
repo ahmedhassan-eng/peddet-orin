@@ -187,14 +187,14 @@ RAM was not a constraint in runs 3-5: the lowest available memory during any job
 
 ## Results
 
-Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. FPS is 1 / mean latency over the serial batch-1 iterations, not a sustained throughput with several requests in flight. All precisions use the same postprocess. Each benchmark pools three timed repeats of its loop, and the notes give the range of the per-repeat medians. Accuracy is person AP on the 5000 COCO val2017 images, from pycocotools with `catIds=[1]`.
+Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. FPS is 1 / mean latency over the serial batch-1 iterations, not a sustained throughput with several requests in flight. Power is the mean board input over the whole timed loop, which ran at the end-to-end rate, so it sits with the end-to-end columns: energy per frame is each run's power divided by its end-to-end FPS, and the board never ran at the engine FPS while power was read. All precisions use the same postprocess. Each benchmark pools three timed repeats of its loop, and the notes give the range of the per-repeat medians. Accuracy is person AP on the 5000 COCO val2017 images, from pycocotools with `catIds=[1]`.
 
 <!-- results:begin -->
-| Device and precision | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | End-to-end FPS | Peak process RSS (MiB) | Avg power VDD_IN (W) | Person AP@[.5:.95] | Person AP50 | INT8 path |
-|---|---|---|---|---|---|---|---|---|---|
-| GPU, PyTorch FP32 | 29.8 / 30.2 / 31.9 | 87.1 / 99.9 / 106.2 | 33.5 | 11.5 | 1219 | 7.6 | 28.01 | 49.50 | - |
-| GPU, TensorRT FP16 | 3.8 / 3.9 / 4.0 | 60.6 / 73.8 / 80.4 | 263.0 | 16.7 | 1195 | 7.1 | 28.01 | 49.49 | - |
-| GPU, TensorRT INT8 | 3.6 / 3.7 / 3.8 | 64.8 / 77.5 / 84.5 | 276.2 | 15.7 | 1102 | 7.1 | 26.74 | 48.14 | IInt8EntropyCalibrator2 |
+| Device and precision | Engine p50/p90/p99 (ms) | Engine FPS | End-to-end p50/p90/p99 (ms) | End-to-end FPS | Avg power VDD_IN (W) | End-to-end energy per frame (J) | Peak process RSS (MiB) | Person AP@[.5:.95] | Person AP50 | INT8 path |
+|---|---|---|---|---|---|---|---|---|---|---|
+| GPU, PyTorch FP32 | 29.8 / 30.2 / 31.9 | 33.5 | 87.1 / 99.9 / 106.2 | 11.5 | 7.6 | 0.655 | 1219 | 28.01 | 49.50 | - |
+| GPU, TensorRT FP16 | 3.8 / 3.9 / 4.0 | 263.0 | 60.6 / 73.8 / 80.4 | 16.7 | 7.1 | 0.428 | 1195 | 28.01 | 49.49 | - |
+| GPU, TensorRT INT8 | 3.6 / 3.7 / 3.8 | 276.2 | 64.8 / 77.5 / 84.5 | 15.7 | 7.1 | 0.453 | 1102 | 26.74 | 48.14 | IInt8EntropyCalibrator2 |
 
 - Each cell is the median over the n = 3 quieted runs in `runs-repeat/` (run3, run4, run5), this release's count; 0.2.0 plans 5 or more runs.
 - The judged runs were made at commit `025171d` with package version 0.1.0, as their logs record.
@@ -259,7 +259,7 @@ Over the median of the 3 quieted runs, the INT8 engine p50 is lower than FP16's,
 - FP32 runs in PyTorch and FP16 and INT8 in TensorRT, so the gap between FP32 and the other two is runtime and precision together, not precision alone.
 - `jetson_clocks` is not run, memory clocks are not read, and a tegrastats reader thread runs in the timed process. For the judged runs, the QUIET gates and the measurement window excluded what the repeat block and the Provenance notes name: the board's other scheduled jobs and loop services, sessions over their CPU budget or not allowed, swap use and swap-outs, available memory under the bound, and a load1 at or above the gate's bound. They did not exclude the operating system's own processes or the tegrastats reader, so latencies still vary between runs, as the min-max notes show. The earlier run in `runs/` had no such gate.
 - The system RAM rise in each benchmark log is reported per run and not judged.
-- Power is the average of `tegrastats` VDD_IN readings during timing. It is the whole board's input power, not the GPU's alone.
+- Power is the average of `tegrastats` VDD_IN readings during the timed end-to-end loop. It is the whole board's input power, not the GPU's alone, and no power was read for inference alone, so there is no energy figure at the engine rate.
 - INT8 is calibrated on one set, 500 seeded train2017 images. INT8 accuracy with another calibration set was not measured here.
 - Person-only fine-tuning was tried and not shipped. See `QUEUE.md`.
 

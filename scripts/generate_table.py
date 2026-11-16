@@ -47,11 +47,14 @@ DEVICE_AND_FRAMEWORK = {
     "pytorch-cpu": "CPU, PyTorch",
     "tensorrt-gpu": "GPU, TensorRT",
 }
+# Power is sampled over the whole timed loop, which runs at the end-to-end rate, so power and energy per frame sit
+# with the end-to-end columns and engine FPS stays with the engine latency.
 HEADER = (
-    "| Device and precision | Engine p50/p90/p99 (ms) | End-to-end p50/p90/p99 (ms) | Engine FPS | "
-    "End-to-end FPS | Peak process RSS (MiB) | Avg power VDD_IN (W) | "
+    "| Device and precision | Engine p50/p90/p99 (ms) | Engine FPS | End-to-end p50/p90/p99 (ms) | "
+    "End-to-end FPS | Avg power VDD_IN (W) | End-to-end energy per frame (J) | Peak process RSS (MiB) | "
     "Person AP@[.5:.95] | Person AP50 | INT8 path |"
 )
+ENERGY = "end_to_end_energy_per_frame_j"
 
 
 class TableError(ValueError):
@@ -82,9 +85,27 @@ WANTED = (
 )
 
 
+def energy_per_frame_j(results: dict) -> float | str:
+    """Joules per frame at the end-to-end rate: the mean power over the timed loop divided by its frame rate."""
+    power, fps = results.get("avg_power_w"), results.get("end_to_end", {}).get("fps")
+    if _is_plain_number(power) and _is_plain_number(fps) and fps > 0:
+        return power / fps
+    return power if isinstance(power, str) else MISSING
+
+
+def _with_energy(log: dict) -> dict:
+    """A benchmark log with its energy per frame added to a copy of its results; other logs unchanged."""
+    if log["kind"] != "benchmark":
+        return log
+    log = copy.deepcopy(log)
+    log["results"][ENERGY] = energy_per_frame_j(log["results"])
+    return log
+
+
 def select(logs: list[dict]) -> dict[tuple[str, str], dict]:
-    """Pick the logs that feed the block, keyed by kind and precision, and check they agree."""
-    chosen = {key: log for key in WANTED if (log := latest(logs, *key)) is not None}
+    """Pick the logs that feed the block, keyed by kind and precision, and check they agree. Each benchmark log
+    gains its energy per frame, so a median over runs takes the median of each run's figure."""
+    chosen = {key: _with_energy(log) for key in WANTED if (log := latest(logs, *key)) is not None}
     commits = sorted({log["commit"] for log in chosen.values()})
     if len(commits) > 1:
         raise TableError(f"the logs feeding the table come from {len(commits)} commits: {', '.join(commits)}")
@@ -124,11 +145,12 @@ def _row(chosen: dict, precision: str) -> str:
     cells = [
         f"{DEVICE_AND_FRAMEWORK.get(runtime, runtime)} {PRECISION_NAMES[precision]}",
         _latency(timing["engine"]) if timing else MISSING,
-        _latency(timing["end_to_end"]) if timing else MISSING,
         _number(timing["engine"]["fps"], 1) if timing else MISSING,
+        _latency(timing["end_to_end"]) if timing else MISSING,
         _number(timing["end_to_end"]["fps"], 1) if timing else MISSING,
-        _number(timing["peak_process_rss_mib"], 0) if timing else MISSING,
         _number(timing["avg_power_w"], 1) if timing else MISSING,
+        _number(timing[ENERGY], 3) if timing else MISSING,
+        _number(timing["peak_process_rss_mib"], 0) if timing else MISSING,
         _number(scores["ap"] * POINTS, 2) if scores else MISSING,
         _number(scores["ap50"] * POINTS, 2) if scores else MISSING,
         int8_path,

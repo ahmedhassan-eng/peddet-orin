@@ -33,6 +33,9 @@ All notable changes to this project are recorded here. The format follows
 - `scripts/compare_logs.py` compares a re-measure with what the results table is built from, the median of the
   judged runs, not with the earlier run in `runs/`, and fails a re-measure that lacks a clean eval or benchmark log
   for any precision; it skipped those before. Its `--against` option is gone. Two planted defects cover the change.
+- The results table gives end-to-end energy per frame, each run's mean power over the timed loop divided by its
+  end-to-end FPS, then the median. Power and energy sit with the end-to-end columns and engine FPS with the engine
+  latency: power was sampled over the end-to-end loop, never at the engine rate.
 
 ### Security
 
