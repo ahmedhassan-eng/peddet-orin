@@ -105,7 +105,7 @@ def _utc_now() -> str:
     return datetime.now(UTC).strftime(TIMESTAMP_FORMAT)
 
 
-def _command_output(arguments: list[str]) -> str:
+def command_output(arguments: list[str]) -> str:
     """Return a command's stripped stdout, or ``UNREADABLE`` if it cannot be run."""
     if shutil.which(arguments[0]) is None:
         return UNREADABLE
@@ -170,7 +170,7 @@ def environment_facts() -> dict[str, str]:
         release = Path(TEGRA_RELEASE_FILE).read_text().strip()
     except OSError:
         release = UNREADABLE
-    facts = {"nv_tegra_release": release, "nvpmodel": _command_output(["nvpmodel", "-q"])}
+    facts = {"nv_tegra_release": release, "nvpmodel": command_output(["nvpmodel", "-q"])}
     for name in ("tensorrt", "torch", "torchvision", "onnxruntime", "onnx"):
         facts[name] = _module_version(name)
     facts["python"] = platform.python_version()

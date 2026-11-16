@@ -224,7 +224,7 @@ def cpu_benchmark(tmp_path, monkeypatch):
 
     monkeypatch.setattr(runlog.RunLog, "_write", capture)
     monkeypatch.setattr(runlog, "other_gpu_process_count", lambda: 0)
-    monkeypatch.setattr(runlog, "_command_output", lambda arguments: "MODE TEST")
+    monkeypatch.setattr(runlog, "command_output", lambda arguments: "MODE TEST")
     monkeypatch.setattr(benchmark, "TEGRASTATS", "peddet-orin-absent-tegrastats")
     monkeypatch.setattr(benchmark, "BASELINE_SAMPLE_S", 0.0)
     # Never read the host's own devfreq node in a test: point all four files into tmp_path.
@@ -264,7 +264,7 @@ def test_benchmark_result_record_has_the_schema_keys(cpu_benchmark):
     assert results["power_mode"] == "MODE TEST"
 
 
-def test_benchmark_pools_repeats_and_reads_load_before_timing(cpu_benchmark, monkeypatch):
+def test_benchmark_pools_repeats_and_reads_load_and_power_mode_before_timing(cpu_benchmark, monkeypatch):
     events = []
     # One warm-up at 100 ms, then four timed iterations at 1, 2, 3 and 4 ms (end-to-end twice that).
     durations = itertools.chain([0.1], [0.001, 0.002, 0.003, 0.004])
@@ -279,12 +279,18 @@ def test_benchmark_pools_repeats_and_reads_load_before_timing(cpu_benchmark, mon
         return (1.25, 1.0, 1.0)
 
     monkeypatch.setattr(benchmark, "_iteration", fake_iteration)
+    def fake_power_mode(arguments):
+        events.append("power_mode")
+        return "MODE TEST"
+
     monkeypatch.setattr(benchmark.os, "getloadavg", fake_load)
+    monkeypatch.setattr(runlog, "command_output", fake_power_mode)
     results = cpu_benchmark()
     assert results["engine"]["p50_ms"] == pytest.approx(2.5)
     assert results["engine"]["fps"] == pytest.approx(400.0)
     assert results["end_to_end"]["p99_ms"] == pytest.approx(2 * (3 + 0.97))
     assert results["engine_p50_ms_per_repeat"] == [pytest.approx(1.5), pytest.approx(3.5)]
     assert results["end_to_end_p50_ms_per_repeat"] == [pytest.approx(3.0), pytest.approx(7.0)]
-    assert events == ["iteration", "load", "iteration", "iteration", "iteration", "iteration"]
+    # The load average and the power mode are both read after warm-up and before the first timed iteration.
+    assert events == ["iteration", "load", "power_mode", "iteration", "iteration", "iteration", "iteration"]
     assert results["cpu_load_1min_before_timing"] == 1.25

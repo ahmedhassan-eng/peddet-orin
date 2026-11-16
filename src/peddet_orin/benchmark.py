@@ -349,8 +349,10 @@ def main(argv: list[str] | None = None) -> int:
         baseline.stop()
 
         picks = order.integers(0, len(pool), size=(args.repeats, args.iterations))
-        # The one-minute load average shows whether other CPU work was running as timing began.
+        # The one-minute load average shows whether other CPU work was running as timing began. The power mode is
+        # read here too, so the log records the mode in force as timing starts.
         load_before_timing = os.getloadavg()[0]
+        power_mode = runlog.command_output(["nvpmodel", "-q"])
         sampler = TegrastatsSampler()
         sampler.start()
         clock = ClockSampler(clock_files())
@@ -383,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
                 "system_ram_rise_mib": system_ram_rise_mib(sampler.lines, baseline.lines),
                 "avg_power_w": average_power_w(sampler.lines),
                 "power_samples": power_samples,
-                "power_mode": runlog._command_output(["nvpmodel", "-q"]),
+                "power_mode": power_mode,
                 "cpu_load_1min_before_timing": load_before_timing,
                 "gpu_busy_pct_before_timing": gpu_busy_pct(baseline.lines),
                 "gpu_clock": gpu_clock,

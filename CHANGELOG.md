@@ -61,6 +61,9 @@ All notable changes to this project are recorded here. The format follows
   lookup moves to `src/peddet_orin/root.py`, which reads `pyproject.toml` with `tomllib`, and `import peddet_orin`
   still works outside a checkout.
 - ruff's target is Python 3.11, the oldest supported version.
+- The benchmark reads the power mode with `nvpmodel -q` after warm-up and before timing, beside the load
+  average, so the log records the mode in force as timing starts; it was read after timing ended. The
+  command-output helper in `runlog` is public as `command_output`.
 
 ### Security
 

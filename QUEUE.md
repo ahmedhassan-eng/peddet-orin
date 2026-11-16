@@ -10,7 +10,6 @@
 | A one-line error, not a traceback, for `--precision fp32 --device cuda` on a host with no usable GPU | planned for 0.2.0 |
 | Check each TensorRT I/O tensor's dtype is FLOAT before allocating its buffer | planned for 0.2.0 |
 | One sentinel for "no entropy failure" in build logs, enforced by the log check | planned for 0.2.0 |
-| Make the command-output helper public, and read the power mode before timing starts | planned for 0.2.0 |
 | Format the tree with `ruff format` and check it in CI | planned for 0.2.0 |
 | Re-measure with the pinned set, the peak process RSS included, and record the Pillow, numpy and libjpeg versions in every run log | planned for 0.1.2 |
 | A planted defect or an in-file negative test for `tests/test_gpu_check.py`, the one test file with neither | planned for 0.1.2 |
