@@ -712,3 +712,12 @@ def test_an_unloadable_cuda_runtime_is_recorded_as_unreadable(monkeypatch):
     broken = make_log()
     broken["environment"]["cuda_runtime"] = 13
     assert "fact is not a string: cuda_runtime" in runlog.validate_log(broken)
+
+
+def test_the_logged_package_version_is_the_checkouts_even_with_stale_metadata(monkeypatch, tmp_path):
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "peddet-orin"\nversion = "7.7.7"\n')
+    monkeypatch.setattr(runlog, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(runlog.metadata, "version", lambda name: "0.0.1")
+    assert runlog._package_version() == "7.7.7"
+    (tmp_path / "pyproject.toml").write_text("[project]\n")
+    assert runlog._package_version() == "0.0.1"

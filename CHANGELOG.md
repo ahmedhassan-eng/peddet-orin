@@ -192,6 +192,8 @@ All notable changes to this project are recorded here. The format follows
   file beside it; one extracted image alone made an interrupted extraction look complete.
 - Each run log also records the CUDA runtime and driver versions, as the runtime library the run loaded reports
   them, beside the TensorRT version it already recorded; `UNREADABLE` on a host with no CUDA runtime.
+- A run log's `peddet_orin` version is the checkout's `pyproject.toml` version, the code that ran; it was the
+  installed metadata's, which reads `UNREADABLE` when the package runs from `PYTHONPATH` and can be stale.
 - README Limitations states what the measurements and checks do not cover: idle power inside energy per frame,
   no GPU-only kernel time, the deprecated INT8 calibrator, what the INT8 GPU tests check, ONNX parity on random
   input, MD5 for the COCO archives, and compare_logs' two-decimal print.

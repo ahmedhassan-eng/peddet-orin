@@ -190,6 +190,11 @@ def _cuda_versions() -> tuple[str, str]:
 
 
 def _package_version() -> str:
+    """The version in the checkout's pyproject.toml, which is the code that runs; an install's metadata can be stale
+    or absent (as under PYTHONPATH), so it is only the fallback."""
+    version = project_field(REPO_ROOT / "pyproject.toml", "version")
+    if version:
+        return version
     try:
         return metadata.version(PROJECT_NAME)
     except metadata.PackageNotFoundError:
