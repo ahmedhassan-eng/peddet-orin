@@ -264,8 +264,11 @@ DEFECTS = [
     {
         "id": "compare-skips-missing-log",
         "file": "scripts/compare_logs.py",
-        "old": '                failures += 1\n                lines.append(f"COMPARE {kind} {precision} log',
-        "new": '                lines.append(f"COMPARE {kind} {precision} log',
+        "old": (
+            "                failures += 1\n"
+            '                lines.append(f"COMPARE {kind} {precision} log published=- new=missing'
+        ),
+        "new": '                lines.append(f"COMPARE {kind} {precision} log published=- new=missing',
         "catches": "tests/test_compare_logs.py::test_an_incomplete_new_set_fails",
     },
     {

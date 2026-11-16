@@ -42,9 +42,9 @@ def published(tmp_path, logs=None):
     return generate_table.select(generate_table.load_logs(directory))
 
 
-def run(tmp_path, new_logs, reference=None):
+def run(tmp_path, new_logs, reference=None, committed=frozenset()):
     new = write(tmp_path / "new", new_logs)
-    lines = compare_logs.compare(new, published(tmp_path) if reference is None else reference)
+    lines = compare_logs.compare(new, published(tmp_path) if reference is None else reference, set(committed))
     return (0 if lines[-1] == "COMPARE DONE PASS" else 1), lines
 
 
@@ -115,16 +115,59 @@ def test_a_log_with_no_published_counterpart_is_out(tmp_path):
     assert line(lines, "eval", "fp32", "ap") == expected
 
 
-def test_the_newest_clean_new_log_is_the_one_compared(tmp_path):
+def test_the_newest_new_log_is_the_one_compared(tmp_path):
     status, lines = run(
         tmp_path,
         [
             make_log("eval", "fp16", results={"ap": 0.2000}, end_utc="2026-01-01T00:09:00Z"),
             *complete(),
-            make_log("eval", "fp16", results={"ap": 0.1000}, end_utc="2026-01-01T00:11:00Z", dirty=True),
         ],
     )
     assert status == 0 and line(lines, "eval", "fp16", "ap").endswith("new=30.00 delta=+0.00 tol=0.10 OK")
+
+
+def test_a_dirty_newest_log_fails_instead_of_falling_back_to_an_older_one(tmp_path):
+    dirty = make_log("eval", "fp16", results={"ap": 0.1000}, end_utc="2026-01-01T00:11:00Z", dirty=True)
+    status, lines = run(tmp_path, [*complete(), dirty])
+    assert status == 1 and lines[-1] == "COMPARE DONE FAIL 1"
+    assert "COMPARE eval fp16 log published=- new=dirty delta=n/a tol=- OUT" in lines
+
+
+def test_committed_logs_never_stand_in_for_a_re_measure(tmp_path):
+    committed_logs = complete()
+    identities = {compare_logs._identity(log) for log in committed_logs}
+    # A fresh clone's runs/ holding only the committed logs: every one is left out, so every log is missing.
+    status, lines = run(tmp_path, committed_logs, committed=identities)
+    assert status == 1 and lines[-1] == "COMPARE DONE FAIL 6"
+    # With a re-measure beside them, only the re-measure is compared.
+    remeasure = [dict(log, end_utc="2026-02-01T00:10:00Z", start_utc="2026-02-01T00:00:00Z") for log in complete()]
+    status, lines = run(tmp_path, [*committed_logs, *remeasure], committed=identities)
+    assert status == 0 and lines[-1] == "COMPARE DONE PASS"
+
+
+def test_the_repository_committed_logs_are_all_known():
+    identities = compare_logs.committed_identities()
+    # runs/ holds 10 logs and each judged run under runs-repeat/ holds 10 more.
+    assert len(identities) >= 40
+
+
+def test_new_logs_from_two_commits_fail(tmp_path):
+    logs = complete()
+    logs[0] = dict(logs[0], commit="f" * 40)
+    status, lines = run(tmp_path, logs)
+    assert status == 1 and any(item.startswith("COMPARE - - commit ") and item.endswith(" OUT") for item in lines)
+
+
+def test_a_re_measure_with_other_counts_or_another_runtime_fails(tmp_path):
+    fewer = [
+        dict(log, iterations=dict(log["iterations"], repeats=1)) if log["kind"] == "benchmark" else log
+        for log in complete()
+    ]
+    status, lines = run(tmp_path, fewer)
+    assert status == 1 and lines[-1] == "COMPARE DONE FAIL 3"
+    assert all(line(lines, "benchmark", p, "setup").endswith(" OUT") for p in PRECISIONS)
+    status, lines = run(tmp_path, complete({"fp32": {"runtime": "pytorch-cpu"}}))
+    assert status == 1 and line(lines, "eval", "fp32", "setup").endswith(" OUT")
 
 
 def test_an_incomplete_new_set_fails(tmp_path):

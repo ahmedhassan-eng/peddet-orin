@@ -260,12 +260,12 @@ python -m peddet_orin.benchmark --precision fp32
 python -m peddet_orin.benchmark --precision fp16
 python -m peddet_orin.benchmark --precision int8
 
-python scripts/generate_table.py --write
+python scripts/compare_logs.py runs
 ```
 
-Each command writes a JSON log to `runs/`, and the last one rewrites the README's generated blocks. With quieted runs committed under `runs-repeat/`, the results table is their median; without them, it is the newest clean logs in `runs/`, which must all come from one commit. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
+Each command writes a JSON log to `runs/`. The results table is built from the judged runs committed under `runs-repeat/`, and `python scripts/generate_table.py --write` rebuilds it from them; a re-measure does not run it, since it would show the re-measure's logs in `runs/` as the earlier run. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
 
-To check a re-measure against the published numbers, write its logs to another directory, for example a fresh clone's `runs/`, and compare: `python scripts/compare_logs.py <that runs dir>`. It compares the newest clean eval and benchmark log of each precision with what the results table is built from, the median of the judged runs in `runs-repeat/`, applies the tolerances of `PRD.md` R-11 and prints one line per metric. A set without a clean eval and benchmark log for every precision fails. Set `PDORIN_DEBUG=1` to turn on diagnostic logging and profiling.
+The last command checks the re-measure against the published numbers. `python scripts/compare_logs.py <runs dir>` leaves out the logs committed under `runs/` and `runs-repeat/`, so the committed logs never stand in for a missing or failed one. It compares the newest eval and benchmark log of each precision with what the results table is built from, the median of the judged runs, applies the tolerances of `PRD.md` R-11 and prints one line per metric. It fails a precision with no new log, a dirty newest log, a log run with another runtime or other iteration counts, and new logs from more than one commit. Set `PDORIN_DEBUG=1` to turn on diagnostic logging and profiling.
 
 ## Continuous integration
 

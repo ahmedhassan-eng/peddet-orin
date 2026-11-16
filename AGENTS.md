@@ -17,7 +17,7 @@ These rules apply to everyone who changes this repository, whether a person or a
 
 - Every published number comes from a JSON log under `runs/` or `runs-repeat/`; regenerate the README table with `python scripts/generate_table.py --write` and never edit it by hand.
 - Measure from a clean tree, so the log records `dirty: false`. The table skips dirty logs and needs all its logs from one commit.
-- Check a re-measure against the published table with `python scripts/compare_logs.py <new runs dir>`.
+- Check a re-measure against the published table with `python scripts/compare_logs.py runs`.
 
 ## Commit messages
 

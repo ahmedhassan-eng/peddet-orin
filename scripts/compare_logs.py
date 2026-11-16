@@ -1,22 +1,27 @@
 # SPDX-License-Identifier: Apache-2.0
 """Compare a re-measure with the published table, metric by metric, against fixed tolerances.
 
-Usage: python scripts/compare_logs.py <new_runs_dir>
+Usage: python scripts/compare_logs.py <runs dir>, for example runs after a re-measure
 
 The reference is what the README's results table is built from: with judged runs under ``runs-repeat/``, their
-median; without them, the newest clean logs in ``runs/``. The new set must hold a clean eval and a clean benchmark
-log for every precision; for each, the newest is compared. Each metric prints one line:
+median; without them, the newest clean logs in ``runs/``. Logs that are committed under ``runs/`` or
+``runs-repeat/`` are left out of the new set, so a fresh clone's ``runs/`` can be compared after a re-measure and
+the committed logs never stand in for missing ones. The rest must come from one commit and hold an eval and a
+benchmark log for every precision; for each, the newest is compared, and it must be clean and run with the same
+runtime and iteration counts as the reference. Each metric prints one line:
 
     COMPARE <kind> <precision> <metric> published=.. new=.. delta=.. tol=.. OK|OUT
 
 Metrics in ``REPORTED_ONLY`` end in ``REPORTED`` instead: they are shown, not judged. A kind and precision with no
-clean new log prints one ``COMPARE <kind> <precision> log published=- new=missing delta=n/a tol=- OUT`` line.
+new log prints one ``COMPARE <kind> <precision> log published=- new=missing delta=n/a tol=- OUT`` line; a dirty
+newest log, a different runtime or iteration count, or new logs from more than one commit print their own OUT line.
 The last line is ``COMPARE DONE PASS`` (exit 0) or ``COMPARE DONE FAIL <n>`` (exit 1), where n counts the OUT lines.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -89,19 +94,59 @@ def reference() -> dict:
     return generate_table.headline()[0]
 
 
-def compare(new_dir: Path, published_logs: dict | None = None) -> list[str]:
-    """Return the COMPARE lines, the final DONE line included; ``published_logs`` defaults to ``reference()``."""
+def _identity(log: dict) -> tuple:
+    return (log.get("kind"), log.get("precision"), log.get("commit"), log.get("start_utc"), log.get("end_utc"))
+
+
+def committed_identities() -> set[tuple]:
+    """The identity of every log committed under runs/ and runs-repeat/."""
+    logs = generate_table.load_logs(generate_table.RUNS_DIR)
+    for directory in sorted(path for path in generate_table.REPEATS_DIR.glob("*") if path.is_dir()):
+        logs += generate_table.load_logs(directory)
+    return {_identity(log) for log in logs}
+
+
+def _newest(logs: list[dict], kind: str, precision: str) -> dict | None:
+    matching = [log for log in logs if log["kind"] == kind and log["precision"] == precision]
+    return max(matching, key=lambda log: log["end_utc"]) if matching else None
+
+
+def _setup(log: dict) -> str:
+    """The runtime and iteration counts a log ran with, as one space-free token."""
+    counts = json.dumps(log.get("iterations"), sort_keys=True, separators=(",", ":"))
+    return f"{log['results'].get('runtime')}/{counts}"
+
+
+def compare(new_dir: Path, published_logs: dict | None = None, committed: set[tuple] | None = None) -> list[str]:
+    """Return the COMPARE lines, the final DONE line included; ``published_logs`` defaults to ``reference()`` and
+    ``committed`` to ``committed_identities()``."""
     published_logs = reference() if published_logs is None else published_logs
-    new_logs = generate_table.load_logs(new_dir)
+    committed = committed_identities() if committed is None else committed
+    found = generate_table.load_logs(new_dir)
+    new_logs = [log for log in found if _identity(log) not in committed]
+    if len(new_logs) < len(found):
+        print(f"compare_logs: leaving out {len(found) - len(new_logs)} committed logs", file=sys.stderr)
     lines, failures = [], 0
+    commits = sorted({log["commit"] for log in new_logs if log["kind"] in KINDS})
+    if len(commits) > 1:
+        failures += 1
+        lines.append(f"COMPARE - - commit published=- new={','.join(c[:7] for c in commits)} delta=n/a tol=- OUT")
     for kind in KINDS:
         for precision in generate_table.PRECISIONS:
-            new = generate_table.latest(new_logs, kind, precision)
+            new = _newest(new_logs, kind, precision)
             if new is None:
                 failures += 1
                 lines.append(f"COMPARE {kind} {precision} log published=- new=missing delta=n/a tol=- OUT")
                 continue
+            if new.get("dirty") is not False:
+                failures += 1
+                lines.append(f"COMPARE {kind} {precision} log published=- new=dirty delta=n/a tol=- OUT")
+                continue
             published = published_logs.get((kind, precision))
+            if published and _setup(new) != _setup(published):
+                failures += 1
+                shown = f"published={_setup(published)} new={_setup(new)}"
+                lines.append(f"COMPARE {kind} {precision} setup {shown} delta=n/a tol=- OUT")
             for metric, read in METRICS[kind]:
                 new_value = read(new["results"])
                 published_value = read(published["results"]) if published else "missing"
