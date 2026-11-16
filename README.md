@@ -46,7 +46,7 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 - run5: PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
 <!-- results:end -->
 
-A second, deployment-style benchmark runs the same timed loop with a postprocess that keeps the person class only, COCO category 1, at one fixed score threshold of 0.5: a fixed midpoint chosen before any deployment-style run; it is not tuned on the results, and no recall or AP is reported at this threshold. Its other settings are torchvision's. It writes its own log kind, `benchmark_deploy`, which the results table and R-11 never use:
+A second, deployment-style benchmark runs the same timed loop with a postprocess that keeps the person class only, COCO category 1, at one fixed score threshold of 0.5: a fixed midpoint chosen before any deployment-style run; it is not tuned on the results, and no recall or AP is reported at this threshold. Its other settings are torchvision's. It writes its own log kind, `benchmark_deploy`, which the results table and R-11 never use. No deployment setting was measured: the code ships, and no judged run carries its logs.
 
 <!-- deploy:begin -->
 The deployment-style benchmark (`--postprocess deploy`) is not yet measured: these logs have none of it.
@@ -66,7 +66,7 @@ Over the median of the 3 quieted runs, the INT8 engine p50 is lower than FP16's,
 - The export uses PyTorch's TorchScript-based ONNX exporter, which PyTorch has deprecated; `pyproject.toml` bounds torch below 2.15 for that reason.
 - CI runs on x86_64 CPUs only. The aarch64 build, the GPU tests and TensorRT run only on the Jetson, by hand, before a release.
 - Batch size 1 only.
-- PyTorch FP32 runs in PyTorch and FP16 and INT8 in TensorRT, so the gap between the PyTorch baseline and the other two is runtime and precision together, not precision alone. TensorRT FP32, the precision baseline, runs in the same runtime as FP16 and INT8, so it separates runtime from precision more closely, though not entirely (see Results); it is not in the committed judged runs.
+- PyTorch FP32 runs in PyTorch and FP16 and INT8 in TensorRT, so the gap between the PyTorch baseline and the other two is runtime and precision together, not precision alone. TensorRT FP32, the precision baseline, runs in the same runtime as FP16 and INT8, so it separates runtime from precision more closely, though not entirely (see Results); it is not yet measured. Until it is, the only FP32 row runs on a PyTorch wheel without support for this board's compute capability, 8.7; the TensorRT FP32 row is planned for 0.2.0.
 - `jetson_clocks` is not run, memory clocks are not read, and a tegrastats reader thread runs in the timed process. For the judged runs, the QUIET gates and the measurement window excluded what the repeat block and the Provenance notes name: the board's other scheduled jobs and loop services, sessions over their CPU budget or not allowed, swap use and swap-outs, available memory under the bound, and a load1 at or above the gate's bound. They did not exclude the operating system's own processes or the tegrastats reader, so latencies still vary between runs, as the min-max notes show. The earlier run in `runs/` had no such gate.
 - The system RAM rise in each benchmark log is reported per run and not judged.
 - Power is the average of `tegrastats` VDD_IN readings during the timed end-to-end loop. It is the whole board's input power, not the GPU's alone, and no power was read for inference alone, so there is no energy figure at the engine rate.
@@ -274,24 +274,29 @@ python -m peddet_orin.gpu_check
 python -m peddet_orin.export
 python -m peddet_orin.engine_build --precision fp16
 python -m peddet_orin.engine_build --precision int8
-python -m peddet_orin.engine_build --precision fp32-trt
 
 python -m peddet_orin.evaluate --precision fp32
 python -m peddet_orin.evaluate --precision fp16
 python -m peddet_orin.evaluate --precision int8
-python -m peddet_orin.evaluate --precision fp32-trt
 
 python -m peddet_orin.benchmark --precision fp32
 python -m peddet_orin.benchmark --precision fp16
 python -m peddet_orin.benchmark --precision int8
+
+python scripts/compare_logs.py runs
+```
+
+The code for the TensorRT FP32 row and the deployment-style benchmark ships, but no judged run has measured either; these commands make their logs, which `compare_logs.py` reports and does not judge:
+
+```sh
+python -m peddet_orin.engine_build --precision fp32-trt
+python -m peddet_orin.evaluate --precision fp32-trt
 python -m peddet_orin.benchmark --precision fp32-trt
 
 python -m peddet_orin.benchmark --precision fp32 --postprocess deploy
 python -m peddet_orin.benchmark --precision fp16 --postprocess deploy
 python -m peddet_orin.benchmark --precision int8 --postprocess deploy
 python -m peddet_orin.benchmark --precision fp32-trt --postprocess deploy
-
-python scripts/compare_logs.py runs
 ```
 
 Each command writes a JSON log to `runs/`. The results table is built from the judged runs committed under `runs-repeat/`, and `python scripts/generate_table.py --write` rebuilds it from them; a re-measure does not run it, since it would show the re-measure's logs in `runs/` as the earlier run. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.

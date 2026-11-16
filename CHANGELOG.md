@@ -40,7 +40,8 @@ All notable changes to this project are recorded here. The format follows
   settings they record. The committed judged runs have no such logs, so the block says in one line that they are
   not yet measured; judged runs that carry them in some runs and not others stop
   `scripts/generate_table.py`. `scripts/compare_logs.py` never judges them, and prints one REPORTED line per
-  deployment-style metric when the new logs carry it. The README's reproduce steps run it for all four precisions.
+  deployment-style metric when the new logs carry it. The README's reproduce steps list its commands for all four
+  precisions, with the TensorRT FP32 row's, apart from the judged runs' commands, since no judged run measured them.
 
 ### Changed
 
