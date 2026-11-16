@@ -19,7 +19,6 @@ The exit status is non-zero if the check fails.
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 import warnings
 
@@ -43,9 +42,6 @@ MAX_BOX_PIXELS = 64.0
 NMS_IOU = 0.5
 NOT_RUN = "not run"  # Stands in for a measurement whose operation raised an error.
 # A slice names the capability as one integer, major * 10 + minor: sm_87 is 8.7, sm_100 is 10.0.
-SLICE_PATTERN = re.compile(r"sm_(\d+)$")
-CAPABILITY_BASE = 10
-NO_COMPATIBLE_SLICE = "none"
 
 
 def matmul_difference(generator: torch.Generator) -> float:
@@ -77,27 +73,6 @@ def nms_comparison(generator: torch.Generator) -> dict[str, int | bool]:
         "nms_kept_gpu": int(on_gpu.numel()),
         "nms_input_boxes": BOX_COUNT,
     }
-
-
-def slice_capability(arch: str) -> tuple[int, int] | None:
-    """Return the (major, minor) capability a slice name such as sm_100 stands for."""
-    match = SLICE_PATTERN.match(arch)
-    return divmod(int(match.group(1)), CAPABILITY_BASE) if match else None
-
-
-def compatible_slice(arch_list: list[str], major: int, minor: int) -> str:
-    """Return the newest slice a device of this capability can load, by CUDA's rule.
-
-    A CUDA binary compiled for capability X.y runs on X.z when z >= y, and never
-    across major versions. The driver does not report which slice it loaded, so this
-    is an inference from that rule and the wheel's own list, and is logged as one.
-    """
-    candidates = []
-    for arch in arch_list:
-        capability = slice_capability(arch)
-        if capability is not None and capability[0] == major and capability[1] <= minor:
-            candidates.append((capability[1], arch))
-    return max(candidates)[1] if candidates else NO_COMPATIBLE_SLICE
 
 
 def first_cuda_use() -> str:
@@ -159,7 +134,6 @@ def main(argv: list[str] | None = None) -> int:
                 "cuda_available": available,
                 "arch_list": arch_list,
                 "device_compute_capability": f"{major}.{minor}",
-                "inferred_slice": compatible_slice(arch_list, major, minor),
                 "matmul_max_abs_difference": difference if difference is not None else NOT_RUN,
                 "matmul_tolerance": MATMUL_TOLERANCE,
                 "matmul_matches": matmul_ok,

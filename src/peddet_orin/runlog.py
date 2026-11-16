@@ -440,6 +440,8 @@ RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
     },
 }
 # Keys a kind may carry beyond its required ones.
+# Logs written before 0.1.1 carry an inferred_slice, which gpu_check no longer records: no slice can be inferred
+# for a device that PyTorch itself says its build excludes.
 OPTIONAL_RESULTS: dict[str, frozenset[str]] = {"gpu_check": frozenset({"inferred_slice"})}
 
 

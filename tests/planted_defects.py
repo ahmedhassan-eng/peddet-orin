@@ -269,10 +269,10 @@ DEFECTS = [
         "catches": "tests/test_compare_logs.py::test_an_incomplete_new_set_fails",
     },
     {
-        "id": "gpu-check-slice-across-majors",
+        "id": "gpu-check-ignores-nms",
         "file": "src/peddet_orin/gpu_check.py",
-        "old": "capability[0] == major and capability[1] <= minor",
-        "new": "capability[0] >= major and capability[1] <= minor",
-        "catches": "tests/test_gpu_check.py::test_compatible_slice_takes_the_newest_minor_not_above_the_device",
+        "old": "usable = matmul_ok and nms_ok",
+        "new": "usable = matmul_ok",
+        "catches": "tests/test_gpu_check.py::test_a_failed_comparison_makes_the_gpu_unusable",
     },
 ]

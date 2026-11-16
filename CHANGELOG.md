@@ -68,8 +68,9 @@ All notable changes to this project are recorded here. The format follows
   `python3.12-venv`, `python3-libnvinfer`, `nvidia-l4t-nvpmodel`, `nvidia-l4t-tools` and `python3-numpy`.
 - `PDORIN_REQUIRE_GPU=1` makes a GPU or TensorRT test that skips fail the run; the README's board test command
   sets it, so a missing CUDA device or TensorRT no longer passes quietly.
-- A planted defect for `gpu_check`'s slice rule covers `tests/test_gpu_check.py`, the last test file with no
-  negative control; `tests/test_negative_controls.py` now fails if any test file has neither.
+- `gpu_check` no longer records an `inferred_slice`: PyTorch's own warning, which the log keeps, says its build's
+  sm_80 slice excludes this device, so no slice can be inferred from the build's list. A planted defect for its
+  usable verdict covers `tests/test_gpu_check.py`, the last test file with no negative control; `tests/test_negative_controls.py` now fails if any test file has neither.
 - evaluate and benchmark refuse `--precision fp32` with a `--device` that is not a torch device, or is CUDA on
   a host where PyTorch finds none, with one line and exit 2 (PRD R-14); it was a traceback.
 
