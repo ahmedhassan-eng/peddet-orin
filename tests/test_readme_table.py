@@ -635,3 +635,77 @@ def test_a_judged_run_with_part_of_tensorrt_fp32_stops_the_generator(tmp_path):
     _add_tensorrt_fp32(tmp_path / "run2", kinds=("benchmark", "eval"))
     with pytest.raises(generate_table.TableError, match="judged run run2 has some TensorRT FP32 logs but no clean log"):
         generate_table.build_block(generate_table.RUNS_DIR, tmp_path)
+
+
+DEPLOY_SETTINGS = {
+    "score_threshold": 0.5,
+    "nms_iou_threshold": 0.55,
+    "top_k_per_class": 300,
+    "detections_per_image": 300,
+    "num_classes": 91,
+    "kept_labels": [1],
+}
+
+
+def _add_deploy(run_dir, precisions=generate_table.TABLE_PRECISIONS, scale=0.9):
+    """Each precision's benchmark log, end-to-end times scaled, as a deployment-style log."""
+    for precision in precisions:
+        (source,) = sorted(run_dir.glob(f"benchmark_{precision}_*.json"))
+        log = json.loads(source.read_text())
+        log["kind"] = "benchmark_deploy"
+        log["results"]["end_to_end"] = {key: value * scale for key, value in log["results"]["end_to_end"].items()}
+        log["results"]["postprocess_settings"] = DEPLOY_SETTINGS
+        (run_dir / source.name.replace("benchmark_", "benchmark_deploy_")).write_text(json.dumps(log))
+
+
+def test_without_deploy_logs_the_deploy_block_says_so_in_one_line(tmp_path):
+    _judged(tmp_path)
+    assert generate_table.build_deploy_block(generate_table.RUNS_DIR, tmp_path) == generate_table.DEPLOY_PENDING
+    readme = generate_table.README.read_text()
+    assert generate_table.readme_block(readme, generate_table.DEPLOY_MARKERS) == generate_table.DEPLOY_PENDING
+    # The block sits right after the results table.
+    after = readme.split(generate_table.END_MARKER, 1)[1]
+    assert after.index(generate_table.DEPLOY_MARKERS[0]) < after.index("\n## ")
+
+
+def test_deploy_logs_in_every_judged_run_give_their_own_block_and_leave_the_table_alone(tmp_path):
+    _judged(tmp_path)
+    before = generate_table.build_block(generate_table.RUNS_DIR, tmp_path)
+    repeat_before = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
+    for name in ("run1", "run2"):
+        _add_tensorrt_fp32(tmp_path / name)
+        _add_deploy(tmp_path / name)
+    block = generate_table.build_deploy_block(generate_table.RUNS_DIR, tmp_path)
+    rows = [line for line in block.splitlines() if line.startswith("| GPU")]
+    assert [row.split(" | ")[0] for row in rows] == [
+        "| GPU, PyTorch FP32 (PyTorch baseline)",
+        "| GPU, TensorRT FP32 (precision baseline)",
+        "| GPU, TensorRT FP16",
+        "| GPU, TensorRT INT8",
+    ]
+    assert block.startswith("Each cell is the median over the 2 judged runs")
+    assert "labels kept 1 (COCO category 1, person), score threshold 0.5, NMS IoU threshold 0.55" in block
+    assert "it is not tuned on the results" in block
+    fp16 = generate_table.headline(generate_table.RUNS_DIR, tmp_path)[0][("benchmark", "fp16")]["results"]
+    fp16_row = next(row for row in rows if row.startswith("| GPU, TensorRT FP16"))
+    assert f" {fp16['end_to_end']['p50_ms'] * 0.9:.1f} / " in fp16_row
+    assert "benchmark_deploy" not in generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
+    after = generate_table.build_block(generate_table.RUNS_DIR, tmp_path)
+    assert [line for line in after.splitlines() if "FP16" in line and line.startswith("| GPU")] == [
+        line for line in before.splitlines() if "FP16" in line and line.startswith("| GPU")
+    ]
+    assert repeat_before.count("| FP16 |") == generate_table.build_repeat_block(
+        generate_table.RUNS_DIR, tmp_path
+    ).count("| FP16 |")
+
+
+def test_deploy_logs_in_only_some_judged_runs_stop_the_generator(tmp_path):
+    _judged(tmp_path)
+    _add_deploy(tmp_path / "run1", precisions=generate_table.PRECISIONS)
+    with pytest.raises(generate_table.TableError, match="judged run run1 has some deployment-style benchmark logs"):
+        generate_table.build_deploy_block(generate_table.RUNS_DIR, tmp_path)
+    _add_tensorrt_fp32(tmp_path / "run1")
+    _add_tensorrt_fp32(tmp_path / "run2")
+    _add_deploy(tmp_path / "run1", precisions=["fp32-trt"])
+    with pytest.raises(generate_table.TableError, match="deployment-style benchmark logs are in 1 of the 2 judged"):
+        generate_table.build_deploy_block(generate_table.RUNS_DIR, tmp_path)

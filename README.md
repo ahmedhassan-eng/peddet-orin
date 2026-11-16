@@ -46,6 +46,12 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 - run5: PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
 <!-- results:end -->
 
+A second, deployment-style benchmark runs the same timed loop with a postprocess that keeps the person class only, COCO category 1, at one fixed score threshold of 0.5: a fixed midpoint chosen before any deployment-style run; it is not tuned on the results. Its other settings are torchvision's. It writes its own log kind, `benchmark_deploy`, which the results table and R-11 never use:
+
+<!-- deploy:begin -->
+The deployment-style benchmark (`--postprocess deploy`) is measured from the next judged runs on; these logs have none of it.
+<!-- deploy:end -->
+
 The PyTorch FP32 row runs PyTorch on the GPU with TF32 turned off for cuDNN and matmul, so it is FP32 throughout. PyTorch warns on first CUDA use that its published 2.14.1+cu130 wheels do not support this board's compute capability, 8.7; the notes quote the warning's first line, the `gpu_check` log holds all of it, and the code does not hide it. Which kernel image the driver runs is not reported. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable: it compares a matmul and NMS against the CPU, and `tests/test_gpu.py` compares a full forward pass.
 
 Peak process RSS does not fully capture memory allocated on the device. System RAM rise, the highest system-wide RAM during timing minus the mean just before, is in the logs but not in the table: it includes any other activity on the board and does not reproduce between runs.
@@ -273,12 +279,17 @@ python -m peddet_orin.benchmark --precision fp16
 python -m peddet_orin.benchmark --precision int8
 python -m peddet_orin.benchmark --precision fp32-trt
 
+python -m peddet_orin.benchmark --precision fp32 --postprocess deploy
+python -m peddet_orin.benchmark --precision fp16 --postprocess deploy
+python -m peddet_orin.benchmark --precision int8 --postprocess deploy
+python -m peddet_orin.benchmark --precision fp32-trt --postprocess deploy
+
 python scripts/compare_logs.py runs
 ```
 
 Each command writes a JSON log to `runs/`. The results table is built from the judged runs committed under `runs-repeat/`, and `python scripts/generate_table.py --write` rebuilds it from them; a re-measure does not run it, since it would show the re-measure's logs in `runs/` as the earlier run. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
 
-The last command checks the re-measure against the published numbers. `python scripts/compare_logs.py <runs dir>` leaves out the logs committed under `runs/` and `runs-repeat/`, so the committed logs never stand in for a missing or failed one. It compares the newest eval and benchmark log of each precision with what the results table is built from, the median of the judged runs, applies the tolerances of `PRD.md` R-11 and prints one line per metric. TensorRT FP32 is reported, not judged, while the judged runs have no logs for it, and judged once they do. It fails a precision with no new log, a dirty newest log, a log run with another runtime or other iteration counts, and new logs from more than one commit. Set `PDORIN_DEBUG=1` to turn on diagnostic logging and profiling.
+The last command checks the re-measure against the published numbers. `python scripts/compare_logs.py <runs dir>` leaves out the logs committed under `runs/` and `runs-repeat/`, so the committed logs never stand in for a missing or failed one. It compares the newest eval and benchmark log of each precision with what the results table is built from, the median of the judged runs, applies the tolerances of `PRD.md` R-11 and prints one line per metric. TensorRT FP32 is reported, not judged, while the judged runs have no logs for it, and judged once they do. The deployment-style benchmark is never judged: it prints one REPORTED line per metric when the new logs carry it. It fails a precision with no new log, a dirty newest log, a log run with another runtime or other iteration counts, and new logs from more than one commit. Set `PDORIN_DEBUG=1` to turn on diagnostic logging and profiling.
 
 ## Continuous integration
 

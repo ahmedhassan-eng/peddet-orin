@@ -40,6 +40,17 @@ TOLERANCES: dict[str, dict] = {
 }
 REPORTED_ONLY = ("engine_p99_ms", "end_to_end_p99_ms", "system_ram_rise_mib")
 KINDS = ("eval", "benchmark")
+# The deployment-style benchmark is not judged by R-11: each of its metrics prints one REPORTED line when the new
+# logs carry it, and it never counts as a failure or a missing log.
+DEPLOY_KIND = generate_table.DEPLOY
+DEPLOY_METRICS: tuple[tuple[str, Callable[[dict], object]], ...] = (
+    ("end_to_end_p50_ms", lambda results: results["end_to_end"]["p50_ms"]),
+    ("end_to_end_p90_ms", lambda results: results["end_to_end"]["p90_ms"]),
+    ("end_to_end_p99_ms", lambda results: results["end_to_end"]["p99_ms"]),
+    ("end_to_end_fps", lambda results: results["end_to_end"]["fps"]),
+    ("avg_power_w", lambda results: results["avg_power_w"]),
+    ("end_to_end_energy_per_frame_j", generate_table.energy_per_frame_j),
+)
 # Floating-point slack, so that a difference equal to its tolerance is within it.
 EPSILON = 1e-9
 
@@ -165,7 +176,28 @@ def compare(new_dir: Path, published_logs: dict | None = None, committed: set[tu
                     f"COMPARE {kind} {precision} {metric} published={_shown(published_value)} "
                     f"new={_shown(new_value)} delta={delta} tol={tolerance} {verdict}"
                 )
+    lines += deploy_lines(new_logs, published_logs)
     lines.append("COMPARE DONE PASS" if failures == 0 else f"COMPARE DONE FAIL {failures}")
+    return lines
+
+
+def deploy_lines(new_logs: list[dict], published_logs: dict) -> list[str]:
+    """One REPORTED line per deployment-style metric, for each precision the new logs carry it for."""
+    lines = []
+    for precision in generate_table.TABLE_PRECISIONS:
+        new = _newest(new_logs, DEPLOY_KIND, precision)
+        if new is None:
+            continue
+        published = published_logs.get((DEPLOY_KIND, precision))
+        for metric, read in DEPLOY_METRICS:
+            new_value = read(new["results"])
+            published_value = read(published["results"]) if published else "missing"
+            numbers = _is_number(published_value) and _is_number(new_value)
+            delta = f"{new_value - published_value:+.2f}" if numbers else "n/a"
+            lines.append(
+                f"COMPARE {DEPLOY_KIND} {precision} {metric} published={_shown(published_value)} "
+                f"new={_shown(new_value)} delta={delta} tol=- REPORTED"
+            )
     return lines
 
 

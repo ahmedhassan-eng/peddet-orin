@@ -233,3 +233,21 @@ def test_tensorrt_fp32_is_judged_once_the_reference_has_it(tmp_path):
     assert status == 1 and line(lines, "eval", "fp32-trt", "ap").endswith(" tol=0.10 OUT")
     status, lines = run(tmp_path / "without", complete(), reference)
     assert status == 1 and line(lines, "eval", "fp32-trt", "log").endswith("new=missing delta=n/a tol=- OUT")
+
+
+def test_deploy_logs_print_reported_lines_and_are_never_judged(tmp_path):
+    (tmp_path / "with").mkdir()
+    deploy = make_log("benchmark", "fp16", results={"end_to_end": latency(9.0), "avg_power_w": 8.0})
+    deploy["kind"] = "benchmark_deploy"
+    status, lines = run(tmp_path / "with", [*complete(), deploy])
+    assert status == 0
+    reported = [item for item in lines if item.startswith("COMPARE benchmark_deploy ")]
+    assert [item.split()[3] for item in reported] == [metric for metric, _ in compare_logs.DEPLOY_METRICS]
+    assert all(item.endswith(" tol=- REPORTED") for item in reported)
+    assert (
+        "COMPARE benchmark_deploy fp16 end_to_end_p50_ms published=missing new=9.00 delta=n/a tol=- REPORTED" in lines
+    )
+    energy = "COMPARE benchmark_deploy fp16 end_to_end_energy_per_frame_j published=missing new=0.07 "
+    assert any(item.startswith(energy) for item in lines)
+    status, lines = run(tmp_path, complete())
+    assert status == 0 and not any("benchmark_deploy" in item for item in lines)

@@ -132,6 +132,12 @@ All notable changes to this project are recorded here. The format follows
   writes a log of its own kind, `benchmark_deploy`, whose results are the benchmark's with `stages`,
   `postprocess_settings` (with `kept_labels`), `engine_sha256` and `torch_num_threads` required. `--postprocess`
   defaults to `standard`, the main benchmark, which is unchanged.
+- The README gains a generated deployment-style block right after the results table: per precision, end-to-end
+  p50/p90/p99, end-to-end FPS, power and energy per frame from the `benchmark_deploy` logs, and the postprocess
+  settings they record. The committed judged runs have no such logs, so the block says in one line that they are
+  measured from the next judged runs on; judged runs that carry them in some runs and not others stop
+  `scripts/generate_table.py`. `scripts/compare_logs.py` never judges them, and prints one REPORTED line per
+  deployment-style metric when the new logs carry it. The README's reproduce steps run it for all four precisions.
 
 ### Security
 

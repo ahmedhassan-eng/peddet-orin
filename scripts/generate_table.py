@@ -8,7 +8,8 @@ apart and not judged. Without them, the newest clean log of each kind and precis
 cells. A log made from a dirty tree is skipped, with a line on stderr. The logs that feed the table must come from
 one commit, and each row's evaluation and benchmark must name the same runtime; otherwise the script exits non-zero.
 TensorRT FP32 has a row only where its logs are present: the committed judged runs predate it, and a judged set
-that carries it in some runs and not others stops the script.
+that carries it in some runs and not others stops the script. The deployment-style benchmark's logs feed only
+their own block, under the same all-or-none rule, and never the results table or R-11.
 """
 
 from __future__ import annotations
@@ -32,6 +33,17 @@ BEGIN_MARKER = "<!-- results:begin -->"
 END_MARKER = "<!-- results:end -->"
 INT8_MARKERS = ("<!-- int8:begin -->", "<!-- int8:end -->")
 REPEAT_MARKERS = ("<!-- repeats:begin -->", "<!-- repeats:end -->")
+DEPLOY_MARKERS = ("<!-- deploy:begin -->", "<!-- deploy:end -->")
+# The deployment-style benchmark's log kind, which never feeds the results table or R-11.
+DEPLOY = "benchmark_deploy"
+DEPLOY_PENDING = (
+    "The deployment-style benchmark (`--postprocess deploy`) is measured from the next judged runs on; these logs "
+    "have none of it."
+)
+DEPLOY_HEADER = (
+    "| Device and precision | End-to-end p50/p90/p99 (ms) | End-to-end FPS | Avg power VDD_IN (W) | "
+    "End-to-end energy per frame (J) |"
+)
 # The precisions every judged run carries: PyTorch FP32, the PyTorch baseline, and TensorRT FP16 and INT8.
 PRECISIONS = ("fp32", "fp16", "int8")
 # TensorRT FP32, the precision baseline. The committed judged runs predate it; from the next judged runs on, each
@@ -100,6 +112,7 @@ WANTED = (
 # one; anything between stops the script, so a row or block never mixes runs that measured it with runs that did not.
 OPTIONAL_GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
     "TensorRT FP32": (("benchmark", TENSORRT_FP32), ("eval", TENSORRT_FP32), ("build", TENSORRT_FP32)),
+    "deployment-style benchmark": tuple((DEPLOY, precision) for precision in TABLE_PRECISIONS),
 }
 
 
@@ -137,7 +150,7 @@ def energy_per_frame_j(results: dict) -> float | str:
 
 def _with_energy(log: dict) -> dict:
     """A benchmark log with its energy per frame added to a copy of its results; other logs unchanged."""
-    if log["kind"] != "benchmark":
+    if log["kind"] not in ("benchmark", DEPLOY):
         return log
     log = copy.deepcopy(log)
     log["results"][ENERGY] = energy_per_frame_j(log["results"])
@@ -174,6 +187,12 @@ def _latency(summary: dict) -> str:
     return " / ".join(f"{summary[key]:.1f}" for key in ("p50_ms", "p90_ms", "p99_ms"))
 
 
+def _device(runtime: str, precision: str) -> str:
+    """A row's first cell: device, framework and precision, and the baseline the row is."""
+    name = ROW_PRECISION.get(precision, PRECISION_NAMES[precision])
+    return f"{DEVICE_AND_FRAMEWORK.get(runtime, runtime)} {name}{BASELINES.get(precision, '')}"
+
+
 def _row(chosen: dict, precision: str) -> str:
     benchmark = chosen.get(("benchmark", precision))
     evaluation = chosen.get(("eval", precision))
@@ -186,8 +205,7 @@ def _row(chosen: dict, precision: str) -> str:
         int8_path = "-"
     runtime = (timing or scores or {}).get("runtime", MISSING)
     cells = [
-        f"{DEVICE_AND_FRAMEWORK.get(runtime, runtime)} {ROW_PRECISION.get(precision, PRECISION_NAMES[precision])}"
-        f"{BASELINES.get(precision, '')}",
+        _device(runtime, precision),
         _latency(timing["engine"]) if timing else MISSING,
         _number(timing["engine"]["fps"], 1) if timing else MISSING,
         _latency(timing["end_to_end"]) if timing else MISSING,
@@ -514,6 +532,56 @@ def build_int8_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None)
             if d8 != d16
             else ""
         )
+    )
+
+
+def _deploy_settings(runs: list[dict]) -> dict:
+    """The postprocess settings every deployment-style log records; they must agree across logs and runs."""
+    settings = [
+        log["results"]["postprocess_settings"] for chosen in runs for key, log in chosen.items() if key[0] == DEPLOY
+    ]
+    if any(item != settings[0] for item in settings):
+        raise TableError("the deployment-style benchmark logs record different postprocess settings")
+    return settings[0]
+
+
+def build_deploy_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> str:
+    """The deployment-style benchmark per precision: end-to-end latency, FPS, power and energy per frame, and the
+    postprocess settings its logs record. It is shown, not judged by R-11."""
+    chosen, runs = headline(runs_dir, repeats_dir)
+    precisions = [precision for precision in TABLE_PRECISIONS if (DEPLOY, precision) in chosen]
+    if not precisions:
+        return DEPLOY_PENDING
+    rows = []
+    for precision in precisions:
+        results = chosen[(DEPLOY, precision)]["results"]
+        cells = [
+            _device(results["runtime"], precision),
+            _latency(results["end_to_end"]),
+            _number(results["end_to_end"]["fps"], 1),
+            _number(results["avg_power_w"], 1),
+            _number(results[ENERGY], 3),
+        ]
+        rows.append("| " + " | ".join(cells) + " |")
+    settings = _deploy_settings([run for _, run in runs] or [chosen])
+    labels = ", ".join(str(label) for label in settings["kept_labels"])
+    opening = f"Each cell is the median over the {len(runs)} judged runs" if runs else "Each cell is from one run"
+    return "\n".join(
+        [
+            f"{opening}, from the `{DEPLOY}` logs, which the results table and R-11 never use.",
+            "",
+            DEPLOY_HEADER,
+            "|" + "---|" * (DEPLOY_HEADER.count(" | ") + 1),
+            *rows,
+            "",
+            f"- Postprocess, as the logs record it: labels kept {labels} (COCO category 1, person), score threshold "
+            f"{settings['score_threshold']:g}, NMS IoU threshold {settings['nms_iou_threshold']:g}, top-k "
+            f"{settings['top_k_per_class']} per class, at most {settings['detections_per_image']} detections per "
+            f"image, over {settings['num_classes']} classes. The score threshold is a fixed midpoint chosen before "
+            "any deployment-style run; it is not tuned on the results. The other settings are torchvision's.",
+            "- Only end-to-end figures are shown: the postprocess runs after the engine, whose time the results "
+            "table gives. No accuracy is measured with this postprocess.",
+        ]
     )
 
 
@@ -970,6 +1038,7 @@ BLOCKS = (
     ((BEGIN_MARKER, END_MARKER), lambda runs_dir, repeats_dir: build_block(runs_dir, repeats_dir)),
     (INT8_MARKERS, lambda runs_dir, repeats_dir: build_int8_block(runs_dir, repeats_dir)),
     (REPEAT_MARKERS, lambda runs_dir, repeats_dir: build_repeat_block(runs_dir, repeats_dir)),
+    (DEPLOY_MARKERS, lambda runs_dir, repeats_dir: build_deploy_block(runs_dir, repeats_dir)),
 )
 
 
