@@ -403,6 +403,10 @@ def _is_postprocess_settings(value: Any) -> bool:
     )
 
 
+def _is_flag_list(value: Any) -> bool:
+    return isinstance(value, list) and all(map(_is_string, value)) and len(set(value)) == len(value)
+
+
 def _is_number_list(value: Any) -> bool:
     return isinstance(value, list) and all(_is_number(item) for item in value)
 
@@ -518,10 +522,10 @@ OPTIONAL_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
         "engine_sha256": _is_string,
         # The sha256 of the INT8 calibration cache this build wrote, or "-" when it wrote none.
         "calibration_cache_sha256": _is_string,
-        # The TensorRT builder flags the engine was built with, by their BuilderFlag names.
-        "builder_flags": lambda value: (
-            isinstance(value, list) and bool(value) and all(map(_is_string, value)) and len(set(value)) == len(value)
-        ),
+        # The TensorRT builder flags the build set, by their BuilderFlag names; TensorRT FP32 sets none.
+        "builder_flags": lambda value: _is_flag_list(value),
+        # The flags the build cleared from TensorRT's defaults: TF32 for TensorRT FP32, so it is FP32 throughout.
+        "cleared_builder_flags": lambda value: _is_flag_list(value),
     },
 }
 # Logs written before 0.1.1 carry an inferred_slice, which gpu_check no longer records: no slice can be inferred
@@ -537,11 +541,17 @@ OPTIONAL_RESULTS: dict[str, frozenset[str]] = {
 NOT_APPLICABLE = "-"
 NO_ENTROPY_FAILURE = ""
 INT8_ENTROPY_PATH = "IInt8EntropyCalibrator2"
-# The precision that runs in PyTorch, with no engine file.
+# The precision that runs in PyTorch, with no engine file: the PyTorch baseline.
 PYTORCH_PRECISION = "fp32"
+# The TensorRT engine built in FP32 throughout: the precision baseline, against which FP16 and INT8 differ in
+# precision alone. "fp32" stays PyTorch's key, so the committed logs keep their meaning.
+TENSORRT_FP32_PRECISION = "fp32-trt"
 # The TensorRT builder flags each engine precision sets. INT8 sets FP16 too, so a layer TensorRT does not run in INT8
-# runs in FP16, not FP32.
-BUILDER_FLAG_NAMES: dict[str, list[str]] = {"fp16": ["FP16"], "int8": ["FP16", "INT8"]}
+# runs in FP16, not FP32. TensorRT FP32 sets none.
+BUILDER_FLAG_NAMES: dict[str, list[str]] = {TENSORRT_FP32_PRECISION: [], "fp16": ["FP16"], "int8": ["FP16", "INT8"]}
+# The flags each engine precision clears from TensorRT's defaults. TF32 is on by default; clearing it keeps TensorRT
+# FP32's convolutions and matrix products in FP32.
+CLEARED_FLAG_NAMES: dict[str, list[str]] = {TENSORRT_FP32_PRECISION: ["TF32"], "fp16": [], "int8": []}
 
 
 def _identity_problems(kind: str, precision: Any, results: dict) -> list[str]:
@@ -596,6 +606,11 @@ def _cross_field_problems(kind: str, precision: Any, results: dict) -> list[str]
         flags = results.get("builder_flags")
         if isinstance(flags, list) and precision in BUILDER_FLAG_NAMES and flags != BUILDER_FLAG_NAMES[precision]:
             problems.append(f"bad result: build builder_flags must be {BUILDER_FLAG_NAMES[precision]} for {precision}")
+        cleared = results.get("cleared_builder_flags")
+        if isinstance(cleared, list) and precision in CLEARED_FLAG_NAMES and cleared != CLEARED_FLAG_NAMES[precision]:
+            problems.append(
+                f"bad result: build cleared_builder_flags must be {CLEARED_FLAG_NAMES[precision]} for {precision}"
+            )
     return problems
 
 

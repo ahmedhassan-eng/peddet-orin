@@ -248,14 +248,18 @@ class FakeConfig:
 
     def __init__(self) -> None:
         self.flags: list[str] = []
+        self.cleared: list[str] = []
         self.int8_calibrator = None
 
     def set_flag(self, flag) -> None:
         self.flags.append(flag)
 
+    def clear_flag(self, flag) -> None:
+        self.cleared.append(flag)
+
 
 # Stands in for the tensorrt module as configure sees it: each BuilderFlag is its own name.
-FAKE_TENSORRT = types.SimpleNamespace(BuilderFlag=types.SimpleNamespace(FP16="FP16", INT8="INT8", FP32="FP32"))
+FAKE_TENSORRT = types.SimpleNamespace(BuilderFlag=types.SimpleNamespace(FP16="FP16", INT8="INT8", TF32="TF32"))
 
 
 class FakeCalibrator:
@@ -283,7 +287,12 @@ def configured(monkeypatch):
 
 def test_fp16_sets_only_the_fp16_flag(configured, tmp_path):
     engine_build.build_fp16(tmp_path / "in.onnx", tmp_path / "fp16.engine")
-    assert [config.flags for config in configured] == [["FP16"]]
+    assert [(config.flags, config.cleared) for config in configured] == [(["FP16"], [])]
+
+
+def test_tensorrt_fp32_sets_no_precision_flag_and_clears_tf32(configured, tmp_path):
+    engine_build.build_fp32_trt(tmp_path / "in.onnx", tmp_path / "fp32-trt.engine")
+    assert [(config.flags, config.cleared) for config in configured] == [([], ["TF32"])]
 
 
 def test_the_int8_entropy_build_sets_fp16_and_int8(configured, tmp_path):
@@ -308,8 +317,10 @@ def test_the_build_log_records_the_flags_the_build_set(precision, configured, ca
     onnx_path.write_bytes(b"onnx")
     arguments = ["--precision", precision, "--onnx", str(onnx_path), "--output", str(output)]
     assert engine_build.main([*arguments, "--calibration-dir", str(calibration)]) == 0
-    assert RecordingLog.opened[0].results["builder_flags"] == configured[0].flags
-    assert configured[0].flags == (["FP16", "INT8"] if precision == "int8" else ["FP16"])
+    results = RecordingLog.opened[0].results
+    assert (results["builder_flags"], results["cleared_builder_flags"]) == (configured[0].flags, configured[0].cleared)
+    expected = {"fp32-trt": ([], ["TF32"]), "fp16": (["FP16"], []), "int8": (["FP16", "INT8"], [])}
+    assert (configured[0].flags, configured[0].cleared) == expected[precision]
 
 
 def run_int8_build(calibration, tmp_path, monkeypatch, entropy) -> dict:

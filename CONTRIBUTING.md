@@ -51,7 +51,7 @@ The suite also enforces the repository's own rules:
 - `tests/test_agents_rule.py`: `AGENTS.md` states the commit-message rule, and no commit carries a trailer or
   ends its subject with a period.
 - `tests/test_version_agreement.py`: `pyproject.toml`, `CHANGELOG.md` and `CITATION.cff` name the same version.
-- `tests/test_strict_skips.py`: with `PDORIN_STRICT_SKIPS=1`, as in CI, any skip other than the five GPU and
+- `tests/test_strict_skips.py`: with `PDORIN_STRICT_SKIPS=1`, as in CI, any skip other than the six GPU and
   TensorRT tests fails the run. Outside CI, the repository-rule tests may also skip in a release tarball (no `.git`)
   or a shallow clone, with exactly the reason `tests/strict_skips.py` names.
   With `PDORIN_REQUIRE_GPU=1`, as on the board, the GPU and TensorRT tests may not skip either.

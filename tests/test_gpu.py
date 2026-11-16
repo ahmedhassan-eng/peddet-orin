@@ -97,6 +97,34 @@ def test_tensorrt_check_fails_on_unnormalised_input(fp16_engine):
     assert min_cosine(cpu_reference(network, normalise(raw)), engine(raw)) < FP16_MIN_COSINE
 
 
+# TensorRT FP32 sets no FP16 or INT8 flag and clears TF32, so only kernel choice and the order of FP32 accumulation
+# differ from the CPU reference. 1e-3 of the largest output leaves room for that, a tenth of the bound for PyTorch on
+# CUDA, and is below the error of rounding to FP16. It has not yet been measured on the board.
+TENSORRT_FP32_RELATIVE_TOLERANCE = 1e-3
+
+
+@needs_cuda
+@needs_tensorrt
+def test_tensorrt_fp32_engine_matches_cpu_and_logs_no_reduced_precision(tmp_path, monkeypatch):
+    from peddet_orin import engine_build
+    from peddet_orin.backends import TensorRtBackend
+    from peddet_orin.export import export
+
+    network = SsdNetwork(lively_detector(SEED)).eval()
+    export(network, tmp_path / "network.onnx")
+    RecordingBuildLog.opened = []
+    monkeypatch.setattr(engine_build.runlog, "RunLog", RecordingBuildLog)
+    output = tmp_path / "fp32-trt.engine"
+    arguments = ["--precision", "fp32-trt", "--onnx", str(tmp_path / "network.onnx"), "--output", str(output)]
+    assert engine_build.main(arguments) == 0
+    results = RecordingBuildLog.opened[0].results
+    assert (results["builder_flags"], results["cleared_builder_flags"]) == ([], ["TF32"])
+    assert results["engine_sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
+    batch = seeded_batch()
+    with TensorRtBackend(output) as engine:
+        assert relative_error(cpu_reference(network, batch), engine(batch)) < TENSORRT_FP32_RELATIVE_TOLERANCE
+
+
 # INT8 builds use a small, test-only calibration set: the real 500 images are not needed to show each route works.
 INT8_CALIBRATION_IMAGES = 8
 CALIBRATION_IMAGE_SIZE = (400, 300)  # Width, height.

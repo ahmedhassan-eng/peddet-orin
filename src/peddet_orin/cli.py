@@ -19,7 +19,8 @@ ANNOTATIONS_RELATIVE = Path("annotations") / "instances_val2017.json"
 IMAGES_RELATIVE = Path("val2017")
 ANNOTATIONS = DATA_DIR / ANNOTATIONS_RELATIVE
 IMAGES = DATA_DIR / IMAGES_RELATIVE
-PRECISIONS = ("fp32", "fp16", "int8")
+# fp32 is PyTorch, the PyTorch baseline; fp32-trt is the TensorRT FP32 engine, the precision baseline.
+PRECISIONS = ("fp32", runlog.TENSORRT_FP32_PRECISION, "fp16", "int8")
 CUDA = "cuda"
 USAGE_ERROR_STATUS = 2
 # What a TensorRT backend may raise when the runtime cannot deserialise an engine file.
@@ -117,5 +118,5 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
         "--engine",
         type=Path,
         default=None,
-        help="TensorRT engine for fp16 or int8 (default: artifacts/<precision>.engine in the repository)",
+        help="TensorRT engine for fp32-trt, fp16 or int8 (default: artifacts/<precision>.engine in the repository)",
     )

@@ -350,6 +350,8 @@ def test_benchmark_logs_the_engine_hash_for_tensorrt_and_none_for_fp32(cpu_bench
     engine.write_bytes(b"fp16 engine")
     results = cpu_benchmark("--precision", "fp16", "--engine", str(engine))
     assert results["engine_sha256"] == hashlib.sha256(b"fp16 engine").hexdigest()
+    results = cpu_benchmark("--precision", "fp32-trt", "--engine", str(engine))
+    assert results["engine_sha256"] == hashlib.sha256(b"fp16 engine").hexdigest()
 
 
 def test_benchmark_logs_torchs_cpu_thread_count(cpu_benchmark, monkeypatch):

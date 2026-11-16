@@ -179,7 +179,7 @@ def test_engine_sha256_hashes_the_engine_file_and_is_absent_for_fp32(tmp_path):
     assert cli.engine_sha256(None) == "-"
 
 
-@pytest.mark.parametrize("precision", ["fp32", "fp16"])
+@pytest.mark.parametrize("precision", ["fp32", "fp32-trt", "fp16"])
 def test_evaluate_logs_the_engine_hash(precision, tmp_path, monkeypatch, offline_run):
     make_data_dir(tmp_path)
     engine = tmp_path / "custom.engine"
@@ -189,9 +189,21 @@ def test_evaluate_logs_the_engine_hash(precision, tmp_path, monkeypatch, offline
     monkeypatch.setattr(evaluate, "load_backend", lambda *arguments: _QuietBackend(arguments[3]))
     arguments = ["--precision", precision, "--device", "cpu", "--data-dir", str(tmp_path), "--engine", str(engine)]
     assert evaluate.main(arguments) == 0
-    expected = hashlib.sha256(b"x").hexdigest() if precision == "fp16" else "-"
+    expected = hashlib.sha256(b"x").hexdigest() if precision != "fp32" else "-"
     assert written[0].results["engine_sha256"] == expected
+    assert written[0].precision == precision
     assert written[0].results["torch_num_threads"] == torch.get_num_threads()
+
+
+@pytest.mark.parametrize("name", sorted(MODULES))
+def test_measure_accepts_tensorrt_fp32_with_its_own_engine(name, tmp_path, capsys):
+    """fp32-trt is a TensorRT precision: it needs artifacts/fp32-trt.engine, while fp32 stays PyTorch."""
+    assert cli.PRECISIONS == ("fp32", "fp32-trt", "fp16", "int8")
+    assert cli.default_engine("fp32-trt") == runlog.REPO_ROOT / "artifacts" / "fp32-trt.engine"
+    make_data_dir(tmp_path)
+    arguments = ["--precision", "fp32-trt", "--data-dir", str(tmp_path), "--engine", str(tmp_path / "none.engine")]
+    error = fails_with_one_line(capsys, MODULES[name].main, arguments)
+    assert "python -m peddet_orin.engine_build --precision fp32-trt" in error
 
 
 def test_measure_default_paths_are_under_the_repository_root():

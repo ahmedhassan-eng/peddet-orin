@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Build TensorRT FP16 and INT8 engines from the ONNX network, on the device.
+"""Build TensorRT FP32, FP16 and INT8 engines from the ONNX network, on the device.
+
+TensorRT FP32 (``--precision fp32-trt``) sets neither FP16 nor INT8 and clears TF32, so
+it runs FP32 throughout: it is the precision baseline, the same runtime as FP16 and
+INT8 at full precision.
 
 INT8 uses IInt8EntropyCalibrator2 over the seeded calibration set. Should the
 TensorRT build fail, it falls back to ONNX post-training quantisation, built from
@@ -45,13 +49,17 @@ CALIBRATOR_DEPRECATION_PATTERN = r"Use Deprecated in TensorRT [\d.]+\. Supersede
 PATH_ENTROPY = runlog.INT8_ENTROPY_PATH
 PATH_QDQ = "onnx-ptq-qdq"
 NOT_APPLICABLE = runlog.NOT_APPLICABLE
-PRECISIONS = ("fp16", "int8")
+FP32_TRT = runlog.TENSORRT_FP32_PRECISION
+PRECISIONS = (FP32_TRT, "fp16", "int8")
 EXIT_BAD_INPUT = 2
 PROG = "python -m peddet_orin.engine_build"
 HASH_CHUNK_BYTES = 1 << 20
 # The BuilderFlag names each precision sets, as the build log records them. INT8 sets FP16 as well, so a layer
 # TensorRT does not run in INT8 runs in FP16, not FP32.
 BUILDER_FLAGS = runlog.BUILDER_FLAG_NAMES
+# The BuilderFlag names each precision clears: TF32 for TensorRT FP32, which is on by default and would let
+# convolutions and matrix products round their inputs to TF32.
+CLEARED_FLAGS = runlog.CLEARED_FLAG_NAMES
 
 
 class InputError(ValueError):
@@ -195,9 +203,20 @@ def _build(onnx_path: Path, output: Path, configure) -> None:
 
 
 def _set_builder_flags(config, tensorrt, precision: str) -> None:
-    """Set each of the precision's builder flags on the config."""
+    """Set each of the precision's builder flags on the config, and clear each flag it clears."""
     for name in BUILDER_FLAGS[precision]:
         config.set_flag(getattr(tensorrt.BuilderFlag, name))
+    for name in CLEARED_FLAGS[precision]:
+        config.clear_flag(getattr(tensorrt.BuilderFlag, name))
+
+
+def build_fp32_trt(onnx_path: Path, output: Path) -> None:
+    """Build the TensorRT FP32 engine, the precision baseline: no FP16 or INT8 flag, and TF32 cleared."""
+
+    def configure(config, tensorrt) -> None:
+        _set_builder_flags(config, tensorrt, FP32_TRT)
+
+    _build(onnx_path, output, configure)
 
 
 def build_fp16(onnx_path: Path, output: Path) -> None:
@@ -331,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
         if int8:
             route, failure = build_int8(args.onnx, output, images)
         else:
-            build_fp16(args.onnx, output)
+            (build_fp16 if args.precision == "fp16" else build_fp32_trt)(args.onnx, output)
             route, failure = NOT_APPLICABLE, NOT_APPLICABLE
         log.results.update(
             {
@@ -343,6 +362,7 @@ def main(argv: list[str] | None = None) -> int:
                 "engine_sha256": file_sha256(output),
                 "calibration_cache_sha256": calibration_cache_sha256(route, output),
                 "builder_flags": list(BUILDER_FLAGS[args.precision]),
+                "cleared_builder_flags": list(CLEARED_FLAGS[args.precision]),
             }
         )
     print(f"built {display_path(output)}")

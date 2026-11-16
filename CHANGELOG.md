@@ -114,6 +114,11 @@ All notable changes to this project are recorded here. The format follows
   layout but not every pixel's range, so the full-frame `min()` and `max()` are out of the timed loop. evaluate and
   calibration keep the full check on every image. The judged runs ran the check inside each timed iteration, so
   their end-to-end times include it and were not re-measured.
+- `engine_build --precision fp32-trt` builds a TensorRT FP32 engine, `artifacts/fp32-trt.engine`, the precision
+  baseline: it sets neither `FP16` nor `INT8` and clears `TF32`, so it is FP32 throughout. Its build log records
+  `builder_flags` `[]` and a new optional `cleared_builder_flags`, `["TF32"]` (`[]` for FP16 and INT8). evaluate and
+  benchmark accept `--precision fp32-trt`; `fp32` stays PyTorch, the PyTorch baseline, so the committed logs keep
+  their meaning. `tests/test_gpu.py` gains a sixth GPU test, which builds the engine and checks it against the CPU.
 
 ### Security
 
