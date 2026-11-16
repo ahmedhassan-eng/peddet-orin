@@ -48,6 +48,7 @@ RESULT_KEYS = {
     "stages",
     "postprocess_settings",
     "engine_sha256",
+    "torch_num_threads",
 }
 SUMMARY_KEYS = {"p50_ms", "p90_ms", "p99_ms", "fps"}
 
@@ -348,3 +349,8 @@ def test_benchmark_logs_the_engine_hash_for_tensorrt_and_none_for_fp32(cpu_bench
     engine.write_bytes(b"fp16 engine")
     results = cpu_benchmark("--precision", "fp16", "--engine", str(engine))
     assert results["engine_sha256"] == hashlib.sha256(b"fp16 engine").hexdigest()
+
+
+def test_benchmark_logs_torchs_cpu_thread_count(cpu_benchmark, monkeypatch):
+    monkeypatch.setattr(benchmark.torch, "get_num_threads", lambda: 3)
+    assert cpu_benchmark()["torch_num_threads"] == 3

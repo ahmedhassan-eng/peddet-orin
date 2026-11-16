@@ -105,6 +105,9 @@ All notable changes to this project are recorded here. The format follows
   calibrator never reads one, so a cache present afterwards is that build's. Each eval and benchmark log records
   the `engine_sha256` of the engine it ran, or `-` for FP32, so a measurement can be traced to its build. The log
   check enforces each form when present; the committed logs predate the keys and stay valid.
+- Each eval and benchmark log records `torch_num_threads`, `torch.get_num_threads()` as the run begins: PyTorch's
+  CPU threads run preprocessing and postprocessing at every precision, and FP32 inference on the CPU. The key is
+  optional in the log check, a positive integer, and the committed logs predate it.
 
 ### Security
 

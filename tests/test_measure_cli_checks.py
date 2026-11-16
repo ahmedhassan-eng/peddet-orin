@@ -184,6 +184,7 @@ def test_evaluate_logs_the_engine_hash(precision, tmp_path, monkeypatch, offline
     assert evaluate.main(arguments) == 0
     expected = hashlib.sha256(b"x").hexdigest() if precision == "fp16" else "-"
     assert written[0].results["engine_sha256"] == expected
+    assert written[0].results["torch_num_threads"] == torch.get_num_threads()
 
 
 def test_measure_default_paths_are_under_the_repository_root():

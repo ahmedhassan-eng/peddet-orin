@@ -501,9 +501,13 @@ OPTIONAL_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
     "eval": {
         # The sha256 of the TensorRT engine file that ran, or "-" for fp32, which runs no engine file.
         "engine_sha256": _is_string,
+        # torch.get_num_threads() as the run began: PyTorch's intra-op CPU threads, which preprocessing and
+        # postprocessing use at every precision, and FP32 inference uses on the CPU.
+        "torch_num_threads": lambda value: _is_integer(value) and value >= 1,
     },
     "benchmark": {
         "engine_sha256": _is_string,
+        "torch_num_threads": lambda value: _is_integer(value) and value >= 1,
         # One summary per stage of the timed iteration, each over every timed iteration of every repeat.
         "stages": _is_stages,
         # The postprocess's score and NMS IoU thresholds, per-class top-k, detection cap and class count.

@@ -368,6 +368,19 @@ def test_a_builds_engine_and_cache_hashes_are_optional_and_checked():
     )
 
 
+@pytest.mark.parametrize("kind", ["eval", "benchmark"])
+def test_a_measurements_torch_thread_count_is_optional_and_checked(kind):
+    def problems(threads):
+        return runlog.validate_log(make_log(kind, results={"torch_num_threads": threads}))
+
+    assert problems(1) == problems(6) == []
+    for bad in (0, -1, 6.0, "6", True):
+        assert problems(bad) == [f"bad result: {kind} torch_num_threads"], bad
+    assert "unexpected result: build torch_num_threads" in runlog.validate_log(
+        make_log("build", results={"torch_num_threads": 6})
+    )
+
+
 @pytest.mark.parametrize("kind", sorted(RESULTS))
 def test_each_required_result_is_enforced(kind):
     for key in RESULTS[kind]:

@@ -9,6 +9,7 @@ import io
 import sys
 from pathlib import Path
 
+import torch
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
@@ -110,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         usage_error(parser.prog, f"annotations file {annotations} lists no images")
     with runlog.RunLog("eval", args.precision, EVAL_SEED, {"images": len(image_ids)}) as log:
         engine_digest = engine_sha256(engine)
+        threads = torch.get_num_threads()
         detector = load_detector(pretrained=True)
         postprocess = Postprocessor.from_torchvision(detector)
         backend = load_backend(parser.prog, args.precision, args.device, detector, engine)
@@ -119,7 +121,13 @@ def main(argv: list[str] | None = None) -> int:
             release_backend(backend)
         scores = person_ap(ground_truth, detections, image_ids)
         log.results.update(
-            {**scores, "runtime": backend.label, "detections": len(detections), "engine_sha256": engine_digest}
+            {
+                **scores,
+                "runtime": backend.label,
+                "detections": len(detections),
+                "engine_sha256": engine_digest,
+                "torch_num_threads": threads,
+            }
         )
     print(f"{args.precision}: person AP {scores['ap']:.4f}, AP50 {scores['ap50']:.4f}")
     return 0
