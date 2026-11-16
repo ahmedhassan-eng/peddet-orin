@@ -19,6 +19,7 @@ NEGATIVE_TESTS = {
     "tests/test_debug.py": "test_the_generic_debug_variable_turns_nothing_on",
     "tests/test_device_resources.py": "test_write_rejects_a_wrong_shape_with_the_same_byte_count",
     "tests/test_internal_ids.py": "test_an_id_planted_in_any_tracked_path_is_found",
+    "tests/test_locks.py": "test_a_lock_that_drifts_from_its_pin_file_is_detected",
     "tests/test_measure_cli_checks.py": "test_measure_corrupt_engine_is_refused",
     "tests/test_negative_controls.py": "test_a_readme_sentence_with_one_number_changed_is_refused",
     "tests/test_network_guard.py": "test_a_test_that_opens_a_socket_fails",

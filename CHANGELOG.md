@@ -104,6 +104,13 @@ All notable changes to this project are recorded here. The format follows
   torchvision were skipped unaudited, since PyPI does not know their `+cpu` builds, and the board file was not
   audited. The audit now reads copies with the local suffix stripped, so torch 2.14.1 and torchvision 0.29.1 are
   audited as their public releases.
+- CI, `scripts/ci_local.sh` and the README Quickstart install from hashed locks with `--require-hashes`:
+  `requirements/ci-cpu.lock`, `constraints/jetson-orin.lock` and `requirements/pip-audit.lock`, so every file pip
+  installs, from PyPI or the PyTorch index, must match a recorded sha256. The package itself installs with
+  `--no-build-isolation`, so its build backend is the pinned setuptools. `scripts/lock_hashes.py` writes the two pin
+  locks from their pin files without resolving anything, and `tests/test_locks.py` checks they agree.
+- `pyproject.toml` declares `pillow>=13.0.0` and, for the tests, `pytest>=9.0.3`, so an install outside the pinned
+  sets cannot pick the releases pip-audit lists; the floors were 10.3 and 7.4.
 - The judged runs used Pillow 12.3.0. The pins name 13.0.0, the first release with the fixes pip-audit lists, and
   the numbers were not re-measured with it; JPEG decoding by Pillow is inside the end-to-end timings, not the
   engine timings.

@@ -16,12 +16,15 @@ On any Linux machine, the CPU-only set runs the linter and the tests:
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install -r requirements/ci-cpu.txt
-python -m pip install --no-deps -e .
+python -m pip install --require-hashes -r requirements/ci-cpu.lock
+python -m pip install --no-deps --no-build-isolation -e .
 ```
 
-On a Jetson Orin, follow the README's "Quickstart" instead, which pins every package it installs with
-`constraints/jetson-orin.txt`.
+On a Jetson Orin, follow the README's "Quickstart" instead, which installs the board's set from
+`constraints/jetson-orin.lock`. The `.lock` files are made from the `.txt` pin files beside them with
+`python scripts/lock_hashes.py <pin file> <lock file>` (add `--extra-index-url https://download.pytorch.org/whl/cu130`
+for the board's); after changing a pin, regenerate its lock. `tests/test_locks.py` fails if a lock and its pin file
+differ.
 
 The package runs from a source checkout. Its commands find the checkout two levels above the package, or the one
 `PDORIN_ROOT` names, and refuse to start anywhere else.

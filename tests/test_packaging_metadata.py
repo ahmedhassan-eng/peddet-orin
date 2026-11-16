@@ -18,7 +18,9 @@ JETSON_PINS = REPO_ROOT / "constraints" / "jetson-orin.txt"
 PACKAGE = REPO_ROOT / "src" / "peddet_orin"
 PIN = re.compile(r"^(?P<name>[A-Za-z0-9_.-]+)==(?P<version>[^;\s]+)\s*(?:;\s*(?P<marker>.+))?$")
 # pillow 10.3.0 is the first release with the fix for CVE-2024-28219.
-FIRST_FIXED_PILLOW = (10, 3, 0)
+# The first releases with the fixes pip-audit lists against the versions before them.
+FIRST_FIXED_PILLOW = (13, 0, 0)
+FIRST_FIXED_PYTEST = (9, 0, 3)
 
 
 def project() -> dict:
@@ -93,6 +95,18 @@ def test_pillow_includes_the_cve_2024_28219_fix_and_agrees_across_pin_files():
     ci, orin = pins(CI_PINS)["pillow"], pins(JETSON_PINS)["pillow"]
     assert ci == orin and len(ci) == 1
     assert tuple(int(part) for part in ci[0][0].split(".")) >= FIRST_FIXED_PILLOW
+
+
+def floor(requirement: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in requirement.split(">=", 1)[1].split(",")[0].split("."))
+
+
+def test_the_declared_floors_exclude_the_releases_pip_audit_lists():
+    dependencies = {re.split(r"[<>=]", item, maxsplit=1)[0]: item for item in project()["dependencies"]}
+    tests = {re.split(r"[<>=]", item, maxsplit=1)[0]: item for item in project()["optional-dependencies"]["test"]}
+    assert floor(dependencies["pillow"]) >= FIRST_FIXED_PILLOW
+    assert floor(tests["pytest"]) >= FIRST_FIXED_PYTEST
+    assert floor("pillow>=10.3") < FIRST_FIXED_PILLOW
 
 
 # The Jetson venv runs Python 3.12. torch and torchvision are the same releases in both files but different

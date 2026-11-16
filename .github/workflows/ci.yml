@@ -25,12 +25,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install the CPU-only set
         run: |
-          python -m pip install -r requirements/ci-cpu.txt
-          python -m pip install --no-deps -e .
+          python -m pip install --require-hashes -r requirements/ci-cpu.lock
+          python -m pip install --no-deps --no-build-isolation -e .
       - name: Audit both pin files for known vulnerabilities
         run: |
           python -m venv --clear .cache/pip-audit
-          .cache/pip-audit/bin/python -m pip install pip-audit==2.10.1
+          .cache/pip-audit/bin/python -m pip install --require-hashes -r requirements/pip-audit.lock
           sed -E 's/^([A-Za-z0-9_.-]+==[^+ ;]+)[+][A-Za-z0-9.]+/\1/' requirements/ci-cpu.txt > .cache/pip-audit/ci-cpu.txt
           sed -E 's/^([A-Za-z0-9_.-]+==[^+ ;]+)[+][A-Za-z0-9.]+/\1/' constraints/jetson-orin.txt > .cache/pip-audit/jetson-orin.txt
           .cache/pip-audit/bin/pip-audit --strict --no-deps --disable-pip -r .cache/pip-audit/ci-cpu.txt

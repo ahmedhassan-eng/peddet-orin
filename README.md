@@ -217,11 +217,11 @@ export TORCH_HOME="$PWD/.cache/torch" PIP_CACHE_DIR="$PWD/.cache/pip" XDG_CACHE_
 export MPLCONFIGDIR="$PWD/.cache/mpl" CUDA_CACHE_PATH="$PWD/.cache/cuda"
 python3.12 -m venv .venv --system-site-packages
 . .venv/bin/activate
-pip install -c constraints/jetson-orin.txt --extra-index-url https://download.pytorch.org/whl/cu130 "torch==2.14.1+cu130" "torchvision==0.29.1+cu130"
-pip install -c constraints/jetson-orin.txt -e ".[test]"
+pip install --require-hashes -r constraints/jetson-orin.lock
+pip install --no-deps --no-build-isolation -e .
 ```
 
-The venv uses `--system-site-packages` because TensorRT 10.16.2.10 comes from the JetPack system Python. `constraints/jetson-orin.txt` pins every package that pip installs into the venv; TensorRT, and any package the system Python already provides at a compatible version, are used from the system.
+The venv uses `--system-site-packages` because TensorRT 10.16.2.10 comes from the JetPack system Python. `constraints/jetson-orin.txt` pins every package that pip installs into the venv, and `constraints/jetson-orin.lock`, made from it by `scripts/lock_hashes.py`, adds the sha256 of every file of each pinned release, so `--require-hashes` installs exactly that set and refuses any other file. TensorRT, and numpy, whose system version equals its pin, are used from the system.
 
 The package runs from this source checkout, not from an installed wheel. Its commands find the checkout two levels above the package, or the directory `PDORIN_ROOT` names, and refuse to start anywhere else. `python -m peddet_orin` lists the commands; each is also installed as a `peddet-orin-<command>` script.
 
@@ -283,10 +283,10 @@ CI runs on every push to `main` and on every pull request, cancels a run that a 
 <!-- ci:begin -->
 ```sh
 # CI: ubuntu-latest, Python 3.11 and 3.12
-python -m pip install -r requirements/ci-cpu.txt
-python -m pip install --no-deps -e .
+python -m pip install --require-hashes -r requirements/ci-cpu.lock
+python -m pip install --no-deps --no-build-isolation -e .
 python -m venv --clear .cache/pip-audit
-.cache/pip-audit/bin/python -m pip install pip-audit==2.10.1
+.cache/pip-audit/bin/python -m pip install --require-hashes -r requirements/pip-audit.lock
 sed -E 's/^([A-Za-z0-9_.-]+==[^+ ;]+)[+][A-Za-z0-9.]+/\1/' requirements/ci-cpu.txt > .cache/pip-audit/ci-cpu.txt
 sed -E 's/^([A-Za-z0-9_.-]+==[^+ ;]+)[+][A-Za-z0-9.]+/\1/' constraints/jetson-orin.txt > .cache/pip-audit/jetson-orin.txt
 .cache/pip-audit/bin/pip-audit --strict --no-deps --disable-pip -r .cache/pip-audit/ci-cpu.txt
@@ -297,7 +297,7 @@ PDORIN_STRICT_SKIPS=1 python -m pytest -rs
 ```
 <!-- ci:end -->
 
-Negative controls: `tests/planted_defects.py` registers 38 planted defects, and `python scripts/check_planted_defects.py` plants each one in a fresh clone and checks that its test fails; the release check requires all 38 to be caught. They cover 22 of the 36 test files, 14 more carry in-file negative tests, and no test file has neither. `tests/test_negative_controls.py` fails if these numbers differ from the registry and the test files.
+Negative controls: `tests/planted_defects.py` registers 38 planted defects, and `python scripts/check_planted_defects.py` plants each one in a fresh clone and checks that its test fails; the release check requires all 38 to be caught. They cover 22 of the 37 test files, 15 more carry in-file negative tests, and no test file has neither. `tests/test_negative_controls.py` fails if these numbers differ from the registry and the test files.
 
 ## Repository layout
 
@@ -312,11 +312,15 @@ peddet-orin/
 │   │   └── ci.yml                   pip-audit, ruff and the CPU tests on Python 3.11 and 3.12
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── constraints/
-│   └── jetson-orin.txt              every pin for the Jetson venv
+│   ├── jetson-orin.lock             the same pins with the sha256 of every file
+│   └── jetson-orin.txt              every pin for the board venv
 ├── manifests/
 │   └── calibration_train2017.sha256  the 500 calibration images and their sha256 hashes
 ├── requirements/
-│   └── ci-cpu.txt                   the CPU-only set for CI
+│   ├── ci-cpu.lock                  the same pins with the sha256 of every file
+│   ├── ci-cpu.txt                   the CPU-only set for CI
+│   ├── pip-audit.lock               pip-audit and its dependencies, with hashes
+│   └── pip-audit.txt                the pip-audit release CI audits with
 ├── runs-repeat/                     further full runs, one directory each, with their QUIET lines and samples
 ├── runs/                            one JSON log per measurement; the results table is built from them
 ├── scripts/
@@ -325,7 +329,8 @@ peddet-orin/
 │   ├── compare_logs.py              checks a re-measure against the judged median within the PRD tolerances
 │   ├── fetch_coco.py                fetches COCO 2017 over HTTPS from the official URLs into data/
 │   ├── generate_table.py            writes the README's generated blocks from runs/ and runs-repeat/
-│   └── generate_tree.py             writes this tree from git ls-files
+│   ├── generate_tree.py             writes this tree from git ls-files
+│   └── lock_hashes.py               writes a hashed .lock beside a pin file
 ├── src/
 │   └── peddet_orin/                 export, engine builds, evaluation, benchmarks and run logs
 ├── tests/                           CPU tests, GPU and TensorRT tests, and the repository-rule tests

@@ -33,7 +33,7 @@ dependencies = [
     "onnx>=1.16",
     "onnxruntime>=1.18",
     "pycocotools>=2.0.8",
-    "pillow>=10.3",
+    "pillow>=13.0.0",
 ]
 
 [project.urls]
@@ -43,7 +43,7 @@ Issues = "https://github.com/ahmedhassan-eng/peddet-orin/issues"
 Changelog = "https://github.com/ahmedhassan-eng/peddet-orin/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-test = ["pytest>=7.4", "ruff==0.17.4"]
+test = ["pytest>=9.0.3", "ruff==0.17.4"]
 
 [project.scripts]
 peddet-orin = "peddet_orin.__main__:main"

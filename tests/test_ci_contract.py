@@ -222,7 +222,8 @@ def test_ci_cancels_superseded_runs_and_times_out():
     assert 0 < int(timeouts[0]) <= 60
 
 
-AUDIT = re.compile(r"pip install pip-audit==(?P<version>\d+\.\d+\.\d+)$")
+# pip-audit and its dependencies install from a hashed lock that pins pip-audit (tests/test_locks.py checks the lock).
+AUDIT = re.compile(r"pip install --require-hashes -r requirements/pip-audit\.lock$")
 # Each pin file is audited strictly, so a package pip-audit cannot find fails the run. The copies strip PyTorch's
 # local version suffix (+cpu, +cu130), which PyPI does not know, so torch and torchvision are audited as their public
 # releases.
@@ -235,7 +236,7 @@ def audit_problems(commands: list[str]) -> list[str]:
     """Return why the commands do not strictly audit both pin files with a pinned pip-audit."""
     problems = []
     if not any(AUDIT.search(command) for command in commands):
-        problems.append("pip-audit is not installed at a pinned version")
+        problems.append("pip-audit is not installed from its hashed lock")
     for source, name in AUDITED.items():
         copied = PUBLIC_COPY.format(source=source, name=name) in commands
         audited = any(command.endswith(AUDIT_COMMAND.format(name=name)) for command in commands)
@@ -263,6 +264,13 @@ def test_an_audit_that_is_not_strict_or_skips_a_file_is_detected():
 
 def test_an_unpinned_pip_audit_is_detected():
     text = WORKFLOW.read_text()
-    planted = re.sub(r"pip-audit==\S+", "pip-audit", text)
+    planted = text.replace("pip install --require-hashes -r requirements/pip-audit.lock", "pip install pip-audit")
     assert planted != text
-    assert audit_problems(workflow_commands(planted)) == ["pip-audit is not installed at a pinned version"]
+    assert audit_problems(workflow_commands(planted)) == ["pip-audit is not installed from its hashed lock"]
+
+
+def test_ci_installs_from_the_hashed_locks_without_build_isolation():
+    commands = workflow_commands(WORKFLOW.read_text())
+    assert "python -m pip install --require-hashes -r requirements/ci-cpu.lock" in commands
+    assert "python -m pip install --no-deps --no-build-isolation -e ." in commands
+    assert not any(" -r requirements/ci-cpu.txt" in command and "install" in command for command in commands)
