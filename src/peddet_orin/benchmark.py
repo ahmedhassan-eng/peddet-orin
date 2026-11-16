@@ -30,6 +30,7 @@ from peddet_orin.cli import (
     IMAGES_RELATIVE,
     HelpFormatter,
     add_common_options,
+    check_device,
     check_engine,
     load_backend,
     release_backend,
@@ -332,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
     pool = image_pool(images_dir)
     if not pool:
         usage_error(parser.prog, f"{images_dir} holds no .jpg images; run python scripts/fetch_coco.py val")
+    check_device(parser.prog, args.precision, args.device)
 
     counts = {"warmup": args.warmup, "timed": args.iterations, "repeats": args.repeats, "batch": 1}
     with runlog.RunLog("benchmark", args.precision, BENCHMARK_SEED, counts) as log:

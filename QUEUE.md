@@ -7,7 +7,6 @@
 | Count of other GPU processes on this board, which NVML does not report here | planned for 0.2.0 |
 | Move the `tegrastats` reader out of the timed process, as the clock reader already is | planned for 0.2.0 |
 | Drop `inferred_slice` from the `gpu_check` log, or record `none` when PyTorch's warning excludes this capability | planned for 0.2.0 |
-| A one-line error, not a traceback, for `--precision fp32 --device cuda` on a host with no usable GPU | planned for 0.2.0 |
 | Check each TensorRT I/O tensor's dtype is FLOAT before allocating its buffer | planned for 0.2.0 |
 | One sentinel for "no entropy failure" in build logs, enforced by the log check | planned for 0.2.0 |
 | Format the tree with `ruff format` and check it in CI | planned for 0.2.0 |

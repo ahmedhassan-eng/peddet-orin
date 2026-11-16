@@ -7,6 +7,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import torch
+
 from peddet_orin import runlog
 from peddet_orin.backends import PytorchBackend, TensorRtBackend
 from peddet_orin.engine_build import ARTIFACTS
@@ -69,6 +71,19 @@ def release_backend(backend) -> None:
     close = getattr(backend, "close", None)
     if close is not None:
         close()
+
+
+def check_device(prog: str, precision: str, device: str) -> None:
+    """Exit with one line if FP32's torch device is not a device name, or is CUDA on a host where PyTorch finds none.
+    TensorRT precisions always use the GPU and ignore ``--device``."""
+    if precision != "fp32":
+        return
+    try:
+        kind = torch.device(device).type
+    except (RuntimeError, ValueError):
+        usage_error(prog, f"--device {device} is not a torch device; use cuda or cpu")
+    if kind == CUDA and not torch.cuda.is_available():
+        usage_error(prog, f"--device {device}: PyTorch finds no usable CUDA device here; use --device cpu")
 
 
 def load_backend(prog: str, precision: str, device: str, detector, engine_path: Path | None):

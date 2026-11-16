@@ -80,6 +80,16 @@ def test_evaluate_missing_image_dir_names_the_val_fetch(tmp_path, capsys):
 
 
 @pytest.mark.parametrize("name", sorted(MODULES))
+@pytest.mark.parametrize("device", ["cuda", "cuda:0", "nonsense"])
+def test_measure_fp32_on_an_unusable_device_is_one_line(name, device, tmp_path, capsys, monkeypatch):
+    make_data_dir(tmp_path)
+    monkeypatch.setattr(cli.torch.cuda, "is_available", lambda: False)
+    arguments = ["--precision", "fp32", "--device", device, "--data-dir", str(tmp_path)]
+    error = fails_with_one_line(capsys, MODULES[name].main, arguments)
+    assert f"--device {device}" in error
+
+
+@pytest.mark.parametrize("name", sorted(MODULES))
 def test_measure_missing_engine_names_the_build_command(name, tmp_path, capsys):
     make_data_dir(tmp_path)
     arguments = ["--precision", "int8", "--data-dir", str(tmp_path), "--engine", str(tmp_path / "none.engine")]

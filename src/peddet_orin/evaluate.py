@@ -18,6 +18,7 @@ from peddet_orin.cli import (
     IMAGES_RELATIVE,
     HelpFormatter,
     add_common_options,
+    check_device,
     check_engine,
     load_backend,
     release_backend,
@@ -98,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     annotations, images = check_data(parser.prog, args.data_dir)
     engine = check_engine(parser.prog, args.precision, args.engine)
+    check_device(parser.prog, args.precision, args.device)
 
     with contextlib.redirect_stdout(io.StringIO()):
         ground_truth = COCO(str(annotations))

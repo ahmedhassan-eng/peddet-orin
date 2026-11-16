@@ -70,6 +70,8 @@ All notable changes to this project are recorded here. The format follows
   sets it, so a missing CUDA device or TensorRT no longer passes quietly.
 - A planted defect for `gpu_check`'s slice rule covers `tests/test_gpu_check.py`, the last test file with no
   negative control; `tests/test_negative_controls.py` now fails if any test file has neither.
+- evaluate and benchmark refuse `--precision fp32` with a `--device` that is not a torch device, or is CUDA on
+  a host where PyTorch finds none, with one line and exit 2 (PRD R-14); it was a traceback.
 
 ### Security
 
