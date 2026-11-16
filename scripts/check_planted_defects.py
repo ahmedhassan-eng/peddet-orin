@@ -2,8 +2,10 @@
 """Plant each registered defect in a fresh clone of HEAD and check that its named test catches it.
 
 For every entry in tests/planted_defects.py: the test must pass in the clean clone and fail once the defect is
-planted. Entries that need a GPU run only where CUDA is available. Prints one PLANT line per entry, then
-"PLANTED DONE PASS" or "PLANTED DONE FAIL". Usage: python scripts/check_planted_defects.py
+planted, with pytest's "tests failed" status. Entries that need a GPU run only where CUDA is available. Prints one
+PLANT line per entry, then "PLANTED DONE PASS" when every entry ran and was caught, "PLANTED DONE INCOMPLETE <n> not
+run" when none failed but some needed a GPU it did not have, or "PLANTED DONE FAIL"; only PASS exits 0.
+Usage: python scripts/check_planted_defects.py
 """
 
 import os
@@ -45,9 +47,21 @@ def cuda_available() -> bool:
     return torch.cuda.is_available()
 
 
+# pytest's exit status when tests ran and some failed; a usage error, an unknown test or nothing collected is not
+# a caught defect.
+TESTS_FAILED = 1
+
+
+def verdict(failures: int, not_run: int) -> str:
+    """The last line: PASS only when every entry ran and was caught."""
+    if failures:
+        return "PLANTED DONE FAIL"
+    return f"PLANTED DONE INCOMPLETE {not_run} not run" if not_run else "PLANTED DONE PASS"
+
+
 def main() -> int:
     gpu = cuda_available()
-    failures = 0
+    failures = not_run = 0
     (REPO_ROOT / ".cache").mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="planted-", dir=REPO_ROOT / ".cache"))
     try:
@@ -55,6 +69,7 @@ def main() -> int:
         for defect in DEFECTS:
             if defect.get("needs") == "gpu" and not gpu:
                 print(f"PLANT {defect['id']} not-run (needs a GPU)")
+                not_run += 1
                 continue
             before = run_test(clean, defect["catches"])
             clone = fresh_clone(work, defect["id"])
@@ -66,14 +81,15 @@ def main() -> int:
                 continue
             path.write_text(text.replace(defect["old"], defect["new"]))
             after = run_test(clone, defect["catches"])
-            caught = before == 0 and after != 0
+            caught = before == 0 and after == TESTS_FAILED
             failures += not caught
             print(f"PLANT {defect['id']} clean-rc={before} planted-rc={after} {'caught' if caught else 'FAIL'}")
             shutil.rmtree(clone)
     finally:
         shutil.rmtree(work)
-    print(f"PLANTED DONE {'PASS' if failures == 0 else 'FAIL'}")
-    return 1 if failures else 0
+    line = verdict(failures, not_run)
+    print(line)
+    return 0 if line == "PLANTED DONE PASS" else 1
 
 
 if __name__ == "__main__":

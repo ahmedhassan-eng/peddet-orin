@@ -96,6 +96,12 @@ class StrictSkips:
         if report.skipped:
             self.skipped.append((report.nodeid.rsplit("::", 1)[-1], skip_reason(report)))
 
+    def pytest_collectreport(self, report) -> None:
+        # A module that skips as it is collected (pytest.importorskip, or skip with allow_module_level) skips all
+        # its tests without a run-phase report; it is recorded under the module's path.
+        if report.skipped:
+            self.skipped.append((report.nodeid, skip_reason(report)))
+
     @pytest.hookimpl(trylast=True)
     def pytest_sessionfinish(self, session, exitstatus) -> None:
         gpu = os.environ.get(GPU_VARIABLE) == "1"

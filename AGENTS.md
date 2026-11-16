@@ -10,7 +10,7 @@ These rules apply to everyone who changes this repository, whether a person or a
 
 ## Network and GPU
 
-- The tests need no network: `tests/network_guard.py` fails any test that opens a socket. Only `pip`, the PyTorch index and torchvision's weights download need a network, and `scripts/fetch_coco.py` fetches the data.
+- The tests need no network: `tests/network_guard.py` fails any test that looks up a name or connects or sends on an internet socket. Only `pip`, the PyTorch index and torchvision's weights download need a network, and `scripts/fetch_coco.py` fetches the data.
 - The GPU and TensorRT tests in `tests/test_gpu.py` skip without a CUDA device or TensorRT; on the board, run the suite with `PDORIN_REQUIRE_GPU=1` so such a skip fails. Run one GPU job at a time: two at once spoil each other's timings.
 
 ## Measurements

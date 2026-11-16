@@ -134,6 +134,22 @@ def test_create_connection_is_blocked_before_any_lookup(network_guard):
     network_guard.clear()
 
 
+@pytest.mark.parametrize(
+    ("name", "arguments"),
+    [
+        ("gethostbyname", ("localhost",)),
+        ("gethostbyname_ex", ("localhost",)),
+        ("gethostbyaddr", ("127.0.0.1",)),
+        ("getnameinfo", (("127.0.0.1", 80), 0)),
+    ],
+)
+def test_every_name_lookup_is_blocked(network_guard, name, arguments):
+    with pytest.raises(NetworkBlocked, match=name):
+        getattr(socket, name)(*arguments)
+    assert network_guard == [name]
+    network_guard.clear()
+
+
 def test_a_local_unix_datagram_still_works():
     left, right = socket.socketpair(socket.AF_UNIX, socket.SOCK_DGRAM)
     with left, right:

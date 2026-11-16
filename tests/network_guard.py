@@ -3,9 +3,12 @@
 
 The guard is installed once for the whole session, at pytest_configure, before any
 fixture of any scope runs, so session- and module-scoped fixtures and test-module
-imports are guarded too. It blocks name lookups (getaddrinfo, create_connection) and
+imports are guarded too. It blocks the socket module's name lookups (getaddrinfo,
+gethostbyname, gethostbyname_ex, gethostbyaddr, getnameinfo) and create_connection, and
 every way an internet socket sends or connects: connect, connect_ex, sendto and
-sendmsg. Local (AF_UNIX) sockets remain usable, because they never leave the machine.
+sendmsg. Opening a socket is allowed; local (AF_UNIX) sockets remain usable, because
+they never leave the machine. It guards this process only: a subprocess a test starts,
+or the C-level _socket module used directly, is not guarded.
 
 Every attempt is also remembered, so a test or fixture that swallows the exception
 still fails: the phase (setup, call or teardown) in which it happened is reported as
@@ -23,7 +26,14 @@ PLUGIN_NAME = "peddet-orin-network-guard"
 # The guarded socket methods, which refuse only for internet families.
 SOCKET_METHODS = ("connect", "connect_ex", "sendto", "sendmsg")
 # The guarded module functions, which always refuse.
-MODULE_FUNCTIONS = ("getaddrinfo", "create_connection")
+MODULE_FUNCTIONS = (
+    "getaddrinfo",
+    "gethostbyname",
+    "gethostbyname_ex",
+    "gethostbyaddr",
+    "getnameinfo",
+    "create_connection",
+)
 
 
 class NetworkBlocked(RuntimeError):

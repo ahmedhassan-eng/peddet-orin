@@ -55,6 +55,27 @@ def test_the_same_skip_passes_a_lenient_run(pytester, monkeypatch):
     assert _planted_run(pytester, monkeypatch, strict=False).ret == 0
 
 
+MODULE_SKIP_PLANTED = """
+import pytest
+
+pytest.importorskip("peddet_orin_no_such_module")
+
+
+def test_never_collected():
+    pass
+"""
+
+
+def test_a_module_that_skips_at_collection_fails_a_strict_run(pytester, monkeypatch):
+    result = _planted_run(pytester, monkeypatch, strict=True, source=MODULE_SKIP_PLANTED)
+    assert result.ret != 0
+    result.stdout.fnmatch_lines(["*unexpected skips: *"])
+    lenient = _planted_run(pytester, monkeypatch, strict=False, source=MODULE_SKIP_PLANTED)
+    # Without strict mode the module's skip is not reported; pytest itself exits "no tests collected".
+    assert lenient.ret == pytest.ExitCode.NO_TESTS_COLLECTED
+    assert "unexpected skips" not in lenient.stdout.str()
+
+
 GPU_PLANTED = """
 import pytest
 

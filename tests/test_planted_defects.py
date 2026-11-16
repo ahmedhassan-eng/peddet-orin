@@ -60,3 +60,12 @@ def test_a_stale_registry_entry_is_detected():
 
 def test_a_duplicate_id_is_detected():
     assert registry_problems([DEFECTS[0], DEFECTS[0]], tracked(), collected()) == [f"id used twice: {DEFECTS[0]['id']}"]
+
+
+def test_the_planted_check_passes_only_when_every_entry_ran_and_was_caught():
+    import check_planted_defects
+
+    assert check_planted_defects.verdict(0, 0) == "PLANTED DONE PASS"
+    assert check_planted_defects.verdict(0, 1) == "PLANTED DONE INCOMPLETE 1 not run"
+    assert check_planted_defects.verdict(1, 1) == "PLANTED DONE FAIL"
+    assert check_planted_defects.TESTS_FAILED == 1
