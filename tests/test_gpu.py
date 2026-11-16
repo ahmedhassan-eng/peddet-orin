@@ -97,9 +97,10 @@ def test_tensorrt_check_fails_on_unnormalised_input(fp16_engine):
     assert min_cosine(cpu_reference(network, normalise(raw)), engine(raw)) < FP16_MIN_COSINE
 
 
-# TensorRT FP32 sets no FP16 or INT8 flag and clears TF32, so only kernel choice and the order of FP32 accumulation
-# differ from the CPU reference. 1e-3 of the largest output leaves room for that, a tenth of the bound for PyTorch on
-# CUDA, and is below the error of rounding to FP16. It has not yet been measured on the board.
+# A first bound, not yet measured: the board's GPU run is to confirm or adjust it. It is a tenth of the bound for
+# PyTorch on CUDA. It is not shown to separate FP32 from TF32 or FP16; the logged builder flags are what show that no
+# reduced-precision flag was set. No check of the engine's per-layer precision is made: TensorRT's IEngineInspector
+# reports it only for an engine built with ProfilingVerbosity.DETAILED, which the measured engines are not.
 TENSORRT_FP32_RELATIVE_TOLERANCE = 1e-3
 
 
@@ -118,7 +119,7 @@ def test_tensorrt_fp32_engine_matches_cpu_and_logs_no_reduced_precision(tmp_path
     arguments = ["--precision", "fp32-trt", "--onnx", str(tmp_path / "network.onnx"), "--output", str(output)]
     assert engine_build.main(arguments) == 0
     results = RecordingBuildLog.opened[0].results
-    assert (results["builder_flags"], results["cleared_builder_flags"]) == ([], ["TF32"])
+    assert results["builder_flags"] == engine_build.runlog.BUILDER_FLAG_NAMES["fp32-trt"] == []
     assert results["engine_sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
     batch = seeded_batch()
     with TensorRtBackend(output) as engine:
@@ -208,6 +209,7 @@ def test_tensorrt_int8_entropy_engine_builds_runs_and_logs_its_path(int8_inputs)
     log = RecordingBuildLog.opened[0]
     assert log.results["int8_path"] == engine_build.PATH_ENTROPY
     assert log.results["entropy_failure"] == ""
+    assert log.results["builder_flags"] == engine_build.runlog.BUILDER_FLAG_NAMES["int8"] == ["FP16", "INT8", "TF32"]
     assert log.results["engine_bytes"] == output.stat().st_size > 0
     assert log.iterations == {"calibration_images": INT8_CALIBRATION_IMAGES}
     check_int8_engine_runs(network, output)
@@ -226,6 +228,7 @@ def test_tensorrt_int8_qdq_fallback_engine_builds_runs_and_logs_its_path(int8_in
     assert engine_build.main(arguments) == 0
     log = RecordingBuildLog.opened[0]
     assert log.results["int8_path"] == engine_build.PATH_QDQ
+    assert log.results["builder_flags"] == engine_build.runlog.BUILDER_FLAG_NAMES["int8"] == ["FP16", "INT8", "TF32"]
     assert log.results["entropy_failure"] == "TensorRtBuildError: entropy build failure forced by the test"
     assert (output.parent / engine_build.QDQ_ONNX_NAME).is_file()
     check_int8_engine_runs(network, output)

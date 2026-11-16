@@ -54,12 +54,12 @@ PRECISIONS = (FP32_TRT, "fp16", "int8")
 EXIT_BAD_INPUT = 2
 PROG = "python -m peddet_orin.engine_build"
 HASH_CHUNK_BYTES = 1 << 20
-# The BuilderFlag names each precision sets, as the build log records them. INT8 sets FP16 as well, so a layer
-# TensorRT does not run in INT8 runs in FP16, not FP32.
+# The precision flags the build controls, and, per precision, the ones it leaves on; it clears the rest. INT8 has
+# FP16 on as well, so a layer TensorRT does not run in INT8 runs in FP16, not FP32. TF32 is on by default in
+# TensorRT and stays on for FP16 and INT8, as in every earlier build; TensorRT FP32 clears it, so it is FP32
+# throughout. The build log records the flags read back from the config, not this table.
+PRECISION_FLAGS = runlog.PRECISION_FLAG_NAMES
 BUILDER_FLAGS = runlog.BUILDER_FLAG_NAMES
-# The BuilderFlag names each precision clears: TF32 for TensorRT FP32, which is on by default and would let
-# convolutions and matrix products round their inputs to TF32.
-CLEARED_FLAGS = runlog.CLEARED_FLAG_NAMES
 
 
 class InputError(ValueError):
@@ -181,8 +181,11 @@ def _make_calibrator(images: list[Path], cache_path: Path):
     return EntropyCalibrator()
 
 
-def _build(onnx_path: Path, output: Path, configure) -> None:
-    """Parse the ONNX file, apply ``configure`` to the builder config, and serialise."""
+def _build(onnx_path: Path, output: Path, configure) -> list[str]:
+    """Parse the ONNX file, apply ``configure`` to the builder config, and serialise.
+
+    Returns the precision flags set on the config, read back from it after ``configure``.
+    """
     import tensorrt
 
     logger = tensorrt_logger()
@@ -194,39 +197,54 @@ def _build(onnx_path: Path, output: Path, configure) -> None:
         raise RuntimeError(f"ONNX parse failed: {errors}")
     config = builder.create_builder_config()
     configure(config, tensorrt)
+    flags = flags_set(config, tensorrt)
     with debug.profile("engine build"):
         serialized = builder.build_serialized_network(network, config)
     if serialized is None:
         raise TensorRtBuildError("TensorRT returned no engine")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(bytes(serialized))
+    return flags
+
+
+def flags_set(config, tensorrt) -> list[str]:
+    """The precision flags this TensorRT has that are set on the config, in ``PRECISION_FLAGS`` order."""
+    return [
+        name
+        for name in PRECISION_FLAGS
+        if hasattr(tensorrt.BuilderFlag, name) and config.get_flag(getattr(tensorrt.BuilderFlag, name))
+    ]
 
 
 def _set_builder_flags(config, tensorrt, precision: str) -> None:
-    """Set each of the precision's builder flags on the config, and clear each flag it clears."""
-    for name in BUILDER_FLAGS[precision]:
-        config.set_flag(getattr(tensorrt.BuilderFlag, name))
-    for name in CLEARED_FLAGS[precision]:
-        config.clear_flag(getattr(tensorrt.BuilderFlag, name))
+    """Set the precision's flags on the config and clear every other precision flag this TensorRT has."""
+    for name in PRECISION_FLAGS:
+        if not hasattr(tensorrt.BuilderFlag, name):
+            continue
+        flag = getattr(tensorrt.BuilderFlag, name)
+        if name in BUILDER_FLAGS[precision]:
+            config.set_flag(flag)
+        else:
+            config.clear_flag(flag)
 
 
-def build_fp32_trt(onnx_path: Path, output: Path) -> None:
+def build_fp32_trt(onnx_path: Path, output: Path) -> list[str]:
     """Build the TensorRT FP32 engine, the precision baseline: no FP16 or INT8 flag, and TF32 cleared."""
 
     def configure(config, tensorrt) -> None:
         _set_builder_flags(config, tensorrt, FP32_TRT)
 
-    _build(onnx_path, output, configure)
+    return _build(onnx_path, output, configure)
 
 
-def build_fp16(onnx_path: Path, output: Path) -> None:
+def build_fp16(onnx_path: Path, output: Path) -> list[str]:
     def configure(config, tensorrt) -> None:
         _set_builder_flags(config, tensorrt, "fp16")
 
-    _build(onnx_path, output, configure)
+    return _build(onnx_path, output, configure)
 
 
-def _build_int8_entropy(onnx_path: Path, output: Path, images: list[Path]) -> None:
+def _build_int8_entropy(onnx_path: Path, output: Path, images: list[Path]) -> list[str]:
     calibrator = None
     cache_path = output.parent / CALIBRATION_CACHE_NAME
     # The calibrator never reads a cache (read_calibration_cache returns None), so one left by an earlier build is
@@ -242,13 +260,13 @@ def _build_int8_entropy(onnx_path: Path, output: Path, images: list[Path]) -> No
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message=CALIBRATOR_DEPRECATION_PATTERN)
         try:
-            _build(onnx_path, output, configure)
+            return _build(onnx_path, output, configure)
         finally:
             if calibrator is not None:
                 calibrator.release()
 
 
-def _build_int8_qdq(onnx_path: Path, output: Path, images: list[Path]) -> None:
+def _build_int8_qdq(onnx_path: Path, output: Path, images: list[Path]) -> list[str]:
     """Fallback: calibrate in ONNX Runtime, then let TensorRT honour the Q/DQ nodes."""
     # Imported here, not at the top: loading ONNX Runtime can print its own warnings, and a command's input
     # checks must stay one line on stderr (PRD R-14).
@@ -283,11 +301,11 @@ def _build_int8_qdq(onnx_path: Path, output: Path, images: list[Path]) -> None:
     def configure(config, tensorrt) -> None:
         _set_builder_flags(config, tensorrt, "int8")
 
-    _build(qdq_onnx, output, configure)
+    return _build(qdq_onnx, output, configure)
 
 
-def build_int8(onnx_path: Path, output: Path, images: list[Path]) -> tuple[str, str]:
-    """Build INT8, returning the path taken and the entropy failure text, if any.
+def build_int8(onnx_path: Path, output: Path, images: list[Path]) -> tuple[str, str, list[str]]:
+    """Build INT8, returning the path taken, the entropy failure text, if any, and the flags read back.
 
     Only a TensorRT build that returns no engine sends the build to the Q/DQ
     fallback. A missing input or any other error propagates unchanged.
@@ -296,12 +314,14 @@ def build_int8(onnx_path: Path, output: Path, images: list[Path]) -> tuple[str, 
     if not images:
         raise InputError("INT8 needs calibration images and none were given")
     try:
-        _build_int8_entropy(onnx_path, output, images)
-        return PATH_ENTROPY, runlog.NO_ENTROPY_FAILURE
+        flags = _build_int8_entropy(onnx_path, output, images)
+        return PATH_ENTROPY, runlog.NO_ENTROPY_FAILURE, flags
     except TensorRtBuildError as error:
         failure = f"{type(error).__name__}: {runlog.relative_command([str(error)])}"
-    _build_int8_qdq(onnx_path, output, images)
-    return PATH_QDQ, failure
+    # The failed attempt may have written a calibration cache; the Q/DQ engine is not built from it, so it goes.
+    (output.parent / CALIBRATION_CACHE_NAME).unlink(missing_ok=True)
+    flags = _build_int8_qdq(onnx_path, output, images)
+    return PATH_QDQ, failure, flags
 
 
 def calibration_cache_sha256(route: str, output: Path) -> str:
@@ -348,9 +368,9 @@ def main(argv: list[str] | None = None) -> int:
     with runlog.RunLog("build", args.precision, CALIBRATION_SEED, {"calibration_images": len(images)}) as log:
         started = time.perf_counter()
         if int8:
-            route, failure = build_int8(args.onnx, output, images)
+            route, failure, flags = build_int8(args.onnx, output, images)
         else:
-            (build_fp16 if args.precision == "fp16" else build_fp32_trt)(args.onnx, output)
+            flags = (build_fp16 if args.precision == "fp16" else build_fp32_trt)(args.onnx, output)
             route, failure = NOT_APPLICABLE, NOT_APPLICABLE
         log.results.update(
             {
@@ -361,8 +381,7 @@ def main(argv: list[str] | None = None) -> int:
                 "engine_bytes": output.stat().st_size,
                 "engine_sha256": file_sha256(output),
                 "calibration_cache_sha256": calibration_cache_sha256(route, output),
-                "builder_flags": list(BUILDER_FLAGS[args.precision]),
-                "cleared_builder_flags": list(CLEARED_FLAGS[args.precision]),
+                "builder_flags": list(flags),
             }
         )
     print(f"built {display_path(output)}")
