@@ -25,6 +25,20 @@ All notable changes to this project are recorded here. The format follows
   shown apart, with its deviation from the median, and is not judged.
 - No file under `src/` changes.
 
+### Security
+
+- `requirements/ci-cpu.txt` pins pillow 13.0.0, pytest 9.0.3 and filelock 4.2.10 on every Python, the first
+  releases with the fixes pip-audit lists against pillow 12.3.0, pytest 7.4.4 and filelock 4.1.0, and pins pygments,
+  which pytest 9 needs. `constraints/jetson-orin.txt` pins pillow 13.0.0 too.
+- The judged runs used Pillow 12.3.0. The pins name 13.0.0, the first release with the fixes pip-audit lists, and
+  the numbers were not re-measured with it; JPEG decoding by Pillow is inside the end-to-end timings, not the
+  engine timings.
+
+### Removed
+
+- Python 3.10. No release of Pillow or filelock with the fixes pip-audit lists installs on it, so
+  `requires-python` is `>=3.11,<3.13` and CI runs on Python 3.11 and 3.12.
+
 ### Fixed
 
 - `scripts/fetch_coco.py` keeps a COCO archive whose MD5 does not match and names it in the error. 0.1.0 deleted

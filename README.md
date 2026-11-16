@@ -17,7 +17,9 @@ The results were measured with this stack. Each run log records the Jetson Linux
 | PyTorch / torchvision | 2.14.1+cu130 / 0.29.1+cu130 |
 | ONNX / ONNX Runtime | 1.23.2 / 1.31.1 |
 
-The CPU tests also run on any Linux machine with Python 3.10, 3.11 or 3.12. See "Continuous integration" below.
+The judged runs used Pillow 12.3.0. The pins name 13.0.0, the first release with the fixes pip-audit lists, and the numbers were not re-measured with it; JPEG decoding by Pillow is inside the end-to-end timings, not the engine timings.
+
+The CPU tests also run on any Linux machine with Python 3.11 or 3.12. See "Continuous integration" below.
 
 ## Quickstart
 
@@ -267,7 +269,7 @@ CI runs on every push to `main` and on every pull request, cancels a run that a 
 
 <!-- ci:begin -->
 ```sh
-# CI: ubuntu-latest, Python 3.10, 3.11 and 3.12
+# CI: ubuntu-latest, Python 3.11 and 3.12
 python -m pip install -r requirements/ci-cpu.txt
 python -m pip install --no-deps -e .
 python -m venv --clear .cache/pip-audit
@@ -290,7 +292,7 @@ peddet-orin/
 ├── .github/
 │   ├── ISSUE_TEMPLATE/              bug report, feature request and the private security link
 │   ├── workflows/
-│   │   └── ci.yml                   pip-audit, ruff and the CPU tests on Python 3.10, 3.11 and 3.12
+│   │   └── ci.yml                   pip-audit, ruff and the CPU tests on Python 3.11 and 3.12
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── constraints/
 │   └── jetson-orin.txt              every pin for the Jetson venv

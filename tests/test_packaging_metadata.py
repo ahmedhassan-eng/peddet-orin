@@ -6,13 +6,9 @@ import sys
 from importlib import metadata
 from pathlib import Path
 
+import tomllib
 from packaging.markers import Marker
 from packaging.requirements import Requirement
-
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python 3.10: pytest's own dependency provides the same parser.
-    import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
@@ -71,7 +67,7 @@ def test_a_cli_module_without_a_console_script_is_detected(tmp_path):
 def test_requires_python_stops_before_the_first_python_without_numpy_1_wheels():
     # numpy<2 has no wheels for Python 3.13.
     assert "numpy<2" in project()["dependencies"]
-    assert project()["requires-python"] == ">=3.10,<3.13"
+    assert project()["requires-python"] == ">=3.11,<3.13"
 
 
 def test_torch_and_torchvision_are_bounded_above_for_the_torchscript_exporter():
@@ -110,10 +106,9 @@ def test_every_ci_requirement_is_an_exact_pin_once_per_python():
     requirements = [line for line in lines if line and not line.startswith(("#", "-"))]
     assert requirements and all(PIN.match(line) for line in requirements), requirements
     names = set(pins(CI_PINS))
-    for python_version in ("3.10", "3.11", "3.12"):
+    for python_version in ("3.11", "3.12"):
         assert set(applicable_pins(CI_PINS, python_version)) <= names
-    assert {"exceptiongroup", "tomli"} <= set(applicable_pins(CI_PINS, "3.10"))
-    assert not {"exceptiongroup", "tomli"} & set(applicable_pins(CI_PINS, "3.12"))
+    assert not {"exceptiongroup", "tomli"} & set(applicable_pins(CI_PINS, "3.11"))
 
 
 def unpinned_dependencies(chosen: dict[str, str]) -> list[str]:

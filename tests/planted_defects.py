@@ -39,7 +39,7 @@ DEFECTS = [
     {
         "id": "ci-python-dropped",
         "file": ".github/workflows/ci.yml",
-        "old": '"3.10", ',
+        "old": '"3.11", ',
         "new": "",
         "catches": "tests/test_ci_contract.py::test_workflow_platform_is_what_the_readme_says",
     },
@@ -60,7 +60,7 @@ DEFECTS = [
     {
         "id": "ci-local-drift",
         "file": "scripts/ci_local.sh",
-        "old": 'VERSIONS="3.10 3.11 3.12"',
+        "old": 'VERSIONS="3.11 3.12"',
         "new": 'VERSIONS="3.12"',
         "catches": "tests/test_ci_contract.py::test_local_script_mirrors_the_ci_matrix",
     },

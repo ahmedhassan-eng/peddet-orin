@@ -8,7 +8,7 @@ LOG=${1:-.cache/ci-local/ci-local.log}
 mkdir -p .cache/ci-local "$(dirname "$LOG")"
 exec > >(tee "$LOG") 2>&1
 # ci:versions
-VERSIONS="3.10 3.11 3.12"
+VERSIONS="3.11 3.12"
 status=0
 for version in $VERSIONS; do
   if ! command -v "python$version" > /dev/null; then

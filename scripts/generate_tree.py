@@ -17,7 +17,7 @@ COLLAPSED = ("runs/", "runs-repeat/", "src/peddet_orin/", "tests/", ".github/ISS
 # A short note after a path; every key must be a tracked file or a shown directory.
 DESCRIPTIONS = {
     ".github/ISSUE_TEMPLATE/": "bug report, feature request and the private security link",
-    ".github/workflows/ci.yml": "pip-audit, ruff and the CPU tests on Python 3.10, 3.11 and 3.12",
+    ".github/workflows/ci.yml": "pip-audit, ruff and the CPU tests on Python 3.11 and 3.12",
     "constraints/jetson-orin.txt": "every pin for the Jetson venv",
     "manifests/calibration_train2017.sha256": "the 500 calibration images and their sha256 hashes",
     "requirements/ci-cpu.txt": "the CPU-only set for CI",

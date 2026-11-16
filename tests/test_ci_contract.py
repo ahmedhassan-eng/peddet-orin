@@ -86,8 +86,8 @@ def test_a_command_missing_from_the_workflow_is_detected():
 
 def test_a_dropped_python_version_is_detected():
     text = WORKFLOW.read_text()
-    assert '"3.10", ' in text
-    assert workflow_platform(text.replace('"3.10", ', "")) != readme_platform(README.read_text())
+    assert '"3.11", ' in text
+    assert workflow_platform(text.replace('"3.11", ', "")) != readme_platform(README.read_text())
 
 
 STRICT = "PDORIN_STRICT_SKIPS=1 "
@@ -156,9 +156,9 @@ def test_local_script_mirrors_the_ci_matrix():
 
 def test_a_local_script_that_drifts_from_ci_is_detected():
     text = LOCAL.read_text()
-    assert 'VERSIONS="3.10 3.11 3.12"' in text and "    ruff check .\n" in text
+    assert 'VERSIONS="3.11 3.12"' in text and "    ruff check .\n" in text
     _, ci_versions = workflow_platform(WORKFLOW.read_text())
-    assert local_matrix(text.replace('VERSIONS="3.10 3.11 3.12"', 'VERSIONS="3.11 3.12"'))[0] != ci_versions
+    assert local_matrix(text.replace('VERSIONS="3.11 3.12"', 'VERSIONS="3.12"'))[0] != ci_versions
     dropped = local_matrix(text.replace("    ruff check .\n", ""))[1]
     assert dropped != workflow_commands(WORKFLOW.read_text())
 

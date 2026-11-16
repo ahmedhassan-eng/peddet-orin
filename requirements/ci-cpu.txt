@@ -1,9 +1,9 @@
-# CPU-only set for CI (ubuntu-latest, Python 3.10 to 3.12). No CUDA, no TensorRT:
+# CPU-only set for CI (ubuntu-latest, Python 3.11 and 3.12). No CUDA, no TensorRT:
 # the GPU and TensorRT tests skip when those are absent.
 #
 # A complete lock: every package pip installs from this file is pinned here, transitive
 # dependencies included, so nothing floats between runs. It was resolved with
-# pip install --dry-run --report for manylinux x86_64 on Python 3.10, 3.11 and 3.12; the
+# pip install --dry-run --report for manylinux x86_64 on Python 3.11 and 3.12; the
 # packages whose versions differ between those Pythons carry environment markers.
 --extra-index-url https://download.pytorch.org/whl/cpu
 # Direct dependencies of the package and of its tests.
@@ -11,13 +11,11 @@ torch==2.14.1+cpu
 torchvision==0.29.1+cpu
 numpy==1.26.4
 onnx==1.23.2
-# onnxruntime 1.31.1 has no wheel for Python 3.10; 1.23.2 is the newest that does.
-onnxruntime==1.31.1; python_version >= "3.11"
-onnxruntime==1.23.2; python_version < "3.11"
+onnxruntime==1.31.1
 pycocotools==2.0.11
-# 12.3.0 is the newest pillow with wheels for cp310 to cp312 on manylinux x86_64 and aarch64.
-pillow==12.3.0
-pytest==7.4.4
+# pillow 13.0.0 and pytest 9.0.3 are the first releases with the fixes pip-audit names for 12.3.0 and 7.4.4.
+pillow==13.0.0
+pytest==9.0.3
 ruff==0.17.4
 # Transitive dependencies, the same on every Python.
 flatbuffers==25.12.19
@@ -30,17 +28,11 @@ mpmath==1.3.0
 packaging==26.3
 pluggy==1.7.0
 protobuf==7.36.2
+pygments==2.21.0
 setuptools==84.2.1
 sympy==1.14.0
 typing_extensions==4.16.0
+filelock==4.2.10
 # Transitive dependencies whose newest release differs by Python version.
-filelock==4.2.10; python_version >= "3.11"
-filelock==4.1.0; python_version < "3.11"
 networkx==3.7; python_version >= "3.12"
 networkx==3.6.1; python_version == "3.11"
-networkx==3.4.2; python_version < "3.11"
-# Only Python 3.10 needs these: pytest's backports and onnxruntime 1.23.2's logging deps.
-coloredlogs==15.0.1; python_version < "3.11"
-exceptiongroup==1.3.1; python_version < "3.11"
-humanfriendly==10.0; python_version < "3.11"
-tomli==2.5.0; python_version < "3.11"
