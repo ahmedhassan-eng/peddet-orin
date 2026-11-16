@@ -13,6 +13,7 @@ import planted_defects
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 README = REPO_ROOT / "README.md"
+PLANTED_RESULTS = REPO_ROOT / "tests" / "planted_results.txt"
 # One in-file negative test for each test file that no registry entry names; each must exist in its file.
 NEGATIVE_TESTS = {
     "tests/test_checkout_kinds.py": "test_a_shallow_clone_in_ci_still_fails_a_strict_run",
@@ -33,7 +34,7 @@ NEGATIVE_TESTS = {
 }
 SENTENCE = re.compile(
     r"`tests/planted_defects\.py` registers (?P<n>\d+) planted defects.*?the release check requires all "
-    r"(?P<caught>\d+) to be caught\. They cover (?P<x>\d+) of the (?P<y>\d+) test files, (?P<z>\d+) more carry "
+    r"(?P<caught>\d+) to be caught.*?\. They cover (?P<x>\d+) of the (?P<y>\d+) test files, (?P<z>\d+) more carry "
     r"in-file negative tests"
 )
 
@@ -63,6 +64,15 @@ def coverage(defects: list[dict], files: list[Path]) -> tuple[int, list[str], li
     return len(defects), covered, negative, rest
 
 
+def planted_result_problems(text: str, defects: list[dict]) -> list[str]:
+    """Each registry entry that the committed planted-check output does not show as caught, and each id in that
+    output that the registry does not hold."""
+    results = dict(re.findall(r"^PLANT (\S+) .*?(\S+)$", text, re.M))
+    ids = [defect["id"] for defect in defects]
+    problems = [f"{name}: {results.get(name, 'no line')}" for name in ids if results.get(name) != "caught"]
+    return problems + [f"{name}: not in the registry" for name in sorted(set(results) - set(ids))]
+
+
 def sentence_problems(readme: str, defects: list[dict], files: list[Path]) -> list[str]:
     """Each number of the README's negative-control sentence that differs from the registry and the test files,
     as "<name>: stated <s>, true <t>"; a missing sentence is one problem."""
@@ -76,6 +86,23 @@ def sentence_problems(readme: str, defects: list[dict], files: list[Path]) -> li
 
 def test_the_readme_states_the_registrys_true_coverage():
     assert sentence_problems(README.read_text(), planted_defects.DEFECTS, listed_test_files()) == []
+
+
+def test_the_committed_planted_output_shows_every_entry_caught():
+    assert planted_result_problems(PLANTED_RESULTS.read_text(), planted_defects.DEFECTS) == []
+
+
+def test_a_planted_output_with_a_missing_or_failed_entry_is_refused():
+    text = PLANTED_RESULTS.read_text()
+    first, second = (defect["id"] for defect in planted_defects.DEFECTS[:2])
+    caught = f"PLANT {first} clean-rc=0 planted-rc=1 caught"
+    failed = text.replace(caught, f"PLANT {first} clean-rc=0 planted-rc=0 FAIL")
+    dropped = "\n".join(line for line in text.splitlines() if not line.startswith(f"PLANT {second} "))
+    assert planted_result_problems(failed, planted_defects.DEFECTS) == [f"{first}: FAIL"]
+    assert planted_result_problems(dropped, planted_defects.DEFECTS) == [f"{second}: no line"]
+    assert planted_result_problems(text + "PLANT gone clean-rc=0 planted-rc=1 caught\n", planted_defects.DEFECTS) == [
+        "gone: not in the registry"
+    ]
 
 
 def test_every_test_file_has_a_negative_control():

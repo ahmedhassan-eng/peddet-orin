@@ -324,7 +324,7 @@ PDORIN_STRICT_SKIPS=1 python -m pytest -rs
 ```
 <!-- ci:end -->
 
-Negative controls: `tests/planted_defects.py` registers 38 planted defects, and `python scripts/check_planted_defects.py` plants each one in a fresh clone and checks that its test fails; the release check requires all 38 to be caught. They cover 22 of the 37 test files, 15 more carry in-file negative tests, and no test file has neither. `tests/test_negative_controls.py` fails if these numbers differ from the registry and the test files.
+Negative controls: `tests/planted_defects.py` registers 38 planted defects, and `python scripts/check_planted_defects.py` plants each one in a fresh clone and checks that its test fails; the release check requires all 38 to be caught, and `tests/planted_results.txt` holds the output of the last run. They cover 22 of the 37 test files, 15 more carry in-file negative tests, and no test file has neither. `tests/test_negative_controls.py` fails if these numbers differ from the registry and the test files.
 
 ## Repository layout
 
