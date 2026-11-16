@@ -105,6 +105,8 @@ DECODE_ENVIRONMENT = ("numpy", "pillow", "libjpeg", "pycocotools")
 # collected when the log is written, after the run, so the library is the one the run already loaded: torch's for
 # PyTorch, the one TensorRT runs with for engines. Recorded from 0.1.1 on, not required.
 RUNTIME_ENVIRONMENT = ("cuda_runtime", "cuda_driver")
+# The stages of a timed benchmark iteration, in the order they run; their times add up to the end-to-end time.
+BENCHMARK_STAGES = ("decode", "preprocess", "engine", "postprocess")
 
 
 def _utc_now() -> str:
@@ -382,6 +384,25 @@ def _is_latency(value: Any) -> bool:
     return isinstance(value, dict) and set(value) == set(keys) and all(_is_number(value[key]) for key in keys)
 
 
+def _is_stages(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == set(BENCHMARK_STAGES)
+        and all(_is_latency(item) for item in value.values())
+    )
+
+
+def _is_postprocess_settings(value: Any) -> bool:
+    thresholds = ("score_threshold", "nms_iou_threshold")
+    counts = ("top_k_per_class", "detections_per_image", "num_classes")
+    return (
+        isinstance(value, dict)
+        and set(value) == {*thresholds, *counts}
+        and all(_is_fraction(value[key]) for key in thresholds)
+        and all(_is_integer(value[key]) and value[key] >= 1 for key in counts)
+    )
+
+
 def _is_number_list(value: Any) -> bool:
     return isinstance(value, list) and all(_is_number(item) for item in value)
 
@@ -477,6 +498,12 @@ RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
 # Keys a kind may carry beyond its required ones, with the test each value must pass when present. Logs written
 # from 0.1.1 on carry them; the committed logs predate them and stay valid without them.
 OPTIONAL_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
+    "benchmark": {
+        # One summary per stage of the timed iteration, each over every timed iteration of every repeat.
+        "stages": _is_stages,
+        # The postprocess's score and NMS IoU thresholds, per-class top-k, detection cap and class count.
+        "postprocess_settings": _is_postprocess_settings,
+    },
     "build": {
         # The TensorRT builder flags the engine was built with, by their BuilderFlag names.
         "builder_flags": lambda value: (

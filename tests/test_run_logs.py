@@ -292,6 +292,42 @@ def test_a_build_logs_builder_flags_are_optional_and_checked():
     assert "unexpected result: eval builder_flags" in runlog.validate_log(make_log(results={"builder_flags": ["FP16"]}))
 
 
+SETTINGS = {
+    "score_threshold": 0.001,
+    "nms_iou_threshold": 0.55,
+    "top_k_per_class": 300,
+    "detections_per_image": 300,
+    "num_classes": 91,
+}
+STAGES = {"decode": latency(5.0), "preprocess": latency(2.0), "engine": latency(4.0), "postprocess": latency(3.0)}
+
+
+def test_a_benchmarks_stages_and_postprocess_settings_are_optional_and_checked():
+    def problems(**results):
+        return runlog.validate_log(make_log("benchmark", results=results))
+
+    assert problems(stages=STAGES, postprocess_settings=SETTINGS) == []
+    bad_stages = [
+        {key: value for key, value in STAGES.items() if key != "decode"},
+        dict(STAGES, decode={"p50_ms": 5.0}),
+        dict(STAGES, load=latency(1.0)),
+        list(STAGES.values()),
+    ]
+    for bad in bad_stages:
+        assert problems(stages=bad) == ["bad result: benchmark stages"], bad
+    bad_settings = [
+        dict(SETTINGS, score_threshold=1.5),
+        dict(SETTINGS, nms_iou_threshold="0.55"),
+        dict(SETTINGS, top_k_per_class=0),
+        dict(SETTINGS, num_classes=91.0),
+        dict(SETTINGS, detections_per_image=True),
+        {key: value for key, value in SETTINGS.items() if key != "num_classes"},
+    ]
+    for bad in bad_settings:
+        assert problems(postprocess_settings=bad) == ["bad result: benchmark postprocess_settings"], bad
+    assert "unexpected result: eval stages" in runlog.validate_log(make_log(results={"stages": STAGES}))
+
+
 @pytest.mark.parametrize("kind", sorted(RESULTS))
 def test_each_required_result_is_enforced(kind):
     for key in RESULTS[kind]:

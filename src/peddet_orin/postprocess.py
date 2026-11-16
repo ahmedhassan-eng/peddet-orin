@@ -48,6 +48,7 @@ class Postprocessor:
         nms_iou_threshold: float,
         detections_per_image: int,
         top_k_per_class: int,
+        num_classes: int | None = None,
     ) -> None:
         self.anchors = anchors
         self.box_coder = box_coder
@@ -55,6 +56,8 @@ class Postprocessor:
         self.nms_iou_threshold = nms_iou_threshold
         self.detections_per_image = detections_per_image
         self.top_k_per_class = top_k_per_class
+        # The classes the head scores, background included; recorded in benchmark logs, not used to decode.
+        self.num_classes = num_classes
 
     @classmethod
     def from_torchvision(cls, model) -> Postprocessor:
@@ -71,6 +74,7 @@ class Postprocessor:
             nms_iou_threshold=model.nms_thresh,
             detections_per_image=model.detections_per_img,
             top_k_per_class=model.topk_candidates,
+            num_classes=model.head.classification_head.num_columns,
         )
 
     def check_inputs(

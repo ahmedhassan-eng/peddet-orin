@@ -93,6 +93,12 @@ All notable changes to this project are recorded here. The format follows
   well as `INT8`, so a layer TensorRT does not run in INT8 runs in FP16, not FP32. The build log records the flags
   as `builder_flags`, `["FP16"]` for FP16 and `["FP16", "INT8"]` for INT8, and the log check enforces them when
   present; the committed logs predate the key and stay valid.
+- Each benchmark log records `stages`, a summary for each stage of the timed iteration (decode, preprocess, engine
+  and postprocess) in the shape of `engine` and `end_to_end`, over every timed iteration of every repeat, and
+  `postprocess_settings`, the score threshold, NMS IoU threshold, top-k per class, detections per image and class
+  count the postprocess ran with. The stage times come from the same `perf_counter` readings as before plus one
+  between decoding and preprocessing, so the end-to-end time holds one more `perf_counter` call; `engine` and
+  `end_to_end` are computed as before. Both keys are optional in the log check, and the committed logs predate them.
 
 ### Security
 

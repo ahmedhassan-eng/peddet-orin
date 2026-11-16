@@ -4,7 +4,9 @@
 Each timed iteration decodes and preprocesses an image from memory, runs inference
 and postprocesses. Engine-only latency is the inference step alone, including the
 copies to and from device memory. End-to-end latency is the whole iteration.
-Warm-up passes come first and are excluded, which also absorbs the first-call JIT.
+Each of the four stages is also timed on its own, from the same perf_counter
+readings plus one between decoding and preprocessing. Warm-up passes come first
+and are excluded, which also absorbs the first-call JIT.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import torch
@@ -274,17 +277,34 @@ def _decode(encoded: bytes) -> torch.Tensor:
     return torch.from_numpy(pixels).permute(2, 0, 1).float() / PIXEL_MAX
 
 
-def _iteration(backend, postprocess, encoded: bytes) -> tuple[float, float]:
-    """Run one full iteration; returns (engine seconds, end-to-end seconds)."""
+class IterationTimes(NamedTuple):
+    """One iteration's seconds: each stage in ``runlog.BENCHMARK_STAGES`` order, then the whole."""
+
+    decode: float
+    preprocess: float
+    engine: float
+    postprocess: float
+    end_to_end: float
+
+
+def _iteration(backend, postprocess, encoded: bytes) -> IterationTimes:
+    """Run one full iteration and return its stage and end-to-end seconds."""
     started = time.perf_counter()
     image = _decode(encoded)
+    decoded = time.perf_counter()
     batch = preprocess(image)
     before_engine = time.perf_counter()
     box_regression, class_logits = backend(batch)
     after_engine = time.perf_counter()
     postprocess(box_regression, class_logits, image.shape[-2:])
     finished = time.perf_counter()
-    return after_engine - before_engine, finished - started
+    return IterationTimes(
+        decoded - started,
+        before_engine - decoded,
+        after_engine - before_engine,
+        finished - after_engine,
+        finished - started,
+    )
 
 
 def _summary(seconds: list[float]) -> dict[str, float]:
@@ -292,6 +312,22 @@ def _summary(seconds: list[float]) -> dict[str, float]:
     summary = {f"p{q}_ms": float(np.percentile(samples, q) * MS_PER_S) for q in PERCENTILES}
     summary["fps"] = float(1.0 / samples.mean())
     return summary
+
+
+def stage_summaries(timed: list[IterationTimes]) -> dict[str, dict[str, float]]:
+    """Each stage's summary over every timed iteration, in the shape of the engine and end-to-end summaries."""
+    return {stage: _summary([getattr(times, stage) for times in timed]) for stage in runlog.BENCHMARK_STAGES}
+
+
+def postprocess_settings(postprocess: Postprocessor) -> dict[str, float | int]:
+    """The postprocess settings every timed iteration ran with."""
+    return {
+        "score_threshold": float(postprocess.score_threshold),
+        "nms_iou_threshold": float(postprocess.nms_iou_threshold),
+        "top_k_per_class": int(postprocess.top_k_per_class),
+        "detections_per_image": int(postprocess.detections_per_image),
+        "num_classes": int(postprocess.num_classes),
+    }
 
 
 def _mean_or_unreadable(values: list[int], scale: float = 1.0) -> float | str:
@@ -360,13 +396,14 @@ def main(argv: list[str] | None = None) -> int:
         sampler.start()
         clock = ClockSampler(clock_files())
         clock.start()
-        engine_repeats, total_repeats = [], []
+        engine_repeats, total_repeats, timed = [], [], []
         for repeat_picks in picks:
             engine_seconds, total_seconds = [], []
             for pick in repeat_picks:
-                engine, total = _iteration(backend, postprocess, pool[int(pick)])
-                engine_seconds.append(engine)
-                total_seconds.append(total)
+                times = _iteration(backend, postprocess, pool[int(pick)])
+                engine_seconds.append(times.engine)
+                total_seconds.append(times.end_to_end)
+                timed.append(times)
             engine_repeats.append(engine_seconds)
             total_repeats.append(total_seconds)
         clock.stop()
@@ -393,6 +430,8 @@ def main(argv: list[str] | None = None) -> int:
                 "gpu_busy_pct_before_timing": gpu_busy_pct(baseline.lines),
                 "gpu_clock": gpu_clock,
                 "cpu_clocks": cpu_clocks,
+                "stages": stage_summaries(timed),
+                "postprocess_settings": postprocess_settings(postprocess),
             }
         )
     print(f"{args.precision}: end-to-end p50 {log.results['end_to_end']['p50_ms']:.2f} ms")

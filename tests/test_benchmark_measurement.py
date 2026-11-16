@@ -44,6 +44,8 @@ RESULT_KEYS = {
     "gpu_busy_pct_before_timing",
     "gpu_clock",
     "cpu_clocks",
+    "stages",
+    "postprocess_settings",
 }
 SUMMARY_KEYS = {"p50_ms", "p90_ms", "p99_ms", "fps"}
 
@@ -272,7 +274,7 @@ def test_benchmark_pools_repeats_and_reads_load_and_power_mode_before_timing(cpu
     def fake_iteration(backend, postprocess, encoded):
         events.append("iteration")
         seconds = next(durations)
-        return seconds, 2 * seconds
+        return benchmark.IterationTimes(0.5 * seconds, 0.25 * seconds, seconds, 0.25 * seconds, 2 * seconds)
 
     def fake_load():
         events.append("load")
@@ -295,3 +297,44 @@ def test_benchmark_pools_repeats_and_reads_load_and_power_mode_before_timing(cpu
     # The load average and the power mode are both read after warm-up and before the first timed iteration.
     assert events == ["iteration", "load", "power_mode", "iteration", "iteration", "iteration", "iteration"]
     assert results["cpu_load_1min_before_timing"] == 1.25
+    # Each stage is summarised over all four timed iterations; the engine stage is the engine summary itself.
+    stages = results["stages"]
+    assert list(stages) == ["decode", "preprocess", "engine", "postprocess"]
+    assert stages["engine"] == results["engine"]
+    assert stages["decode"]["p50_ms"] == pytest.approx(1.25)
+    assert stages["preprocess"]["p50_ms"] == stages["postprocess"]["p50_ms"] == pytest.approx(0.625)
+    assert stages["postprocess"]["fps"] == pytest.approx(1600.0)
+
+
+def test_each_stage_is_timed_between_its_own_perf_counter_readings(monkeypatch):
+    """Five readings bound the four stages; engine and end-to-end are computed as before."""
+    readings = iter([10.0, 11.0, 13.0, 16.0, 20.0])
+    monkeypatch.setattr(benchmark, "time", types.SimpleNamespace(perf_counter=lambda: next(readings)))
+    calls = []
+    monkeypatch.setattr(benchmark, "_decode", lambda encoded: calls.append("decode") or torch.zeros(3, 4, 5))
+    monkeypatch.setattr(benchmark, "preprocess", lambda image: calls.append("preprocess") or image)
+
+    def backend(batch):
+        calls.append("engine")
+        return "boxes", "logits"
+
+    times = benchmark._iteration(backend, lambda *outputs: calls.append("postprocess"), b"jpeg")
+    assert calls == ["decode", "preprocess", "engine", "postprocess"]
+    assert times == benchmark.IterationTimes(1.0, 2.0, 3.0, 4.0, 10.0)
+    assert times.decode + times.preprocess + times.engine + times.postprocess == times.end_to_end
+
+
+def test_benchmark_records_stage_summaries_and_postprocess_settings(cpu_benchmark):
+    results = cpu_benchmark()
+    assert set(results["stages"]) == set(runlog.BENCHMARK_STAGES)
+    assert all(set(summary) == SUMMARY_KEYS for summary in results["stages"].values())
+    detector = load_detector(pretrained=False)
+    assert results["postprocess_settings"] == {
+        "score_threshold": detector.score_thresh,
+        "nms_iou_threshold": detector.nms_thresh,
+        "top_k_per_class": detector.topk_candidates,
+        "detections_per_image": detector.detections_per_img,
+        "num_classes": 91,
+    }
+    for key in ("stages", "postprocess_settings"):
+        assert runlog.OPTIONAL_CHECKS["benchmark"][key](results[key])
