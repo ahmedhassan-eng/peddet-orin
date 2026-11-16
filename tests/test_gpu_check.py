@@ -8,7 +8,8 @@ import torch
 
 from peddet_orin import gpu_check
 
-ARCH_LIST = ["sm_80", "sm_87", "sm_90", "sm_100", "sm_110", "sm_120"]
+# The slices the PyTorch 2.14.1+cu130 wheel lists, as the judged gpu_check logs record them: no sm_87.
+ARCH_LIST = ["sm_80", "sm_90", "sm_100", "sm_110", "sm_120"]
 # Shaped like the warning PyTorch emits on this board; the test only needs it to be passed through unchanged.
 TORCH_WARNING = "Found GPU0 Orin which is of compute capability (CC) 8.7. The following list shows the CCs this version"
 

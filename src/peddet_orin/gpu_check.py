@@ -42,7 +42,6 @@ MIN_BOX_PIXELS = 8.0
 MAX_BOX_PIXELS = 64.0
 NMS_IOU = 0.5
 NOT_RUN = "not run"  # Stands in for a measurement whose operation raised an error.
-# A slice names the capability as one integer, major * 10 + minor: sm_87 is 8.7, sm_100 is 10.0.
 
 
 def matmul_difference(generator: torch.Generator) -> float:
