@@ -268,4 +268,11 @@ DEFECTS = [
         "new": "                lines.append(f\"COMPARE {kind} {precision} log",
         "catches": "tests/test_compare_logs.py::test_an_incomplete_new_set_fails",
     },
+    {
+        "id": "gpu-check-slice-across-majors",
+        "file": "src/peddet_orin/gpu_check.py",
+        "old": "capability[0] == major and capability[1] <= minor",
+        "new": "capability[0] >= major and capability[1] <= minor",
+        "catches": "tests/test_gpu_check.py::test_compatible_slice_takes_the_newest_minor_not_above_the_device",
+    },
 ]

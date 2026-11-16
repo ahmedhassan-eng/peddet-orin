@@ -68,6 +68,8 @@ All notable changes to this project are recorded here. The format follows
   `python3.12-venv`, `python3-libnvinfer`, `nvidia-l4t-nvpmodel`, `nvidia-l4t-tools` and `python3-numpy`.
 - `PDORIN_REQUIRE_GPU=1` makes a GPU or TensorRT test that skips fail the run; the README's board test command
   sets it, so a missing CUDA device or TensorRT no longer passes quietly.
+- A planted defect for `gpu_check`'s slice rule covers `tests/test_gpu_check.py`, the last test file with no
+  negative control; `tests/test_negative_controls.py` now fails if any test file has neither.
 
 ### Security
 

@@ -3,7 +3,7 @@
 
 A test file counts as covered when a registry entry names one of its tests, and as carrying an in-file negative
 test when NEGATIVE_TESTS below names one of its tests that plants or feeds a bad input and checks that it is
-refused. QUEUE.md names every test file that has neither.
+refused. Every test file has one or the other.
 """
 import re
 from pathlib import Path
@@ -12,7 +12,6 @@ import planted_defects
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 README = REPO_ROOT / "README.md"
-QUEUE = REPO_ROOT / "QUEUE.md"
 # One in-file negative test for each test file that no registry entry names; each must exist in its file.
 NEGATIVE_TESTS = {
     "tests/test_checkout_kinds.py": "test_a_shallow_clone_in_ci_still_fails_a_strict_run",
@@ -77,10 +76,9 @@ def test_the_readme_states_the_registrys_true_coverage():
     assert sentence_problems(README.read_text(), planted_defects.DEFECTS, listed_test_files()) == []
 
 
-def test_queue_names_every_test_file_without_a_negative_control():
+def test_every_test_file_has_a_negative_control():
     *_, rest = coverage(planted_defects.DEFECTS, listed_test_files())
-    text = QUEUE.read_text()
-    assert rest and all(f"`{name}`" in text for name in rest), rest
+    assert rest == []
 
 
 def test_a_readme_sentence_with_one_number_changed_is_refused():
