@@ -25,6 +25,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Image Recognition",
     "Topic :: System :: Benchmark",
+    "Private :: Do Not Upload",
 ]
 dependencies = [
     "torch>=2.9,<2.15",

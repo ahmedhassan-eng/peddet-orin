@@ -1,6 +1,6 @@
 # peddet-orin
 
-Person detection on a Jetson Orin Nano Super with torchvision's SSDLite320 MobileNetV3-Large and its COCO weights, measured at three precisions: FP32 in PyTorch, and FP16 and INT8 in TensorRT. The benchmark reports accuracy on COCO 2017 val, latency, frames per second, memory and power. Every number below comes from a JSON log in `runs/`, and a test fails if the table and the logs disagree.
+Person detection on a Jetson Orin Nano Super with torchvision's SSDLite320 MobileNetV3-Large and its COCO weights, measured at three precisions: FP32 in PyTorch, and FP16 and INT8 in TensorRT. The benchmark reports accuracy on COCO 2017 val, latency, frames per second, memory and power. The headline numbers are the median of the judged runs' JSON logs under `runs-repeat/`, which also hold each run's QUIET gate and sampler files; the earlier run's logs are in `runs/`, and a test fails if the table and the logs disagree. The numbers are in [Results](#results); the hardware and software, the Quickstart and how to reproduce the results stand before it.
 
 ## Hardware and software
 
@@ -235,6 +235,7 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 - The measurements ran one at a time, at normal priority, while no other GPU or benchmark job ran on the board.
 - `tests/test_readme_table.py` fails if the block above differs from what `scripts/generate_table.py` makes of the logs.
 - The judged runs are run3, run4 and run5 of one measurement window, which started at 2026-11-15T18:46Z; the memory bound, 6.0e9 bytes, was set before any judged run. Nine earlier attempts did not run or did not finish, and their logs are not committed. By reason: 2 stopped at the window's check that no automated session was running, 4 at its check of available memory, and 3 at a run's QUIET gate (swap in use in all 3, available memory under the bound in 1 of them as well).
+- The earlier attempts, the root setup block and the setting of the memory bound are host records outside this repository.
 - The window was set up by a root shell block that is not in this repository. It turned swap off, stopped the docker, containerd, snapd, fwupd and jtop services and every automated session, and logged for each judged run 0 swap entries, swappiness 1, 0 pages swapped out and 0 OOM kills.
 - The judged runs were run by three host scripts outside this repository: a run script that ran each run and its QUIET gates (sha256 `bef51001f5f3ff431bccb60eabf294f2afcb41aefd49daffa45b86dae45628d5`), a job script that ran each GPU job under a lock with the sampler alongside (`2f36e2682c0faed445168adeed5b046820a8494307a6600113075c1f88e5a25d`), and the sampler `sysmon.sh` (`aa30652bf11859de67420a4e6b64f53cc9348254f03b8a5dea424b94ed2a93ce`). The sampler's sha256 heads every judged sampler file, and `scripts/generate_table.py` refuses a sampler file that names another; the run and job scripts' sha256s are not recorded in the logs. What the scripts did is what the gate terms and the repeat block above state, generated from the logs. The scripts are specific to this host and do not run elsewhere.
 
@@ -252,6 +253,7 @@ Over the median of the 3 quieted runs, the INT8 engine p50 is lower than FP16's,
 - The export uses PyTorch's TorchScript-based ONNX exporter, which PyTorch has deprecated; `pyproject.toml` bounds torch below 2.15 for that reason.
 - CI runs on x86_64 CPUs only. The aarch64 build, the GPU tests and TensorRT run only on the Jetson, by hand, before a release.
 - Batch size 1 only.
+- FP32 runs in PyTorch and FP16 and INT8 in TensorRT, so the gap between FP32 and the other two is runtime and precision together, not precision alone.
 - `jetson_clocks` is not run, memory clocks are not read, and a tegrastats reader thread runs in the timed process. For the judged runs, the QUIET gates and the measurement window excluded what the repeat block and the Provenance notes name: the board's other scheduled jobs and loop services, sessions over their CPU budget or not allowed, swap use and swap-outs, available memory under the bound, and a load1 at or above the gate's bound. They did not exclude the operating system's own processes or the tegrastats reader, so latencies still vary between runs, as the min-max notes show. The earlier run in `runs/` had no such gate.
 - The system RAM rise in each benchmark log is reported per run and not judged.
 - Power is the average of `tegrastats` VDD_IN readings during timing. It is the whole board's input power, not the GPU's alone.

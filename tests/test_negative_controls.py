@@ -23,7 +23,7 @@ SENTENCE = re.compile(
 )
 
 
-def test_files() -> list[Path]:
+def listed_test_files() -> list[Path]:
     return sorted((REPO_ROOT / "tests").glob("test_*.py"))
 
 
@@ -55,26 +55,26 @@ def sentence_problems(readme: str, defects: list[dict], files: list[Path]) -> li
 
 
 def test_the_readme_states_the_registrys_true_coverage():
-    assert sentence_problems(README.read_text(), planted_defects.DEFECTS, test_files()) == []
+    assert sentence_problems(README.read_text(), planted_defects.DEFECTS, listed_test_files()) == []
 
 
 def test_queue_names_every_test_file_without_a_negative_control():
-    *_, rest = coverage(planted_defects.DEFECTS, test_files())
+    *_, rest = coverage(planted_defects.DEFECTS, listed_test_files())
     text = QUEUE.read_text()
     assert rest and all(f"`{name}`" in text for name in rest), rest
 
 
 def test_a_readme_sentence_with_one_number_changed_is_refused():
     readme = README.read_text()
-    count, covered, *_ = coverage(planted_defects.DEFECTS, test_files())
-    right = f"They cover {len(covered)} of the {len(test_files())} test files"
-    wrong = f"They cover {len(covered) + 1} of the {len(test_files())} test files"
+    count, covered, *_ = coverage(planted_defects.DEFECTS, listed_test_files())
+    right = f"They cover {len(covered)} of the {len(listed_test_files())} test files"
+    wrong = f"They cover {len(covered) + 1} of the {len(listed_test_files())} test files"
     assert right in readme
-    assert sentence_problems(readme.replace(right, wrong), planted_defects.DEFECTS, test_files()) == [
+    assert sentence_problems(readme.replace(right, wrong), planted_defects.DEFECTS, listed_test_files()) == [
         f"x: stated {len(covered) + 1}, true {len(covered)}"
     ]
-    assert sentence_problems(readme, planted_defects.DEFECTS, test_files()) == []
-    assert sentence_problems("no sentence here", planted_defects.DEFECTS, test_files()) == [
+    assert sentence_problems(readme, planted_defects.DEFECTS, listed_test_files()) == []
+    assert sentence_problems("no sentence here", planted_defects.DEFECTS, listed_test_files()) == [
         "README has no negative-control sentence"
     ]
     assert count == len(planted_defects.DEFECTS)
