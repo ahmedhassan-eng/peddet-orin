@@ -24,6 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Image Recognition",
     "Topic :: System :: Benchmark",
+    # The package runs only from a source checkout (see README), so it is never uploaded to an index.
     "Private :: Do Not Upload",
 ]
 dependencies = [

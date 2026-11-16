@@ -73,8 +73,8 @@ the Jetson Linux release, power mode and package versions; name the board and Je
 
 ## Commit messages
 
-Follow the commit-message rule in [AGENTS.md](AGENTS.md): an imperative subject that aims for 50-72 characters, and a
-body of bullets with one claim each. This repository uses no commit trailers.
+Follow the commit-message rule in [AGENTS.md](AGENTS.md): an imperative subject of at most 72 characters where the
+change can be named in that, and a body of bullets with one claim each. This repository uses no commit trailers.
 
 ## Licence
 

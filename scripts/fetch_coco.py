@@ -88,9 +88,15 @@ def _stream_to(url: str, destination: Path, digests: tuple[str, ...]) -> dict[st
     raise RuntimeError(f"giving up on {url}: {last_error}")
 
 
+def extracted_stamp(url: str) -> Path:
+    """The file written once an archive is fully extracted; an extraction that stops early leaves none."""
+    return DATA_DIR / f".{url.rsplit('/', 1)[1]}.extracted"
+
+
 def _fetch_archive(url: str, expected_md5: str, marker: str) -> None:
-    """Fetch and extract one archive unless its extracted marker already exists."""
-    if (DATA_DIR / marker).exists():
+    """Fetch and extract one archive unless a completed extraction of it is recorded and its marker file exists."""
+    stamp = extracted_stamp(url)
+    if stamp.exists() and (DATA_DIR / marker).exists():
         print(f"present: {marker}")
         return
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -102,6 +108,7 @@ def _fetch_archive(url: str, expected_md5: str, marker: str) -> None:
     # stays inside DATA_DIR even for a malformed archive.
     with zipfile.ZipFile(archive) as bundle:
         bundle.extractall(DATA_DIR)
+        stamp.write_text(f"{len(bundle.namelist())} members\n")
     archive.unlink()
     print(f"fetched: {marker}")
 

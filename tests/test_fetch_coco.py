@@ -189,3 +189,35 @@ def test_every_subcommand_has_help_and_the_docstring_counts_them():
     assert all(helps.values()), helps
     assert re.search(r"^Four independent subcommands", fetch_coco.__doc__, re.M)
     assert "--write-manifest" in commands.choices["calibration"].format_help()
+
+
+def test_an_interrupted_extraction_is_fetched_again(tmp_path, monkeypatch):
+    import zipfile
+
+    monkeypatch.setattr(fetch_coco, "DATA_DIR", tmp_path)
+    url = "https://images.cocodataset.org/zips/demo.zip"
+    fetches = []
+
+    def fake_stream(source, destination, algorithms):
+        fetches.append(source)
+        with zipfile.ZipFile(destination, "w") as bundle:
+            bundle.writestr("demo/000000000139.jpg", b"jpeg")
+        return {"md5": "m"}
+
+    monkeypatch.setattr(fetch_coco, "_stream_to", fake_stream)
+    real_extract = zipfile.ZipFile.extractall
+
+    def interrupted(self, path=None, members=None, pwd=None):
+        real_extract(self, path, members, pwd)
+        raise OSError("disk full")
+
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", interrupted)
+    with pytest.raises(OSError):
+        fetch_coco._fetch_archive(url, "m", "demo/000000000139.jpg")
+    # The marker file exists, but the extraction did not finish, so it is not taken as present.
+    assert (tmp_path / "demo" / "000000000139.jpg").exists() and not fetch_coco.extracted_stamp(url).exists()
+    monkeypatch.setattr(zipfile.ZipFile, "extractall", real_extract)
+    fetch_coco._fetch_archive(url, "m", "demo/000000000139.jpg")
+    assert len(fetches) == 2 and fetch_coco.extracted_stamp(url).read_text() == "1 members\n"
+    fetch_coco._fetch_archive(url, "m", "demo/000000000139.jpg")
+    assert len(fetches) == 2

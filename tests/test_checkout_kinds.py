@@ -19,12 +19,12 @@ from strict_skips import NO_GIT_REASON, SHALLOW_REASON, checkout_skip_reason
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SKIP = checkout_skip_reason(REPO_ROOT)
 pytestmark = pytest.mark.skipif(SOURCE_SKIP is not None, reason=SOURCE_SKIP or "")
-# The noreply address the project commits with; nothing here is pushed anywhere.
+# A placeholder identity for the throwaway commits these tests make; nothing here is pushed anywhere.
 IDENTITY = (
     "-c",
     "user.name=peddet-orin tests",
     "-c",
-    "user.email=1659721+ahmedhassan-eng@users.noreply.github.com",
+    "user.email=tests@example.invalid",
     "-c",
     "commit.gpgsign=false",
     "-c",

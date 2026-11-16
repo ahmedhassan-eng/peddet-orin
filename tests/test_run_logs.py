@@ -414,7 +414,7 @@ def test_relative_command_leaves_other_paths_for_redaction(monkeypatch, tmp_path
 # The dirty flag, in a real git repository.
 
 
-GIT_IDENTITY = ("-c", "user.name=Ahmed Hassan", "-c", "user.email=1659721+ahmedhassan-eng@users.noreply.github.com")
+GIT_IDENTITY = ("-c", "user.name=peddet-orin tests", "-c", "user.email=tests@example.invalid")
 
 
 def _git_in(repo: Path, *arguments: str) -> None:

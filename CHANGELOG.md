@@ -115,6 +115,8 @@ All notable changes to this project are recorded here. The format follows
   `ubuntu-24.04`, not the moving `ubuntu-latest`; checkout keeps no token in the clone; and
   `tests/test_ci_contract.py` refuses an `if`, `continue-on-error`, `shell`, `env` or `working-directory` key that
   could let a step pass without running what it lists.
+- `scripts/fetch_coco.py` takes an archive as present only once its extraction finished, recorded in a stamp
+  file beside it; one extracted image alone made an interrupted extraction look complete.
 - The judged runs used Pillow 12.3.0. The pins name 13.0.0, the first release with the fixes pip-audit lists, and
   the numbers were not re-measured with it; JPEG decoding by Pillow is inside the end-to-end timings, not the
   engine timings.
