@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Up-front checks and options of the evaluate and benchmark commands, without data or a GPU."""
 
+import hashlib
 import json
 import os
 import subprocess
@@ -8,10 +9,12 @@ import sys
 from pathlib import Path
 
 import pytest
+import torch
 from PIL import Image
 
 from peddet_orin import benchmark, cli, evaluate, runlog
 from peddet_orin.model import load_detector
+from peddet_orin.postprocess import Postprocessor
 
 SRC_DIR = Path(evaluate.__file__).resolve().parents[1]
 MODULES = {"evaluate": evaluate, "benchmark": benchmark}
@@ -146,6 +149,41 @@ def test_evaluate_engine_option_reaches_the_backend(tmp_path, capsys, monkeypatc
         capsys, evaluate.main, ["--precision", "fp16", "--data-dir", str(tmp_path), "--engine", str(engine)]
     )
     assert loaded == [engine]
+
+
+class _QuietBackend:
+    """Raw outputs that postprocess to no detections, shaped for SSDLite's anchors."""
+
+    label = "fake-cpu"
+
+    def __init__(self, detector) -> None:
+        anchors = Postprocessor.from_torchvision(detector).anchors.shape[0]
+        self.outputs = torch.zeros(1, anchors, 4), torch.zeros(1, anchors, 91)
+        self.outputs[1][..., 0] = 20.0
+
+    def __call__(self, batch):
+        return self.outputs
+
+
+def test_engine_sha256_hashes_the_engine_file_and_is_absent_for_fp32(tmp_path):
+    engine = tmp_path / "fp16.engine"
+    engine.write_bytes(b"engine bytes")
+    assert cli.engine_sha256(engine) == hashlib.sha256(b"engine bytes").hexdigest()
+    assert cli.engine_sha256(None) == "-"
+
+
+@pytest.mark.parametrize("precision", ["fp32", "fp16"])
+def test_evaluate_logs_the_engine_hash(precision, tmp_path, monkeypatch, offline_run):
+    make_data_dir(tmp_path)
+    engine = tmp_path / "custom.engine"
+    engine.write_bytes(b"x")
+    written = []
+    monkeypatch.setattr(runlog.RunLog, "_write", lambda self: written.append(self))
+    monkeypatch.setattr(evaluate, "load_backend", lambda *arguments: _QuietBackend(arguments[3]))
+    arguments = ["--precision", precision, "--device", "cpu", "--data-dir", str(tmp_path), "--engine", str(engine)]
+    assert evaluate.main(arguments) == 0
+    expected = hashlib.sha256(b"x").hexdigest() if precision == "fp16" else "-"
+    assert written[0].results["engine_sha256"] == expected
 
 
 def test_measure_default_paths_are_under_the_repository_root():

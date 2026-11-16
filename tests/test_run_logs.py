@@ -328,6 +328,46 @@ def test_a_benchmarks_stages_and_postprocess_settings_are_optional_and_checked()
     assert "unexpected result: eval stages" in runlog.validate_log(make_log(results={"stages": STAGES}))
 
 
+ENGINE_SHA256 = "cd" * 32
+CACHE_SHA256 = "ef" * 32
+
+
+@pytest.mark.parametrize("kind", ["eval", "benchmark"])
+def test_a_measurements_engine_hash_is_optional_and_checked(kind):
+    def problems(precision, engine_sha256):
+        return runlog.validate_log(make_log(kind, precision, results={"engine_sha256": engine_sha256}))
+
+    assert problems("fp16", ENGINE_SHA256) == problems("int8", ENGINE_SHA256) == problems("fp32", "-") == []
+    assert problems("fp16", "-") == [f"bad result: {kind} engine_sha256 is not a sha256"]
+    assert problems("int8", "abc") == [f"bad result: {kind} engine_sha256 is not a sha256"]
+    assert problems("fp32", ENGINE_SHA256) == [f"bad result: {kind} engine_sha256 must be - for fp32"]
+    assert problems("fp16", 7) == [f"bad result: {kind} engine_sha256"]
+
+
+def test_a_builds_engine_and_cache_hashes_are_optional_and_checked():
+    def problems(precision, **results):
+        return runlog.validate_log(make_log("build", precision, results=results))
+
+    entropy = dict(INT8_BUILD, engine_sha256=ENGINE_SHA256)
+    assert problems("fp16", engine_sha256=ENGINE_SHA256, calibration_cache_sha256="-") == []
+    assert problems("int8", **entropy, calibration_cache_sha256=CACHE_SHA256) == []
+    assert problems("int8", **entropy, calibration_cache_sha256="-") == []
+    qdq = dict(entropy, int8_path="onnx-ptq-qdq", entropy_failure=QDQ_FAILURE)
+    assert problems("int8", **qdq, calibration_cache_sha256="-") == []
+    assert problems("fp16", engine_sha256="-") == ["bad result: build engine_sha256 is not a sha256"]
+    assert problems("int8", **entropy, calibration_cache_sha256="cache") == [
+        "bad result: build calibration_cache_sha256 is not a sha256"
+    ]
+    for precision, results in (("fp16", {}), ("int8", qdq)):
+        assert problems(precision, **results, calibration_cache_sha256=CACHE_SHA256) == [
+            "bad result: build calibration_cache_sha256 must be - without the int8 entropy path"
+        ]
+    assert problems("fp16", calibration_cache_sha256=None) == ["bad result: build calibration_cache_sha256"]
+    assert "unexpected result: export engine_sha256" in runlog.validate_log(
+        make_log("export", results={"engine_sha256": ENGINE_SHA256})
+    )
+
+
 @pytest.mark.parametrize("kind", sorted(RESULTS))
 def test_each_required_result_is_enforced(kind):
     for key in RESULTS[kind]:

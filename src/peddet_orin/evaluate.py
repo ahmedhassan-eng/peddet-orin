@@ -21,6 +21,7 @@ from peddet_orin.cli import (
     add_common_options,
     check_device,
     check_engine,
+    engine_sha256,
     load_backend,
     release_backend,
     usage_error,
@@ -108,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     if not image_ids:
         usage_error(parser.prog, f"annotations file {annotations} lists no images")
     with runlog.RunLog("eval", args.precision, EVAL_SEED, {"images": len(image_ids)}) as log:
+        engine_digest = engine_sha256(engine)
         detector = load_detector(pretrained=True)
         postprocess = Postprocessor.from_torchvision(detector)
         backend = load_backend(parser.prog, args.precision, args.device, detector, engine)
@@ -116,7 +118,9 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             release_backend(backend)
         scores = person_ap(ground_truth, detections, image_ids)
-        log.results.update({**scores, "runtime": backend.label, "detections": len(detections)})
+        log.results.update(
+            {**scores, "runtime": backend.label, "detections": len(detections), "engine_sha256": engine_digest}
+        )
     print(f"{args.precision}: person AP {scores['ap']:.4f}, AP50 {scores['ap50']:.4f}")
     return 0
 

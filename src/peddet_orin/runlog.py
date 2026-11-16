@@ -498,13 +498,22 @@ RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
 # Keys a kind may carry beyond its required ones, with the test each value must pass when present. Logs written
 # from 0.1.1 on carry them; the committed logs predate them and stay valid without them.
 OPTIONAL_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
+    "eval": {
+        # The sha256 of the TensorRT engine file that ran, or "-" for fp32, which runs no engine file.
+        "engine_sha256": _is_string,
+    },
     "benchmark": {
+        "engine_sha256": _is_string,
         # One summary per stage of the timed iteration, each over every timed iteration of every repeat.
         "stages": _is_stages,
         # The postprocess's score and NMS IoU thresholds, per-class top-k, detection cap and class count.
         "postprocess_settings": _is_postprocess_settings,
     },
     "build": {
+        # The sha256 of the engine file the build wrote.
+        "engine_sha256": _is_string,
+        # The sha256 of the INT8 calibration cache this build wrote, or "-" when it wrote none.
+        "calibration_cache_sha256": _is_string,
         # The TensorRT builder flags the engine was built with, by their BuilderFlag names.
         "builder_flags": lambda value: (
             isinstance(value, list) and bool(value) and all(map(_is_string, value)) and len(set(value)) == len(value)
@@ -524,14 +533,35 @@ OPTIONAL_RESULTS: dict[str, frozenset[str]] = {
 NOT_APPLICABLE = "-"
 NO_ENTROPY_FAILURE = ""
 INT8_ENTROPY_PATH = "IInt8EntropyCalibrator2"
+# The precision that runs in PyTorch, with no engine file.
+PYTORCH_PRECISION = "fp32"
 # The TensorRT builder flags each engine precision sets. INT8 sets FP16 too, so a layer TensorRT does not run in INT8
 # runs in FP16, not FP32.
 BUILDER_FLAG_NAMES: dict[str, list[str]] = {"fp16": ["FP16"], "int8": ["FP16", "INT8"]}
 
 
+def _identity_problems(kind: str, precision: Any, results: dict) -> list[str]:
+    """Return the problems with the engine and calibration cache sha256s, where a log records them."""
+    problems = []
+    engine = results.get("engine_sha256")
+    if isinstance(engine, str):
+        if kind in ("eval", "benchmark") and precision == PYTORCH_PRECISION:
+            if engine != NOT_APPLICABLE:
+                problems.append(f"bad result: {kind} engine_sha256 must be - for {PYTORCH_PRECISION}")
+        elif not SHA256_PATTERN.fullmatch(engine):
+            problems.append(f"bad result: {kind} engine_sha256 is not a sha256")
+    cache = results.get("calibration_cache_sha256")
+    if kind == "build" and isinstance(cache, str) and cache != NOT_APPLICABLE:
+        if precision != "int8" or results.get("int8_path") != INT8_ENTROPY_PATH:
+            problems.append("bad result: build calibration_cache_sha256 must be - without the int8 entropy path")
+        elif not SHA256_PATTERN.fullmatch(cache):
+            problems.append("bad result: build calibration_cache_sha256 is not a sha256")
+    return problems
+
+
 def _cross_field_problems(kind: str, precision: Any, results: dict) -> list[str]:
     """Return the problems that involve more than one value of a log's results."""
-    problems = []
+    problems = _identity_problems(kind, precision, results)
     if kind == "eval" and _is_number(results.get("ap")) and _is_number(results.get("ap50")):
         if results["ap"] > results["ap50"]:
             problems.append("bad result: eval ap is above ap50")

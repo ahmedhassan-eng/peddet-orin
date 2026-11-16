@@ -209,10 +209,14 @@ def build_fp16(onnx_path: Path, output: Path) -> None:
 
 def _build_int8_entropy(onnx_path: Path, output: Path, images: list[Path]) -> None:
     calibrator = None
+    cache_path = output.parent / CALIBRATION_CACHE_NAME
+    # The calibrator never reads a cache (read_calibration_cache returns None), so one left by an earlier build is
+    # only ever replaced. Removing it first means a cache present after the build is this build's.
+    cache_path.unlink(missing_ok=True)
 
     def configure(config, tensorrt) -> None:
         nonlocal calibrator
-        calibrator = _make_calibrator(images, output.parent / CALIBRATION_CACHE_NAME)
+        calibrator = _make_calibrator(images, cache_path)
         config.int8_calibrator = calibrator
         _set_builder_flags(config, tensorrt, "int8")
 
@@ -281,6 +285,12 @@ def build_int8(onnx_path: Path, output: Path, images: list[Path]) -> tuple[str, 
     return PATH_QDQ, failure
 
 
+def calibration_cache_sha256(route: str, output: Path) -> str:
+    """The sha256 of the calibration cache the entropy route wrote next to ``output``, or ``-`` if it wrote none."""
+    cache = output.parent / CALIBRATION_CACHE_NAME
+    return file_sha256(cache) if route == PATH_ENTROPY and cache.is_file() else NOT_APPLICABLE
+
+
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog=PROG,
@@ -330,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
                 "calibration_manifest_sha256": manifest_digest,
                 "build_seconds": round(time.perf_counter() - started, 1),
                 "engine_bytes": output.stat().st_size,
+                "engine_sha256": file_sha256(output),
+                "calibration_cache_sha256": calibration_cache_sha256(route, output),
                 "builder_flags": list(BUILDER_FLAGS[args.precision]),
             }
         )

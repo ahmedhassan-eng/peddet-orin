@@ -231,6 +231,7 @@ def test_int8_build_logs_the_manifest_hash_and_route(calibration, tmp_path, monk
     assert log.results["engine_bytes"] == len(b"engine")
     digest = hashlib.sha256(engine_build.MANIFEST_PATH.read_bytes()).hexdigest()
     assert log.results["calibration_manifest_sha256"] == digest
+    assert log.results["engine_sha256"] == hashlib.sha256(b"engine").hexdigest()
 
 
 def test_the_qdq_fallback_quantizes_symmetrically_without_biases(tmp_path, monkeypatch):
@@ -309,3 +310,74 @@ def test_the_build_log_records_the_flags_the_build_set(precision, configured, ca
     assert engine_build.main([*arguments, "--calibration-dir", str(calibration)]) == 0
     assert RecordingLog.opened[0].results["builder_flags"] == configured[0].flags
     assert configured[0].flags == (["FP16", "INT8"] if precision == "int8" else ["FP16"])
+
+
+def run_int8_build(calibration, tmp_path, monkeypatch, entropy) -> dict:
+    """Run main for INT8 with ``entropy`` standing in for the entropy build; return the build log's results."""
+    RecordingLog.opened = []
+    monkeypatch.setattr(engine_build.runlog, "RunLog", RecordingLog)
+    monkeypatch.setattr(engine_build, "_build_int8_entropy", entropy)
+    onnx_path = tmp_path / "network.onnx"
+    onnx_path.write_bytes(b"onnx")
+    output = tmp_path / "out" / "int8.engine"
+    arguments = ["--precision", "int8", "--onnx", str(onnx_path), "--output", str(output)]
+    assert engine_build.main([*arguments, "--calibration-dir", str(calibration)]) == 0
+    return RecordingLog.opened[0].results
+
+
+def test_the_int8_build_log_records_the_engine_and_cache_hashes(calibration, tmp_path, monkeypatch):
+    def entropy_writes_both(onnx_path, engine, images):
+        engine.parent.mkdir(parents=True, exist_ok=True)
+        engine.write_bytes(b"engine")
+        (engine.parent / engine_build.CALIBRATION_CACHE_NAME).write_bytes(b"cache")
+
+    results = run_int8_build(calibration, tmp_path, monkeypatch, entropy_writes_both)
+    assert results["engine_sha256"] == hashlib.sha256(b"engine").hexdigest()
+    assert results["calibration_cache_sha256"] == hashlib.sha256(b"cache").hexdigest()
+
+
+def test_an_int8_build_that_writes_no_cache_records_none(calibration, tmp_path, monkeypatch):
+    def entropy_writes_engine(onnx_path, engine, images):
+        engine.parent.mkdir(parents=True, exist_ok=True)
+        engine.write_bytes(b"engine")
+
+    assert run_int8_build(calibration, tmp_path, monkeypatch, entropy_writes_engine)["calibration_cache_sha256"] == "-"
+
+
+def test_the_qdq_fallback_records_no_calibration_cache(calibration, tmp_path, monkeypatch):
+    """A cache the failed entropy attempt left is not the engine's: the log records none."""
+
+    def entropy_fails(onnx_path, engine, images):
+        engine.parent.mkdir(parents=True, exist_ok=True)
+        (engine.parent / engine_build.CALIBRATION_CACHE_NAME).write_bytes(b"cache")
+        raise engine_build.TensorRtBuildError("TensorRT returned no engine")
+
+    def qdq_writes_engine(onnx_path, engine, images):
+        engine.write_bytes(b"qdq engine")
+
+    monkeypatch.setattr(engine_build, "_build_int8_qdq", qdq_writes_engine)
+    results = run_int8_build(calibration, tmp_path, monkeypatch, entropy_fails)
+    assert results["int8_path"] == engine_build.PATH_QDQ
+    assert results["engine_sha256"] == hashlib.sha256(b"qdq engine").hexdigest()
+    assert results["calibration_cache_sha256"] == "-"
+
+
+def test_the_entropy_build_removes_an_earlier_builds_cache_first(configured, tmp_path):
+    stale = tmp_path / engine_build.CALIBRATION_CACHE_NAME
+    stale.write_bytes(b"an earlier build's cache")
+    engine_build._build_int8_entropy(tmp_path / "in.onnx", tmp_path / "int8.engine", [])
+    assert not stale.exists()
+
+
+def test_the_fp16_build_log_records_the_engine_hash_and_no_cache(configured, tmp_path, monkeypatch):
+    RecordingLog.opened = []
+    monkeypatch.setattr(engine_build.runlog, "RunLog", RecordingLog)
+    output = tmp_path / "fp16.engine"
+    output.write_bytes(b"fp16 engine")
+    (tmp_path / engine_build.CALIBRATION_CACHE_NAME).write_bytes(b"cache")
+    onnx_path = tmp_path / "network.onnx"
+    onnx_path.write_bytes(b"onnx")
+    assert engine_build.main(["--precision", "fp16", "--onnx", str(onnx_path), "--output", str(output)]) == 0
+    results = RecordingLog.opened[0].results
+    assert results["engine_sha256"] == hashlib.sha256(b"fp16 engine").hexdigest()
+    assert results["calibration_cache_sha256"] == "-"

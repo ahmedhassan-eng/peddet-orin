@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Benchmark statistics, tegrastats parsing and the result record, checked on CPU with known answers."""
 
+import hashlib
 import itertools
 import os
 import resource
@@ -46,6 +47,7 @@ RESULT_KEYS = {
     "cpu_clocks",
     "stages",
     "postprocess_settings",
+    "engine_sha256",
 }
 SUMMARY_KEYS = {"p50_ms", "p90_ms", "p99_ms", "fps"}
 
@@ -338,3 +340,11 @@ def test_benchmark_records_stage_summaries_and_postprocess_settings(cpu_benchmar
     }
     for key in ("stages", "postprocess_settings"):
         assert runlog.OPTIONAL_CHECKS["benchmark"][key](results[key])
+
+
+def test_benchmark_logs_the_engine_hash_for_tensorrt_and_none_for_fp32(cpu_benchmark, tmp_path):
+    assert cpu_benchmark()["engine_sha256"] == "-"
+    engine = tmp_path / "fp16.engine"
+    engine.write_bytes(b"fp16 engine")
+    results = cpu_benchmark("--precision", "fp16", "--engine", str(engine))
+    assert results["engine_sha256"] == hashlib.sha256(b"fp16 engine").hexdigest()

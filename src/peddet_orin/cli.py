@@ -12,7 +12,7 @@ import torch
 
 from peddet_orin import runlog
 from peddet_orin.backends import PytorchBackend, TensorRtBackend
-from peddet_orin.engine_build import ARTIFACTS
+from peddet_orin.engine_build import ARTIFACTS, file_sha256
 
 DATA_DIR = runlog.REPO_ROOT / "data"
 ANNOTATIONS_RELATIVE = Path("annotations") / "instances_val2017.json"
@@ -58,6 +58,11 @@ def check_engine(prog: str, precision: str, engine: Path | None) -> Path | None:
     if not path.is_file():
         usage_error(prog, f"engine file {path} does not exist; build it with {build_command(precision)}")
     return path
+
+
+def engine_sha256(engine_path: Path | None) -> str:
+    """The sha256 of the engine file a TensorRT precision runs, or ``-`` for fp32, which runs none."""
+    return runlog.NOT_APPLICABLE if engine_path is None else file_sha256(engine_path)
 
 
 def make_backend(precision: str, device: str, detector, engine_path: Path | None = None):

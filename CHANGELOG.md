@@ -99,6 +99,12 @@ All notable changes to this project are recorded here. The format follows
   count the postprocess ran with. The stage times come from the same `perf_counter` readings as before plus one
   between decoding and preprocessing, so the end-to-end time holds one more `perf_counter` call; `engine` and
   `end_to_end` are computed as before. Both keys are optional in the log check, and the committed logs predate them.
+- Each build log records `engine_sha256`, the sha256 of the engine file it wrote, and `calibration_cache_sha256`,
+  the sha256 of the INT8 calibration cache the entropy route wrote, or `-` when the build wrote none (FP16, or the
+  Q/DQ fallback). The entropy route removes a cache left by an earlier build before it calibrates, since the
+  calibrator never reads one, so a cache present afterwards is that build's. Each eval and benchmark log records
+  the `engine_sha256` of the engine it ran, or `-` for FP32, so a measurement can be traced to its build. The log
+  check enforces each form when present; the committed logs predate the keys and stay valid.
 
 ### Security
 

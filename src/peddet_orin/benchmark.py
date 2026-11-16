@@ -36,6 +36,7 @@ from peddet_orin.cli import (
     add_common_options,
     check_device,
     check_engine,
+    engine_sha256,
     load_backend,
     release_backend,
     usage_error,
@@ -374,6 +375,7 @@ def main(argv: list[str] | None = None) -> int:
 
     counts = {"warmup": args.warmup, "timed": args.iterations, "repeats": args.repeats, "batch": 1}
     with runlog.RunLog("benchmark", args.precision, BENCHMARK_SEED, counts) as log:
+        engine_digest = engine_sha256(engine_path)
         order = np.random.default_rng(BENCHMARK_SEED)
         detector = load_detector(pretrained=True)
         postprocess = Postprocessor.from_torchvision(detector)
@@ -432,6 +434,7 @@ def main(argv: list[str] | None = None) -> int:
                 "cpu_clocks": cpu_clocks,
                 "stages": stage_summaries(timed),
                 "postprocess_settings": postprocess_settings(postprocess),
+                "engine_sha256": engine_digest,
             }
         )
     print(f"{args.precision}: end-to-end p50 {log.results['end_to_end']['p50_ms']:.2f} ms")
