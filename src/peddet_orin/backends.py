@@ -71,6 +71,13 @@ class TensorRtBackend:
             self.context = self.engine.create_execution_context()
             self.stream = cuda_native.Stream()
             for name in (INPUT_NAME, *OUTPUT_NAMES):
+                # The buffers hold float32; an engine with any other I/O type would read or write them wrongly.
+                dtype = self.engine.get_tensor_dtype(name)
+                if dtype != tensorrt.DataType.FLOAT:
+                    raise RuntimeError(
+                        f"engine {display_path(engine_path)} tensor {name} is {dtype}, not FLOAT; "
+                        "rebuild it with python -m peddet_orin.engine_build"
+                    )
                 shape = tuple(self.engine.get_tensor_shape(name))
                 buffer = cuda_native.DeviceBuffer(shape, np.float32)
                 self.buffers[name] = buffer

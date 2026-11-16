@@ -73,6 +73,8 @@ All notable changes to this project are recorded here. The format follows
   usable verdict covers `tests/test_gpu_check.py`, the last test file with no negative control; `tests/test_negative_controls.py` now fails if any test file has neither.
 - evaluate and benchmark refuse `--precision fp32` with a `--device` that is not a torch device, or is CUDA on
   a host where PyTorch finds none, with one line and exit 2 (PRD R-14); it was a traceback.
+- The TensorRT backend refuses an engine whose input or outputs are not FLOAT before it allocates a buffer, since
+  its buffers hold float32; the engines `engine_build` writes are FLOAT at both ends.
 
 ### Security
 

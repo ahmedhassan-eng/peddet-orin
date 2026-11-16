@@ -178,8 +178,14 @@ class FakeContext:
 
 
 class FakeEngine:
+    def __init__(self, dtypes=None) -> None:
+        self.dtypes = dtypes or {}
+
     def get_tensor_shape(self, name):
         return ENGINE_SHAPES[name]
+
+    def get_tensor_dtype(self, name):
+        return self.dtypes.get(name, "FLOAT")
 
     def create_execution_context(self):
         return FakeContext()
@@ -202,6 +208,7 @@ def fake_tensorrt(engine) -> types.ModuleType:
 
     module.Logger = Logger
     module.Runtime = Runtime
+    module.DataType = types.SimpleNamespace(FLOAT="FLOAT", HALF="HALF")
     return module
 
 
@@ -246,6 +253,14 @@ def test_tensorrt_backend_close_frees_every_buffer_and_the_stream(monkeypatch, r
     backend.close()  # A second close does nothing.
     with pytest.raises(RuntimeError, match="after close"):
         backend(torch.zeros(ENGINE_SHAPES[INPUT_NAME]))
+
+
+@pytest.mark.parametrize("name", [INPUT_NAME, *OUTPUT_NAMES])
+def test_an_engine_whose_io_is_not_float_is_refused_before_any_buffer(monkeypatch, runtime, engine_file, name):
+    install_tensorrt(monkeypatch, FakeEngine({name: "HALF"}))
+    with pytest.raises(RuntimeError, match=f"tensor {name} is HALF, not FLOAT"):
+        backends.TensorRtBackend(engine_file)
+    assert runtime.memory == {} and runtime.streams == set()
 
 
 def test_pytorch_backend_turns_tf32_off(monkeypatch):
