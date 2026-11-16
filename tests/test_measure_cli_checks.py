@@ -176,3 +176,35 @@ def test_measure_bad_input_exits_two_without_traceback_in_a_process(tmp_path):
     assert "Traceback" not in done.stderr
     assert done.stderr.strip().count("\n") == 0
     assert "python scripts/fetch_coco.py val" in done.stderr
+
+
+# The commands whose input checks must not load ONNX Runtime: it can print its own warnings to stderr on import
+# (on a host with no PCI bus id, for example), and a bad input must stay one line on stderr (PRD R-14).
+CLI_MODULES = ("peddet_orin.benchmark", "peddet_orin.evaluate", "peddet_orin.export", "peddet_orin.engine_build")
+
+
+def loaded_after(code: str) -> set[str]:
+    """Run ``code`` in a fresh interpreter and return the top-level module names it left loaded."""
+    environment = {**os.environ, "PYTHONPATH": os.pathsep.join([str(SRC_DIR), os.environ.get("PYTHONPATH", "")])}
+    report = "\nimport sys\nprint(' '.join(sorted({name.split('.')[0] for name in sys.modules})))"
+    done = subprocess.run([sys.executable, "-c", code + report], capture_output=True, text=True, env=environment,
+                          timeout=300, check=True)
+    return set(done.stdout.split())
+
+
+def test_a_bad_input_command_never_loads_onnxruntime(tmp_path):
+    code = (
+        "import importlib\n"
+        f"for name in {CLI_MODULES!r}:\n"
+        "    importlib.import_module(name)\n"
+        "from peddet_orin import benchmark\n"
+        "try:\n"
+        f"    benchmark.main(['--precision', 'fp16', '--data-dir', {str(tmp_path)!r}])\n"
+        "except SystemExit:\n"
+        "    pass\n"
+    )
+    assert "onnxruntime" not in loaded_after(code)
+
+
+def test_a_module_that_loads_onnxruntime_is_detected():
+    assert "onnxruntime" in loaded_after("import onnxruntime")

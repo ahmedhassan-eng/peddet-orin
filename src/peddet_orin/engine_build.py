@@ -18,7 +18,6 @@ import warnings
 from pathlib import Path
 
 import numpy as np
-import onnxruntime.quantization as ort_quantization
 
 from peddet_orin import cuda_native, debug, runlog
 from peddet_orin.backends import tensorrt_logger
@@ -211,19 +210,22 @@ def _build_int8_entropy(onnx_path: Path, output: Path, images: list[Path]) -> No
                 calibrator.release()
 
 
-class _QdqReader(ort_quantization.CalibrationDataReader):
-    """Feed the calibration set to ONNX Runtime's static quantiser."""
-
-    def __init__(self, images: list[Path]) -> None:
-        self.remaining = iter(images)
-
-    def get_next(self):
-        path = next(self.remaining, None)
-        return None if path is None else {INPUT_NAME: _calibration_batch(path)}
-
-
 def _build_int8_qdq(onnx_path: Path, output: Path, images: list[Path]) -> None:
     """Fallback: calibrate in ONNX Runtime, then let TensorRT honour the Q/DQ nodes."""
+    # Imported here, not at the top: loading ONNX Runtime can print its own warnings, and a command's input
+    # checks must stay one line on stderr (PRD R-14).
+    from onnxruntime import quantization as ort_quantization
+
+    class _QdqReader(ort_quantization.CalibrationDataReader):
+        """Feed the calibration set to ONNX Runtime's static quantiser."""
+
+        def __init__(self, images: list[Path]) -> None:
+            self.remaining = iter(images)
+
+        def get_next(self):
+            path = next(self.remaining, None)
+            return None if path is None else {INPUT_NAME: _calibration_batch(path)}
+
     qdq_onnx = output.parent / QDQ_ONNX_NAME
     qdq_onnx.parent.mkdir(parents=True, exist_ok=True)
     ort_quantization.quantize_static(

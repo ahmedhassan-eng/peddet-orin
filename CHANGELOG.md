@@ -23,7 +23,13 @@ All notable changes to this project are recorded here. The format follows
 - The published numbers changed. The results table is the median of the judged quieted runs at commit `025171d`;
   0.1.0's table came from one run at `17a1ee2` on a host that was not quieted. That run stays in `runs/` and is
   shown apart, with its deviation from the median, and is not judged.
-- No file under `src/` changes.
+- `src/` changes in one way only: `peddet_orin.export` and `peddet_orin.engine_build` import ONNX Runtime where
+  they use it, not at the top. On a host with no PCI bus id ONNX Runtime prints its own warning when it loads, so a
+  command's bad-input error was two lines on stderr there, against PRD R-14; it is one line again. The judged runs
+  ran the code before this change, with ONNX Runtime loaded in the measuring process; the peak process RSS in the
+  table includes it and was not re-measured; the timings and accuracy do not depend on it. The run log still loads
+  ONNX Runtime to record its version, so a benchmark run of the released code loads it too, once its input checks
+  have passed.
 
 ### Security
 

@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import onnxruntime
 import torch
 
 from peddet_orin import runlog
@@ -54,6 +53,10 @@ def max_difference(
     PyTorch always sees normalised input. ``normalise_onnx_input=False`` skips the
     step on the ONNX side only, which is how the check is shown to detect that bug.
     """
+    # Imported here, not at the top: loading ONNX Runtime can print its own warnings, and a command's input
+    # checks must stay one line on stderr (PRD R-14).
+    import onnxruntime
+
     onnx_runtime = onnxruntime.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
     worst = 0.0
     for raw in raw_batches:
