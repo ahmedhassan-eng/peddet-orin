@@ -2,16 +2,20 @@
 # because TensorRT 10.16.2.10 comes from the JetPack system Python, not from pip.
 # Used by the README's install line as: pip install -c constraints/jetson-orin.txt ...
 #
-# The 31 pins below come from the earlier venv's own packages (pip freeze --local),
-# unchanged. Its 21 pins that nothing here installs or imports (streamlit and its
-# dependencies, matplotlib and kiwisolver) are left out.
+# The 31 pins below come from the earlier venv's own packages (pip freeze --local). Its 21
+# pins that nothing here installs or imports (streamlit and its dependencies, matplotlib and
+# kiwisolver) are left out. Every package pinned here and in requirements/ci-cpu.txt carries
+# the same version in both, so the pip-audit run on that file covers it; where that moved a
+# pin, the venv that ran the judged runs had another version: filelock 3.32.0, fsspec
+# 2026.6.0, networkx 3.6.1, protobuf 7.35.1, setuptools 83.0.0, pytest 7.4.4 and pillow
+# 12.3.0. pygments is pinned because pytest 9 needs it.
 cuda-bindings==13.3.1
 cuda-pathfinder==1.6.0
 cuda-toolkit==13.0.3.0
-filelock==3.32.0
-fsspec==2026.6.0
+filelock==4.2.10
+fsspec==2026.9.0
 mpmath==1.3.0
-networkx==3.6.1
+networkx==3.7
 numpy==1.26.4
 nvidia-cublas==13.1.1.3
 nvidia-cuda-cupti==13.0.85
@@ -28,9 +32,9 @@ nvidia-nccl-cu13==2.30.7
 nvidia-nvjitlink==13.3.33
 nvidia-nvshmem-cu13==3.4.5
 nvidia-nvtx==13.0.85
-protobuf==7.35.1
+protobuf==7.36.2
 pycocotools==2.0.11
-setuptools==83.0.0
+setuptools==84.2.1
 sympy==1.14.0
 torch==2.14.1+cu130
 torchvision==0.29.1+cu130
@@ -42,7 +46,8 @@ typing_extensions==4.16.0
 # onnxruntime. These are the versions used on this board.
 onnx==1.23.2
 onnxruntime==1.31.1
-pytest==7.4.4
+pytest==9.0.3
+pygments==2.21.0
 flatbuffers==25.12.19
 ml_dtypes==0.5.4
 #

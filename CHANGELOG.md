@@ -29,7 +29,12 @@ All notable changes to this project are recorded here. The format follows
 
 - `requirements/ci-cpu.txt` pins pillow 13.0.0, pytest 9.0.3 and filelock 4.2.10 on every Python, the first
   releases with the fixes pip-audit lists against pillow 12.3.0, pytest 7.4.4 and filelock 4.1.0, and pins pygments,
-  which pytest 9 needs. `constraints/jetson-orin.txt` pins pillow 13.0.0 too.
+  which pytest 9 needs.
+- `constraints/jetson-orin.txt` pins the same versions as `requirements/ci-cpu.txt` for every package in both, so
+  pip-audit's pass covers the board's set too: pillow 13.0.0, pytest 9.0.3, pygments 2.21.0, filelock 4.2.10,
+  fsspec 2026.9.0, networkx 3.7, protobuf 7.36.2 and setuptools 84.2.1. `tests/test_packaging_metadata.py` fails
+  when a package pinned in both differs; torch and torchvision are compared before the "+", since the board uses
+  CUDA builds and CI CPU builds.
 - The judged runs used Pillow 12.3.0. The pins name 13.0.0, the first release with the fixes pip-audit lists, and
   the numbers were not re-measured with it; JPEG decoding by Pillow is inside the end-to-end timings, not the
   engine timings.

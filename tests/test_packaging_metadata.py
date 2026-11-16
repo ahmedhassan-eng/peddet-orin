@@ -90,6 +90,24 @@ def test_pillow_includes_the_cve_2024_28219_fix_and_agrees_across_pin_files():
     assert tuple(int(part) for part in ci[0][0].split(".")) >= FIRST_FIXED_PILLOW
 
 
+# The Jetson venv runs Python 3.12. torch and torchvision are the same releases in both files but different
+# builds: CUDA 13.0 wheels on the board, CPU wheels in CI, so only their versions before the "+" must agree.
+JETSON_PYTHON = "3.12"
+SAME_RELEASE_OTHER_BUILD = {"torch", "torchvision"}
+
+
+def pin_differences(ci: dict[str, str], orin: dict[str, str]) -> list[str]:
+    """Each package pinned in both sets whose versions differ, as ``name: ci <v> / board <v>``."""
+    problems = []
+    for name in sorted(set(ci) & set(orin)):
+        left, right = ci[name], orin[name]
+        if name in SAME_RELEASE_OTHER_BUILD:
+            left, right = left.split("+")[0], right.split("+")[0]
+        if left != right:
+            problems.append(f"{name}: ci {ci[name]} / board {orin[name]}")
+    return problems
+
+
 def applicable_pins(path: Path, python_version: str) -> dict[str, str]:
     """Return ``{name: version}`` for the pins whose marker holds on the given Python version."""
     chosen: dict[str, str] = {}
@@ -99,6 +117,22 @@ def applicable_pins(path: Path, python_version: str) -> dict[str, str]:
                 assert name not in chosen, f"{name} is pinned twice for Python {python_version}"
                 chosen[name] = version
     return chosen
+
+
+def test_every_package_pinned_in_both_files_has_the_same_version():
+    ci = applicable_pins(CI_PINS, JETSON_PYTHON)
+    orin = applicable_pins(JETSON_PINS, JETSON_PYTHON)
+    assert len(set(ci) & set(orin)) >= 20
+    assert pin_differences(ci, orin) == []
+
+
+def test_a_package_pinned_differently_in_the_two_files_is_detected():
+    ci = applicable_pins(CI_PINS, JETSON_PYTHON)
+    orin = {**applicable_pins(JETSON_PINS, JETSON_PYTHON), "filelock": "3.32.0", "torch": "2.13.0+cu130"}
+    assert pin_differences(ci, orin) == [
+        f"filelock: ci {ci['filelock']} / board 3.32.0",
+        f"torch: ci {ci['torch']} / board 2.13.0+cu130",
+    ]
 
 
 def test_every_ci_requirement_is_an_exact_pin_once_per_python():
