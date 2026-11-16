@@ -64,6 +64,8 @@ All notable changes to this project are recorded here. The format follows
 - The benchmark reads the power mode with `nvpmodel -q` after warm-up and before timing, beside the load
   average, so the log records the mode in force as timing starts; it was read after timing ended. The
   command-output helper in `runlog` is public as `command_output`.
+- The Quickstart names the system packages it relies on and their versions on the measured board:
+  `python3.12-venv`, `python3-libnvinfer`, `nvidia-l4t-nvpmodel`, `nvidia-l4t-tools` and `python3-numpy`.
 
 ### Security
 

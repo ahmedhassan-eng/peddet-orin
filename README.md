@@ -208,7 +208,7 @@ RAM was not a constraint in runs 3-5: the lowest available memory during any job
 
 ## Quickstart
 
-This needs a Jetson Orin on JetPack 7. Run the commands from the repository root:
+This needs a Jetson Orin on JetPack 7, with these system packages, at the versions the measured board had: `python3.12-venv` 3.12.3 for the venv; from JetPack, `python3-libnvinfer` 10.16.2.10 for TensorRT, and `nvidia-l4t-nvpmodel` and `nvidia-l4t-tools` 39.2.1 for `nvpmodel` and `tegrastats`. The board's `python3-numpy` 1.26.4 equals the numpy pin, so the venv uses it; without it, pip installs the pinned numpy. Run the commands from the repository root:
 
 ```sh
 git clone https://github.com/ahmedhassan-eng/peddet-orin.git
