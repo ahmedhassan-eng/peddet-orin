@@ -25,7 +25,7 @@ def test_any_other_skip_is_reported():
     assert unexpected_skips(["test_cuda_forward_matches_cpu", "test_other"]) == ["test_other"]
 
 
-def _planted_run(pytester, monkeypatch, strict: bool, source: str = PLANTED, ci: bool = False):
+def _planted_run(pytester, monkeypatch, strict: bool, source: str = PLANTED, ci: bool = False, gpu: bool = False):
     monkeypatch.syspath_prepend(str(TESTS_DIR))
     if ci:
         monkeypatch.setenv("CI", "true")
@@ -35,6 +35,10 @@ def _planted_run(pytester, monkeypatch, strict: bool, source: str = PLANTED, ci:
         monkeypatch.setenv("PDORIN_STRICT_SKIPS", "1")
     else:
         monkeypatch.delenv("PDORIN_STRICT_SKIPS", raising=False)
+    if gpu:
+        monkeypatch.setenv("PDORIN_REQUIRE_GPU", "1")
+    else:
+        monkeypatch.delenv("PDORIN_REQUIRE_GPU", raising=False)
     pytester.makeconftest(CONFTEST)
     pytester.makepyfile(source)
     return pytester.runpytest_inprocess()
@@ -48,6 +52,23 @@ def test_an_unexpected_skip_fails_a_strict_run(pytester, monkeypatch):
 
 def test_the_same_skip_passes_a_lenient_run(pytester, monkeypatch):
     assert _planted_run(pytester, monkeypatch, strict=False).ret == 0
+
+
+GPU_PLANTED = """
+import pytest
+
+
+def test_cuda_forward_matches_cpu():
+    pytest.skip("no CUDA device")
+"""
+
+
+def test_a_gpu_skip_passes_a_strict_run_but_fails_when_the_gpu_is_required(pytester, monkeypatch):
+    assert _planted_run(pytester, monkeypatch, strict=True, source=GPU_PLANTED).ret == 0
+    result = _planted_run(pytester, monkeypatch, strict=False, source=GPU_PLANTED, gpu=True)
+    assert result.ret != 0
+    result.stdout.fnmatch_lines(["*unexpected skips: test_cuda_forward_matches_cpu*"])
+    assert unexpected_skips(sorted(EXPECTED_SKIPS), gpu=True) == sorted(EXPECTED_SKIPS)
 
 
 CHECKOUT_PLANTED = """

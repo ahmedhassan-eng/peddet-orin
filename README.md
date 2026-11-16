@@ -225,10 +225,10 @@ The venv uses `--system-site-packages` because TensorRT 10.16.2.10 comes from th
 
 The package runs from this source checkout, not from an installed wheel. Its commands find the checkout two levels above the package, or the directory `PDORIN_ROOT` names, and refuse to start anywhere else. `python -m peddet_orin` lists the commands; each is also installed as a `peddet-orin-<command>` script.
 
-Run the tests. They need no network. On the Jetson, the GPU and TensorRT tests in `tests/test_gpu.py` run too, so the suite takes about fifteen minutes while it builds TensorRT engines:
+Run the tests. They need no network. On the Jetson, the GPU and TensorRT tests in `tests/test_gpu.py` run too, so the suite takes about fifteen minutes while it builds TensorRT engines. `PDORIN_REQUIRE_GPU=1` makes a GPU or TensorRT test that skips, for want of a CUDA device or TensorRT, fail the run instead:
 
 ```sh
-python -m pytest -rs
+PDORIN_REQUIRE_GPU=1 python -m pytest -rs
 ```
 
 Export the network and build an FP16 engine. This downloads the pretrained weights once, and checks their sha256 before every load:

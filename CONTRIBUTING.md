@@ -50,7 +50,8 @@ The suite also enforces the repository's own rules:
 - `tests/test_strict_skips.py`: with `PDORIN_STRICT_SKIPS=1`, as in CI, any skip other than the five GPU and
   TensorRT tests fails the run. Outside CI, the repository-rule tests may also skip in a release tarball (no `.git`)
   or a shallow clone, with exactly the reason `tests/strict_skips.py` names.
-- `tests/test_readme_table.py`: the README results table is exactly what the logs in `runs/` generate.
+  With `PDORIN_REQUIRE_GPU=1`, as on the board, the GPU and TensorRT tests may not skip either.
+- `tests/test_readme_table.py`: the README results table is exactly what the logs in `runs/` and `runs-repeat/` generate.
 - `tests/test_changelog.py`: `CHANGELOG.md` has a dated entry with a release link for every version.
 - `tests/test_doc_test_refs.py`: every test file and test name a tracked document cites exists and is collected.
 - `tests/test_prd_coverage.py`: every requirement in `PRD.md` names a test that runs in CI.

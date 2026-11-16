@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A pytest plugin: under PDORIN_STRICT_SKIPS=1, any skip but the expected ones fails the run.
+"""A pytest plugin: under PDORIN_STRICT_SKIPS=1, any skip but the expected ones fails the run; under
+PDORIN_REQUIRE_GPU=1, as on the board, the GPU and TensorRT tests are not expected to skip either.
 
 Two kinds of skip are expected:
 
@@ -29,6 +30,8 @@ EXPECTED_SKIPS = frozenset(
 )
 # CI sets this, so that any other skip fails the run instead of passing quietly.
 VARIABLE = "PDORIN_STRICT_SKIPS"
+# Set on the board, so that a GPU or TensorRT test that skips (no CUDA device, no TensorRT) fails the run too.
+GPU_VARIABLE = "PDORIN_REQUIRE_GPU"
 # The reasons a repository-rule test skips with outside a full clone; nothing else may use them.
 NO_GIT_REASON = "repository rule: no .git here (a release tarball), so git cannot list the tracked files"
 SHALLOW_REASON = "repository rule: a shallow clone lacks the history this test looks commits up in"
@@ -57,16 +60,16 @@ def checkout_skip_reason(root: Path, history: bool = False) -> str | None:
     return None
 
 
-def unexpected_skips(skipped: list[str | tuple[str, str]], ci: bool = True) -> list[str]:
+def unexpected_skips(skipped: list[str | tuple[str, str]], ci: bool = True, gpu: bool = False) -> list[str]:
     """Return the skipped test names that are not expected to skip.
 
     Each entry is a test name, or a ``(name, reason)`` pair. A checkout reason is
-    expected only when ``ci`` is false.
+    expected only when ``ci`` is false; the GPU and TensorRT skips only when ``gpu`` is false.
     """
     unexpected = set()
     for entry in skipped:
         name, reason = (entry, "") if isinstance(entry, str) else entry
-        if name.split("[")[0] in EXPECTED_SKIPS:
+        if not gpu and name.split("[")[0] in EXPECTED_SKIPS:
             continue
         if not ci and reason in CHECKOUT_REASONS:
             continue
@@ -93,9 +96,10 @@ class StrictSkips:
 
     @pytest.hookimpl(trylast=True)
     def pytest_sessionfinish(self, session, exitstatus) -> None:
-        if os.environ.get(VARIABLE) != "1":
+        gpu = os.environ.get(GPU_VARIABLE) == "1"
+        if os.environ.get(VARIABLE) != "1" and not gpu:
             return
-        unexpected = unexpected_skips(self.skipped, ci=in_ci())
+        unexpected = unexpected_skips(self.skipped, ci=in_ci(), gpu=gpu)
         if unexpected:
             print(f"\nunexpected skips: {', '.join(unexpected)}")
             session.exitstatus = pytest.ExitCode.TESTS_FAILED
