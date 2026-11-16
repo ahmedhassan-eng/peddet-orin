@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The repository root: PDORIN_ROOT, else the source checkout, else a one-line RuntimeError."""
+"""The repository root: PDORIN_ROOT, else the source checkout; else resolve_root raises a one-line RuntimeError,
+and importing the package prints that line and exits 2."""
 import shutil
 import subprocess
 import sys
@@ -79,8 +80,8 @@ def test_project_field_reads_only_the_project_table(tmp_path):
 
 def test_an_installed_copy_without_pdorin_root_refuses_to_import(tmp_path):
     done = run_installed(installed_copy(tmp_path), "import peddet_orin.runlog", root=None)
-    assert done.returncode != 0
-    assert "RuntimeError: peddet-orin runs from a source checkout" in done.stderr
+    assert done.returncode == 2
+    assert done.stderr == f"peddet-orin: error: {runlog.NO_CHECKOUT_MESSAGE}\n"
 
 
 def test_an_installed_copy_with_pdorin_root_writes_under_it(tmp_path):
@@ -93,7 +94,17 @@ def test_an_installed_copy_with_pdorin_root_writes_under_it(tmp_path):
 
 def test_an_installed_copy_with_a_bad_pdorin_root_refuses_to_import(tmp_path):
     done = run_installed(installed_copy(tmp_path), "import peddet_orin.runlog", root=tmp_path / "empty")
-    assert done.returncode != 0 and "PDORIN_ROOT" in done.stderr
+    assert done.returncode == 2
+    assert done.stderr == f"peddet-orin: error: {runlog.BAD_OVERRIDE_MESSAGE}\n"
+
+
+def test_a_command_with_a_bad_pdorin_root_prints_one_line_and_no_traceback(tmp_path):
+    environment = {"PYTHONPATH": str(PACKAGE_DIR.parent), "CUDA_VISIBLE_DEVICES": "", "PATH": "",
+                   "PDORIN_ROOT": str(tmp_path / "empty")}
+    done = subprocess.run([sys.executable, "-m", "peddet_orin.export"], capture_output=True, text=True, timeout=120,
+                          env=environment)
+    assert done.returncode == 2 and "Traceback" not in done.stderr
+    assert done.stderr.count("\n") == 1 and "PDORIN_ROOT" in done.stderr
 
 
 def test_package_version_falls_back_to_the_checkout_pyproject(monkeypatch, tmp_path):
@@ -101,7 +112,7 @@ def test_package_version_falls_back_to_the_checkout_pyproject(monkeypatch, tmp_p
         raise peddet_orin.metadata.PackageNotFoundError(name)
 
     monkeypatch.setattr(peddet_orin.metadata, "version", not_installed)
-    monkeypatch.setattr(runlog, "REPO_ROOT", fake_checkout(tmp_path / "clone", version="4.5.6"))
+    monkeypatch.setenv("PDORIN_ROOT", str(fake_checkout(tmp_path / "clone", version="4.5.6")))
     assert peddet_orin._read_version() == "4.5.6"
 
 

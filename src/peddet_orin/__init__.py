@@ -11,11 +11,13 @@ def _read_version() -> str:
         return metadata.version("peddet-orin")
     except metadata.PackageNotFoundError:
         pass
+    from peddet_orin import root
+
     try:
-        from peddet_orin import runlog
+        checkout = root.resolve_root()
     except RuntimeError:  # Not installed and not in a checkout: there is no version to read.
         return UNKNOWN_VERSION
-    return runlog.project_field(runlog.REPO_ROOT / "pyproject.toml", "version") or UNKNOWN_VERSION
+    return root.project_field(checkout / "pyproject.toml", "version") or UNKNOWN_VERSION
 
 
 __version__ = _read_version()

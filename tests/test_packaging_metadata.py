@@ -3,10 +3,10 @@
 import ast
 import re
 import sys
+import tomllib
 from importlib import metadata
 from pathlib import Path
 
-import tomllib
 from packaging.markers import Marker
 from packaging.requirements import Requirement
 

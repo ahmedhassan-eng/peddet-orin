@@ -11,8 +11,8 @@ in the system-file allowlist, so a committed log cannot carry one.
 The repository root is the source checkout the package runs from. The
 environment variable ``PDORIN_ROOT`` overrides it, and must name a directory
 whose ``pyproject.toml`` is peddet-orin's. With neither, importing this module
-raises ``RuntimeError``: logs, data and artifacts belong to a checkout, never
-to the interpreter's installation tree.
+prints one error line and exits with status 2: logs, data and artifacts belong
+to a checkout, never to the interpreter's installation tree.
 """
 from __future__ import annotations
 
@@ -24,66 +24,28 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Mapping
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
 from typing import Any
 
-PROJECT_NAME = "peddet-orin"
-ROOT_ENVIRONMENT_VARIABLE = "PDORIN_ROOT"
-NO_CHECKOUT_MESSAGE = (
-    "peddet-orin runs from a source checkout: run it from a clone of the repository, "
-    "or set PDORIN_ROOT to the clone's directory"
+from peddet_orin.root import (  # noqa: F401  (re-exported: tests and callers read them from runlog)
+    BAD_OVERRIDE_MESSAGE,
+    NO_CHECKOUT_MESSAGE,
+    PROJECT_NAME,
+    ROOT_ENVIRONMENT_VARIABLE,
+    is_checkout,
+    project_field,
+    resolve_root,
 )
-BAD_OVERRIDE_MESSAGE = (
-    "PDORIN_ROOT does not hold peddet-orin's pyproject.toml; peddet-orin runs from a source checkout, "
-    "so set PDORIN_ROOT to the clone's directory"
-)
 
-
-def project_field(pyproject: Path, key: str) -> str | None:
-    """Return a quoted string value from the ``[project]`` table of a pyproject.toml, or ``None``.
-
-    A line-based reader, so that Python 3.10, which has no ``tomllib``, needs no extra package.
-    """
-    try:
-        text = pyproject.read_text()
-    except OSError:
-        return None
-    in_project = False
-    value = re.compile(rf'^{re.escape(key)}\s*=\s*"(?P<value>[^"]*)"\s*(?:#.*)?$')
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("["):
-            in_project = stripped == "[project]"
-        elif in_project and (match := value.match(stripped)):
-            return match.group("value")
-    return None
-
-
-def is_checkout(directory: Path) -> bool:
-    """Report whether a directory holds peddet-orin's pyproject.toml."""
-    return project_field(directory / "pyproject.toml", "name") == PROJECT_NAME
-
-
-def resolve_root(environ: Mapping[str, str] | None = None, module_file: str | Path = __file__) -> Path:
-    """Return the repository root: ``PDORIN_ROOT`` if set, else the checkout above the package."""
-    environ = os.environ if environ is None else environ
-    override = environ.get(ROOT_ENVIRONMENT_VARIABLE, "")
-    if override:
-        root = Path(override).expanduser().resolve()
-        if not is_checkout(root):
-            raise RuntimeError(BAD_OVERRIDE_MESSAGE)
-        return root
-    # src/peddet_orin/runlog.py: the checkout is two levels above the package directory.
-    checkout = Path(module_file).resolve().parents[2]
-    if is_checkout(checkout):
-        return checkout
-    raise RuntimeError(NO_CHECKOUT_MESSAGE)
-
-
-REPO_ROOT = resolve_root()
+# PRD R-13: outside a checkout every command refuses at import with one line and exit status 2, never a traceback.
+try:
+    REPO_ROOT = resolve_root()
+except RuntimeError as error:
+    print(f"peddet-orin: error: {error}", file=sys.stderr)
+    raise SystemExit(2) from None
 RUNS_DIR = REPO_ROOT / "runs"
 UNREADABLE = "UNREADABLE"
 SCHEMA_VERSION = 2
@@ -140,7 +102,7 @@ DECODE_ENVIRONMENT = ("numpy", "pillow", "libjpeg", "pycocotools")
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).strftime(TIMESTAMP_FORMAT)
+    return datetime.now(UTC).strftime(TIMESTAMP_FORMAT)
 
 
 def _command_output(arguments: list[str]) -> str:
@@ -334,7 +296,7 @@ class RunLog:
         if problems:
             raise ValueError(f"refusing to write an invalid log: {problems}")
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(timezone.utc).strftime(FILE_STAMP_FORMAT)
+        stamp = datetime.now(UTC).strftime(FILE_STAMP_FORMAT)
         path = RUNS_DIR / f"{self.kind}_{self.precision}_{stamp}.json"
         path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
         print(f"log written: {relative_command([str(path)])}")

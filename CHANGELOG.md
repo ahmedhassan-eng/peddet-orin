@@ -56,6 +56,11 @@ All notable changes to this project are recorded here. The format follows
   naming the command as evaluate and benchmark do; it printed `error: ...` before.
 - Diagnostic logging and profiling turn on with `PDORIN_DEBUG=1`; the generic `DEBUG` variable, which other
   tools also read, no longer turns them on. `tests/test_debug.py` checks both.
+- A command run outside a checkout, or with a `PDORIN_ROOT` that holds no peddet-orin `pyproject.toml`, prints
+  one `peddet-orin: error: ...` line and exits 2, as PRD R-13 says; it printed an 11-line traceback before. The root
+  lookup moves to `src/peddet_orin/root.py`, which reads `pyproject.toml` with `tomllib`, and `import peddet_orin`
+  still works outside a checkout.
+- ruff's target is Python 3.11, the oldest supported version.
 
 ### Security
 
