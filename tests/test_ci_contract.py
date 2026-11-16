@@ -2,6 +2,7 @@
 """The CI workflow runs exactly what the README says it runs, on the platforms it names."""
 
 import re
+import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -147,6 +148,24 @@ def local_matrix(text: str) -> tuple[list[str], list[str]]:
     start = next(i for i, line in enumerate(lines) if line.strip() == "# ci:commands:begin")
     end = next(i for i, line in enumerate(lines) if line.strip() == "# ci:commands:end")
     return versions, [line.strip() for line in lines[start + 1 : end] if line.strip()]
+
+
+def commands_run_as_a_condition(text: str) -> bool:
+    """Whether the local script runs its CI commands as an if or && condition, where bash ignores set -e."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip() == "# ci:commands:begin")
+    opener = next(line for line in reversed(lines[:start]) if line.strip().endswith("("))
+    return opener.strip() != "("
+
+
+def test_the_local_script_stops_at_its_first_failing_command(tmp_path):
+    text = LOCAL.read_text()
+    assert not commands_run_as_a_condition(text)
+    assert commands_run_as_a_condition(text.replace("\n  (\n", "\n  if (\n", 1))
+    # The same shape run by bash: a failing first command fails the block.
+    block = "(\n  set -e\n  false\n  true\n)\nif [ $? = 0 ]; then echo PASS; else echo FAIL; fi\n"
+    done = subprocess.run(["bash", "-c", block], capture_output=True, text=True, check=True)
+    assert done.stdout.strip() == "FAIL"
 
 
 def test_local_script_mirrors_the_ci_matrix():

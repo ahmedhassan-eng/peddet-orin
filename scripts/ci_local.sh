@@ -19,7 +19,9 @@ for version in $VERSIONS; do
   venv=".cache/ci-local/py$version"
   rm -rf "$venv"
   "python$version" -m venv "$venv" || { echo "CI-LOCAL python$version VENV-FAIL"; status=1; continue; }
-  if (
+  # The subshell runs as a plain command, not as an if condition: bash ignores set -e inside a condition, and then
+  # only the last command's status would count.
+  (
     . "$venv/bin/activate"
     set -e
     # ci:commands:begin
@@ -32,7 +34,8 @@ for version in $VERSIONS; do
     ruff format --check .
     PDORIN_STRICT_SKIPS=1 python -m pytest -rs
     # ci:commands:end
-  ); then
+  )
+  if [ $? = 0 ]; then
     echo "CI-LOCAL python$version PASS"
   else
     echo "CI-LOCAL python$version FAIL"
