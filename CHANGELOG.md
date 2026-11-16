@@ -52,6 +52,8 @@ All notable changes to this project are recorded here. The format follows
 - The command-line pieces that evaluate and benchmark share (data and engine paths, common options, the
   one-line usage error, and the backend for each precision) move from `evaluate.py` to
   `src/peddet_orin/cli.py`, so benchmark no longer imports them from evaluate.
+- A bad input to `python -m peddet_orin.engine_build` prints `python -m peddet_orin.engine_build: error: ...`,
+  naming the command as evaluate and benchmark do; it printed `error: ...` before.
 
 ### Security
 

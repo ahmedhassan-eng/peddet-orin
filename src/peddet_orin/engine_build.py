@@ -42,6 +42,7 @@ PATH_QDQ = "onnx-ptq-qdq"
 NOT_APPLICABLE = "-"
 PRECISIONS = ("fp16", "int8")
 EXIT_BAD_INPUT = 2
+PROG = "python -m peddet_orin.engine_build"
 HASH_CHUNK_BYTES = 1 << 20
 
 
@@ -268,7 +269,7 @@ def build_int8(onnx_path: Path, output: Path, images: list[Path]) -> tuple[str, 
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="python -m peddet_orin.engine_build",
+        prog=PROG,
         description=__doc__.splitlines()[0],
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -299,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         require_onnx(args.onnx)
         images = verify_calibration(args.calibration_dir) if int8 else []
     except InputError as error:
-        print(f"error: {error}", file=sys.stderr)
+        print(f"{PROG}: error: {error}", file=sys.stderr)
         return EXIT_BAD_INPUT
     manifest_digest = file_sha256(MANIFEST_PATH) if int8 else NOT_APPLICABLE
     with runlog.RunLog("build", args.precision, CALIBRATION_SEED, {"calibration_images": len(images)}) as log:

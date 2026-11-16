@@ -101,7 +101,8 @@ def test_build_with_a_missing_onnx_exits_2_with_one_line(tmp_path, monkeypatch, 
     assert engine_build.main(["--precision", "fp16", "--onnx", str(tmp_path / "absent.onnx")]) == 2
     error = capsys.readouterr().err
     assert error.count("\n") == 1
-    assert error.startswith("error: ONNX file not found:") and "absent.onnx" in error
+    assert error.startswith("python -m peddet_orin.engine_build: error: ONNX file not found:")
+    assert "absent.onnx" in error
 
 
 def test_int8_build_with_a_bad_calibration_set_exits_2(calibration, tmp_path, monkeypatch, capsys):
@@ -113,6 +114,7 @@ def test_int8_build_with_a_bad_calibration_set_exits_2(calibration, tmp_path, mo
     assert engine_build.main(arguments) == 2
     error = capsys.readouterr().err
     assert error.count("\n") == 1 and "does not match its sha256" in error
+    assert error.startswith("python -m peddet_orin.engine_build: error: ")
 
 
 def test_the_fallback_is_not_taken_when_the_onnx_is_missing(calibration, tmp_path, monkeypatch):
