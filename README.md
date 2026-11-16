@@ -1,6 +1,70 @@
 # peddet-orin
 
-Person detection on a Jetson Orin Nano Super with torchvision's SSDLite320 MobileNetV3-Large and its COCO weights, measured at three precisions: FP32 in PyTorch, and FP16 and INT8 in TensorRT. The benchmark reports accuracy on COCO 2017 val, latency, frames per second, memory and power. The headline numbers are the median of the judged runs' JSON logs under `runs-repeat/`, which also hold each run's QUIET gate and sampler files; the earlier run's logs are in `runs/`, and a test fails if the table and the logs disagree. The numbers are in [Results](#results); the hardware and software, the Quickstart and how to reproduce the results stand before it.
+Person detection on a Jetson Orin Nano Super with torchvision's SSDLite320 MobileNetV3-Large and its COCO weights, measured at three precisions: FP32 in PyTorch, and FP16 and INT8 in TensorRT. The benchmark reports accuracy on COCO 2017 val, latency, frames per second, memory and power. The headline numbers are the median of the judged runs' JSON logs under `runs-repeat/`, which also hold each run's QUIET gate and sampler files; the earlier run's logs are in `runs/`, and a test fails if the table and the logs disagree. [Results](#results) and [Limitations](#limitations) follow; the hardware and software, how the judged runs were checked, the Quickstart and how to reproduce the results come after them.
+
+## Results
+
+Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. FPS is 1 / mean latency over the serial batch-1 iterations, not a sustained throughput with several requests in flight. Power is the mean board input over the whole timed loop, which ran at the end-to-end rate, so it sits with the end-to-end columns: energy per frame is each run's power divided by its end-to-end FPS, and the board never ran at the engine FPS while power was read. All precisions use the same postprocess. Each benchmark pools three timed repeats of its loop, and the notes give the range of the per-repeat medians. Accuracy is person AP on the 5000 COCO val2017 images, from pycocotools with `catIds=[1]`.
+
+<!-- results:begin -->
+| Device and precision | Engine p50/p90/p99 (ms) | Engine FPS | End-to-end p50/p90/p99 (ms) | End-to-end FPS | Avg power VDD_IN (W) | End-to-end energy per frame (J) | Peak process RSS (MiB) | Person AP@[.5:.95] | Person AP50 | INT8 path |
+|---|---|---|---|---|---|---|---|---|---|---|
+| GPU, PyTorch FP32 | 29.8 / 30.2 / 31.9 | 33.5 | 87.1 / 99.9 / 106.2 | 11.5 | 7.6 | 0.655 | 1219 | 28.01 | 49.50 | - |
+| GPU, TensorRT FP16 | 3.8 / 3.9 / 4.0 | 263.0 | 60.6 / 73.8 / 80.4 | 16.7 | 7.1 | 0.428 | 1195 | 28.01 | 49.49 | - |
+| GPU, TensorRT INT8 | 3.6 / 3.7 / 3.8 | 276.2 | 64.8 / 77.5 / 84.5 | 15.7 | 7.1 | 0.453 | 1102 | 26.74 | 48.14 | IInt8EntropyCalibrator2 |
+
+- Each cell is the median over the n = 3 quieted runs in `runs-repeat/` (run3, run4, run5), this release's count; 0.2.0 plans 5 or more runs.
+- The judged runs were made at commit `025171d` with package version 0.1.0, as their logs record.
+- Memory, swap and temperature are recorded for the judged runs only, over each whole benchmark job, warm-up included; the earlier runs have no such record.
+- INT8 person AP differs from FP16 by -1.27 points.
+- INT8 person AP is 26.74 in each of the 3 judged runs and 26.83 in the earlier run; each run builds its own INT8 engine, so each score comes from a separate build.
+- The judged runs' power mode was not read: 9 of their 9 benchmark logs record `UNREADABLE`, which a log records when `nvpmodel` is not found on PATH or `nvpmodel -q` fails, and the host's run script adds no system sbin directory to PATH. The evidence the logs hold is the clock maxima of every judged benchmark: GPU 1020 MHz, CPU policy0 1728 MHz, policy4 1728 MHz, the same as in each of the earlier run's 3 benchmarks, whose power mode reads `NV Power Mode: MAXN_SUPER 2`.
+- FP32 min-max over the 3 runs: ap 28.01-28.01, ap50 49.50-49.50, engine_p50_ms 29.31-30.21, end_to_end_p50_ms 86.28-87.76, avg_power_w 7.56-7.58.
+- FP16 min-max over the 3 runs: ap 28.00-28.01, ap50 49.46-49.51, engine_p50_ms 3.78-3.84, end_to_end_p50_ms 59.67-61.22, avg_power_w 7.13-7.18.
+- INT8 min-max over the 3 runs: ap 26.74-26.74, ap50 48.14-48.14, engine_p50_ms 3.60-3.63, end_to_end_p50_ms 63.33-66.22, avg_power_w 7.05-7.10.
+- run3: FP32 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 1305 of 1305 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 1299 of 1305 samples; policy4 governor `schedutil`, at max 1728 MHz in 4 of 1305 samples, one-minute CPU load before timing: 0.5, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- run3: FP32 p50 across repeats: engine 29.72-29.81 ms over 3 repeats, end-to-end 87.54-88.14 ms over 3 repeats.
+- run3: FP16 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 888 of 888 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 884 of 888 samples; policy4 governor `schedutil`, at max 1728 MHz in 3 of 888 samples, one-minute CPU load before timing: 0.5, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- run3: FP16 p50 across repeats: engine 3.79-3.80 ms over 3 repeats, end-to-end 59.35-60.08 ms over 3 repeats.
+- run3: INT8 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 960 of 960 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 956 of 960 samples; policy4 governor `schedutil`, at max 1728 MHz in 10 of 960 samples, one-minute CPU load before timing: 0.5, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- run3: INT8 p50 across repeats: engine 3.61-3.62 ms over 3 repeats, end-to-end 64.45-65.51 ms over 3 repeats.
+- run3: PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
+- run4: FP32 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 1294 of 1294 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 1286 of 1294 samples; policy4 governor `schedutil`, at max 1728 MHz in 5 of 1294 samples, one-minute CPU load before timing: 0.6, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- run4: FP32 p50 across repeats: engine 30.18-30.28 ms over 3 repeats, end-to-end 86.87-87.25 ms over 3 repeats.
+- run4: FP16 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 913 of 913 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 902 of 913 samples; policy4 governor `schedutil`, at max 1728 MHz in 13 of 913 samples, one-minute CPU load before timing: 0.3, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- run4: FP16 p50 across repeats: engine 3.78-3.78 ms over 3 repeats, end-to-end 60.72-61.39 ms over 3 repeats.
+- run4: INT8 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 983 of 983 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 979 of 983 samples; policy4 governor `schedutil`, at max 1728 MHz in 2 of 983 samples, one-minute CPU load before timing: 0.8, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- run4: INT8 p50 across repeats: engine 3.60-3.61 ms over 3 repeats, end-to-end 65.82-66.65 ms over 3 repeats.
+- run4: PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
+- run5: FP32 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 1283 of 1283 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 1276 of 1283 samples; policy4 governor `schedutil`, at max 1728 MHz in 10 of 1283 samples, one-minute CPU load before timing: 0.3, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- run5: FP32 p50 across repeats: engine 29.26-29.37 ms over 3 repeats, end-to-end 85.96-86.48 ms over 3 repeats.
+- run5: FP16 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 902 of 902 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 895 of 902 samples; policy4 governor `schedutil`, at max 1728 MHz in 5 of 902 samples, one-minute CPU load before timing: 0.7, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- run5: FP16 p50 across repeats: engine 3.83-3.84 ms over 3 repeats, end-to-end 60.23-61.03 ms over 3 repeats.
+- run5: INT8 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 936 of 936 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 930 of 936 samples; policy4 governor `schedutil`, at max 1728 MHz in 5 of 936 samples, one-minute CPU load before timing: 0.8, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
+- run5: INT8 p50 across repeats: engine 3.62-3.63 ms over 3 repeats, end-to-end 62.96-63.64 ms over 3 repeats.
+- run5: PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
+<!-- results:end -->
+
+The FP32 row runs PyTorch on the GPU with TF32 turned off for cuDNN and matmul, so it is FP32 throughout. PyTorch warns on first CUDA use that its published 2.14.1+cu130 wheels do not support this board's compute capability, 8.7; the notes quote the warning's first line, the `gpu_check` log holds all of it, and the code does not hide it. Which kernel image the driver runs is not reported. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable: it compares a matmul and NMS against the CPU, and `tests/test_gpu.py` compares a full forward pass.
+
+Peak process RSS does not fully capture memory allocated on the device. System RAM rise, the highest system-wide RAM during timing minus the mean just before, is in the logs but not in the table: it includes any other activity on the board and does not reproduce between runs.
+
+<!-- int8:begin -->
+Over the median of the 3 quieted runs, the INT8 engine p50 is lower than FP16's, 3.61 against 3.80 ms, and its end-to-end p50 is higher than FP16's, 64.83 against 60.60 ms; FP16's and INT8's per-repeat end-to-end ranges in the notes do not overlap in any of the 3 runs. The FP16 engine p50 is 6% of its end-to-end p50; the rest is image decoding, preprocessing and postprocessing on the CPU. INT8 yields more person detections after NMS on val2017 than FP16, 398837 against 365070, the `detections` count in the eval logs. Whether more detections give the postprocess more work during the benchmark is a hypothesis: no profile here separates it from run-to-run variation.
+<!-- int8:end -->
+
+## Limitations
+
+- One model, one dataset and one board. The numbers do not transfer to other Jetson modules, power modes or JetPack versions.
+- The export uses PyTorch's TorchScript-based ONNX exporter, which PyTorch has deprecated; `pyproject.toml` bounds torch below 2.15 for that reason.
+- CI runs on x86_64 CPUs only. The aarch64 build, the GPU tests and TensorRT run only on the Jetson, by hand, before a release.
+- Batch size 1 only.
+- FP32 runs in PyTorch and FP16 and INT8 in TensorRT, so the gap between FP32 and the other two is runtime and precision together, not precision alone.
+- `jetson_clocks` is not run, memory clocks are not read, and a tegrastats reader thread runs in the timed process. For the judged runs, the QUIET gates and the measurement window excluded what the repeat block and the Provenance notes name: the board's other scheduled jobs and loop services, sessions over their CPU budget or not allowed, swap use and swap-outs, available memory under the bound, and a load1 at or above the gate's bound. They did not exclude the operating system's own processes or the tegrastats reader, so latencies still vary between runs, as the min-max notes show. The earlier run in `runs/` had no such gate.
+- The system RAM rise in each benchmark log is reported per run and not judged.
+- Power is the average of `tegrastats` VDD_IN readings during the timed end-to-end loop. It is the whole board's input power, not the GPU's alone, and no power was read for inference alone, so there is no energy figure at the engine rate.
+- INT8 is calibrated on one set, 500 seeded train2017 images. INT8 accuracy with another calibration set was not measured here.
+- Person-only fine-tuning was tried and not shipped. See `QUEUE.md`.
 
 ## Hardware and software
 
@@ -21,66 +85,9 @@ The judged runs used Pillow 12.3.0. The pins name 13.0.0, the first release with
 
 The CPU tests also run on any Linux machine with Python 3.11 or 3.12. See "Continuous integration" below.
 
-## Quickstart
+## Judged runs
 
-This needs a Jetson Orin on JetPack 7. Run the commands from the repository root:
-
-```sh
-git clone https://github.com/ahmedhassan-eng/peddet-orin.git
-cd peddet-orin
-export TORCH_HOME="$PWD/.cache/torch" PIP_CACHE_DIR="$PWD/.cache/pip" XDG_CACHE_HOME="$PWD/.cache/xdg"
-export MPLCONFIGDIR="$PWD/.cache/mpl" CUDA_CACHE_PATH="$PWD/.cache/cuda"
-python3.12 -m venv .venv --system-site-packages
-. .venv/bin/activate
-pip install -c constraints/jetson-orin.txt --extra-index-url https://download.pytorch.org/whl/cu130 "torch==2.14.1+cu130" "torchvision==0.29.1+cu130"
-pip install -c constraints/jetson-orin.txt -e ".[test]"
-```
-
-The venv uses `--system-site-packages` because TensorRT 10.16.2.10 comes from the JetPack system Python. `constraints/jetson-orin.txt` pins every package that pip installs into the venv; TensorRT, and any package the system Python already provides at a compatible version, are used from the system.
-
-The package runs from this source checkout, not from an installed wheel. Its commands find the checkout two levels above the package, or the directory `PDORIN_ROOT` names, and refuse to start anywhere else. `python -m peddet_orin` lists the commands; each is also installed as a `peddet-orin-<command>` script.
-
-Run the tests. They need no network. On the Jetson, the GPU and TensorRT tests in `tests/test_gpu.py` run too, so the suite takes about fifteen minutes while it builds TensorRT engines:
-
-```sh
-python -m pytest -rs
-```
-
-Export the network and build an FP16 engine. This downloads the pretrained weights once, and checks their sha256 before every load:
-
-```sh
-python -m peddet_orin.export
-python -m peddet_orin.engine_build --precision fp16
-```
-
-## Reproduce the results
-
-After the quickstart, fetch the data over HTTPS, check the GPU, then build and measure. `nvpmodel` and `tegrastats` must be on `PATH`; `nvpmodel` lives in the system sbin directory, which a user's `PATH` may leave out. A log records `UNREADABLE` for anything it cannot read, so a `power_mode` of `UNREADABLE` usually means `nvpmodel` was not found; it is also recorded when `nvpmodel -q` fails, times out or prints nothing. Run the measurements from a clean tree, one at a time, with nothing else using the GPU.
-
-```sh
-python scripts/fetch_coco.py annotations
-python scripts/fetch_coco.py val
-python scripts/fetch_coco.py calibration
-
-python -m peddet_orin.gpu_check
-python -m peddet_orin.export
-python -m peddet_orin.engine_build --precision fp16
-python -m peddet_orin.engine_build --precision int8
-
-python -m peddet_orin.evaluate --precision fp32
-python -m peddet_orin.evaluate --precision fp16
-python -m peddet_orin.evaluate --precision int8
-
-python -m peddet_orin.benchmark --precision fp32
-python -m peddet_orin.benchmark --precision fp16
-python -m peddet_orin.benchmark --precision int8
-
-python scripts/generate_table.py --write
-```
-
-Each command writes a JSON log to `runs/`, and the last one rewrites the README's generated blocks. With quieted runs committed under `runs-repeat/`, the results table is their median; without them, it is the newest clean logs in `runs/`, which must all come from one commit. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
-
-To check a re-measure against the published numbers, write its logs to another directory, for example a fresh clone's `runs/`, and compare: `python scripts/compare_logs.py <that runs dir>`. It compares the newest clean eval and benchmark log of each precision with what the results table is built from, the median of the judged runs in `runs-repeat/`, applies the tolerances of `PRD.md` R-11 and prints one line per metric. A set without a clean eval and benchmark log for every precision fails. Set `DEBUG=1` to turn on diagnostic logging and profiling.
+How the median in [Results](#results) was judged, with the gate, memory, swap, temperature and sampler records of each judged run, all generated from the logs and host records in `runs-repeat/`.
 
 <!-- repeats:begin -->
 R-11 is judged among the 3 quieted runs run3, run4, run5 in `runs-repeat/`, at commit `025171d`: a metric is IN when every judged run is within its tolerance of their median, and OUT otherwise. The tolerances are the `PRD.md` values in `scripts/compare_logs.py`, unchanged. The spread comes from 3 runs on one board, which is not a population. avg_power_w is the board's input power, VDD_IN, as its sensor measures it. The earlier run in `runs/`, at `17a1ee2`, gave 0.1.0's table; it is shown apart with the deviation from the median and not judged.
@@ -185,49 +192,6 @@ Each judged run's GPU jobs, from the samples taken during each job, from its sta
 RAM was not a constraint in runs 3-5: the lowest available memory during any job was 4527 MiB, and 0 pages were swapped out.
 <!-- repeats:end -->
 
-## Results
-
-Latencies are milliseconds, at batch size 1. "Engine" covers inference, including the copies to and from device memory. "End-to-end" adds image decoding, preprocessing and postprocessing. FPS is 1 / mean latency over the serial batch-1 iterations, not a sustained throughput with several requests in flight. Power is the mean board input over the whole timed loop, which ran at the end-to-end rate, so it sits with the end-to-end columns: energy per frame is each run's power divided by its end-to-end FPS, and the board never ran at the engine FPS while power was read. All precisions use the same postprocess. Each benchmark pools three timed repeats of its loop, and the notes give the range of the per-repeat medians. Accuracy is person AP on the 5000 COCO val2017 images, from pycocotools with `catIds=[1]`.
-
-<!-- results:begin -->
-| Device and precision | Engine p50/p90/p99 (ms) | Engine FPS | End-to-end p50/p90/p99 (ms) | End-to-end FPS | Avg power VDD_IN (W) | End-to-end energy per frame (J) | Peak process RSS (MiB) | Person AP@[.5:.95] | Person AP50 | INT8 path |
-|---|---|---|---|---|---|---|---|---|---|---|
-| GPU, PyTorch FP32 | 29.8 / 30.2 / 31.9 | 33.5 | 87.1 / 99.9 / 106.2 | 11.5 | 7.6 | 0.655 | 1219 | 28.01 | 49.50 | - |
-| GPU, TensorRT FP16 | 3.8 / 3.9 / 4.0 | 263.0 | 60.6 / 73.8 / 80.4 | 16.7 | 7.1 | 0.428 | 1195 | 28.01 | 49.49 | - |
-| GPU, TensorRT INT8 | 3.6 / 3.7 / 3.8 | 276.2 | 64.8 / 77.5 / 84.5 | 15.7 | 7.1 | 0.453 | 1102 | 26.74 | 48.14 | IInt8EntropyCalibrator2 |
-
-- Each cell is the median over the n = 3 quieted runs in `runs-repeat/` (run3, run4, run5), this release's count; 0.2.0 plans 5 or more runs.
-- The judged runs were made at commit `025171d` with package version 0.1.0, as their logs record.
-- Memory, swap and temperature are recorded for the judged runs only, over each whole benchmark job, warm-up included; the earlier runs have no such record.
-- INT8 person AP differs from FP16 by -1.27 points.
-- INT8 person AP is 26.74 in each of the 3 judged runs and 26.83 in the earlier run; each run builds its own INT8 engine, so each score comes from a separate build.
-- The judged runs' power mode was not read: 9 of their 9 benchmark logs record `UNREADABLE`, which a log records when `nvpmodel` is not found on PATH or `nvpmodel -q` fails, and the host's run script adds no system sbin directory to PATH. The evidence the logs hold is the clock maxima of every judged benchmark: GPU 1020 MHz, CPU policy0 1728 MHz, policy4 1728 MHz, the same as in each of the earlier run's 3 benchmarks, whose power mode reads `NV Power Mode: MAXN_SUPER 2`.
-- FP32 min-max over the 3 runs: ap 28.01-28.01, ap50 49.50-49.50, engine_p50_ms 29.31-30.21, end_to_end_p50_ms 86.28-87.76, avg_power_w 7.56-7.58.
-- FP16 min-max over the 3 runs: ap 28.00-28.01, ap50 49.46-49.51, engine_p50_ms 3.78-3.84, end_to_end_p50_ms 59.67-61.22, avg_power_w 7.13-7.18.
-- INT8 min-max over the 3 runs: ap 26.74-26.74, ap50 48.14-48.14, engine_p50_ms 3.60-3.63, end_to_end_p50_ms 63.33-66.22, avg_power_w 7.05-7.10.
-- run3: FP32 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 1305 of 1305 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 1299 of 1305 samples; policy4 governor `schedutil`, at max 1728 MHz in 4 of 1305 samples, one-minute CPU load before timing: 0.5, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- run3: FP32 p50 across repeats: engine 29.72-29.81 ms over 3 repeats, end-to-end 87.54-88.14 ms over 3 repeats.
-- run3: FP16 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 888 of 888 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 884 of 888 samples; policy4 governor `schedutil`, at max 1728 MHz in 3 of 888 samples, one-minute CPU load before timing: 0.5, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- run3: FP16 p50 across repeats: engine 3.79-3.80 ms over 3 repeats, end-to-end 59.35-60.08 ms over 3 repeats.
-- run3: INT8 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 960 of 960 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 956 of 960 samples; policy4 governor `schedutil`, at max 1728 MHz in 10 of 960 samples, one-minute CPU load before timing: 0.5, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- run3: INT8 p50 across repeats: engine 3.61-3.62 ms over 3 repeats, end-to-end 64.45-65.51 ms over 3 repeats.
-- run3: PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
-- run4: FP32 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 1294 of 1294 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 1286 of 1294 samples; policy4 governor `schedutil`, at max 1728 MHz in 5 of 1294 samples, one-minute CPU load before timing: 0.6, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- run4: FP32 p50 across repeats: engine 30.18-30.28 ms over 3 repeats, end-to-end 86.87-87.25 ms over 3 repeats.
-- run4: FP16 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 913 of 913 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 902 of 913 samples; policy4 governor `schedutil`, at max 1728 MHz in 13 of 913 samples, one-minute CPU load before timing: 0.3, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- run4: FP16 p50 across repeats: engine 3.78-3.78 ms over 3 repeats, end-to-end 60.72-61.39 ms over 3 repeats.
-- run4: INT8 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 983 of 983 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 979 of 983 samples; policy4 governor `schedutil`, at max 1728 MHz in 2 of 983 samples, one-minute CPU load before timing: 0.8, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- run4: INT8 p50 across repeats: engine 3.60-3.61 ms over 3 repeats, end-to-end 65.82-66.65 ms over 3 repeats.
-- run4: PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
-- run5: FP32 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 1283 of 1283 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 1276 of 1283 samples; policy4 governor `schedutil`, at max 1728 MHz in 10 of 1283 samples, one-minute CPU load before timing: 0.3, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- run5: FP32 p50 across repeats: engine 29.26-29.37 ms over 3 repeats, end-to-end 85.96-86.48 ms over 3 repeats.
-- run5: FP16 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 902 of 902 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 895 of 902 samples; policy4 governor `schedutil`, at max 1728 MHz in 5 of 902 samples, one-minute CPU load before timing: 0.7, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- run5: FP16 p50 across repeats: engine 3.83-3.84 ms over 3 repeats, end-to-end 60.23-61.03 ms over 3 repeats.
-- run5: INT8 benchmark: power mode `UNREADABLE`, GPU clock governor `performance`, at max 1020 MHz in 936 of 936 samples; CPU clocks policy0 governor `schedutil`, at max 1728 MHz in 930 of 936 samples; policy4 governor `schedutil`, at max 1728 MHz in 5 of 936 samples, one-minute CPU load before timing: 0.8, GPU busy before timing: 0%, other GPU processes: UNREADABLE.
-- run5: INT8 p50 across repeats: engine 3.62-3.63 ms over 3 repeats, end-to-end 62.96-63.64 ms over 3 repeats.
-- run5: PyTorch GPU check: usable True, device compute capability 8.7, wheel slices sm_80, sm_90, sm_100, sm_110, sm_120. PyTorch emitted an unsupported-GPU warning at first CUDA use: "Found GPU0 Orin which is of compute capability (CC) 8.7.". FP32 ran with cudnn.allow_tf32 False and cuda.matmul.allow_tf32 False.
-<!-- results:end -->
-
 ### Provenance
 
 - Each cell is the median over the judged quieted runs listed in the notes, on one board; the notes name the commit and package version their logs record. A benchmark pools three timed repeats of its loop. That commit's `src/` is the same as at `17a1ee2`, where 0.1.0's table was measured from one run on a host that was not quieted, and 0.1.1 changes `src/` only to load ONNX Runtime where it is used (see `CHANGELOG.md`), which changes no computation, so the code that produced the measured numbers is the released code. The judged runs ran the code before this change, with ONNX Runtime loaded in the measuring process; the peak process RSS in the table includes it and was not re-measured; the timings and accuracy do not depend on it. The run log still loads ONNX Runtime to record its version, so a benchmark run of the released code loads it too, once its input checks have passed.
@@ -235,33 +199,73 @@ Latencies are milliseconds, at batch size 1. "Engine" covers inference, includin
 - The power mode in each benchmark note is what `nvpmodel -q` reported, or `UNREADABLE` when it was not read; the notes say which for the judged runs. `jetson_clocks` was not run, since it needs root. During timing a separate process samples the GPU's devfreq clock and each CPU frequency policy's clock every 200 ms; the notes give each governor and how many samples were at that clock's maximum. Memory clocks are not read.
 - The one-minute load average in the notes is read just before timing starts, so it shows what else was running then. The number of other GPU processes could not be read, and is recorded as `UNREADABLE`.
 - The measurements ran one at a time, at normal priority, while no other GPU or benchmark job ran on the board.
-- `tests/test_readme_table.py` fails if the block above differs from what `scripts/generate_table.py` makes of the logs.
+- `tests/test_readme_table.py` fails if the results block differs from what `scripts/generate_table.py` makes of the logs.
 - The judged runs are run3, run4 and run5 of one measurement window, which started at 2026-11-15T18:46Z; the memory bound, 6.0e9 bytes, was set before any judged run. Nine earlier attempts did not run or did not finish, and their logs are not committed. By reason: 2 stopped at the window's check that no automated session was running, 4 at its check of available memory, and 3 at a run's QUIET gate (swap in use in all 3, available memory under the bound in 1 of them as well).
 - The earlier attempts, the root setup block and the setting of the memory bound are host records outside this repository.
 - The bound was 6.5e9 bytes in the earlier attempts, four of which stopped on it, and was lowered to 6.0e9 before the judged runs; no judged run was made under another bound.
 - The window was set up by a root shell block that is not in this repository. It turned swap off, stopped the docker, containerd, snapd, fwupd and jtop services and every automated session, and logged for each judged run 0 swap entries, swappiness 1, 0 pages swapped out and 0 OOM kills.
-- The judged runs were run by three host scripts outside this repository: a run script that ran each run and its QUIET gates (sha256 `bef51001f5f3ff431bccb60eabf294f2afcb41aefd49daffa45b86dae45628d5`), a job script that ran each GPU job under a lock with the sampler alongside (`2f36e2682c0faed445168adeed5b046820a8494307a6600113075c1f88e5a25d`), and the sampler `sysmon.sh` (`aa30652bf11859de67420a4e6b64f53cc9348254f03b8a5dea424b94ed2a93ce`). The sampler's sha256 heads every judged sampler file, and `scripts/generate_table.py` refuses a sampler file that names another; the run and job scripts' sha256s are not recorded in the logs. What the scripts did is what the gate terms and the repeat block above state, generated from the logs. The scripts are specific to this host and do not run elsewhere.
+- The judged runs were run by three host scripts outside this repository: a run script that ran each run and its QUIET gates (sha256 `bef51001f5f3ff431bccb60eabf294f2afcb41aefd49daffa45b86dae45628d5`), a job script that ran each GPU job under a lock with the sampler alongside (`2f36e2682c0faed445168adeed5b046820a8494307a6600113075c1f88e5a25d`), and the sampler `sysmon.sh` (`aa30652bf11859de67420a4e6b64f53cc9348254f03b8a5dea424b94ed2a93ce`). The sampler's sha256 heads every judged sampler file, and `scripts/generate_table.py` refuses a sampler file that names another; the run and job scripts' sha256s are not recorded in the logs. What the scripts did is what the gate terms and the repeat block state, generated from the logs. The scripts are specific to this host and do not run elsewhere.
 
-The FP32 row runs PyTorch on the GPU with TF32 turned off for cuDNN and matmul, so it is FP32 throughout. PyTorch warns on first CUDA use that its published 2.14.1+cu130 wheels do not support this board's compute capability, 8.7; the notes quote the warning's first line, the `gpu_check` log holds all of it, and the code does not hide it. Which kernel image the driver runs is not reported. `python -m peddet_orin.gpu_check` decides by running whether the GPU build is usable: it compares a matmul and NMS against the CPU, and `tests/test_gpu.py` compares a full forward pass.
+## Quickstart
 
-Peak process RSS does not fully capture memory allocated on the device. System RAM rise, the highest system-wide RAM during timing minus the mean just before, is in the logs but not in the table: it includes any other activity on the board and does not reproduce between runs.
+This needs a Jetson Orin on JetPack 7. Run the commands from the repository root:
 
-<!-- int8:begin -->
-Over the median of the 3 quieted runs, the INT8 engine p50 is lower than FP16's, 3.61 against 3.80 ms, and its end-to-end p50 is higher than FP16's, 64.83 against 60.60 ms; FP16's and INT8's per-repeat end-to-end ranges in the notes do not overlap in any of the 3 runs. The FP16 engine p50 is 6% of its end-to-end p50; the rest is image decoding, preprocessing and postprocessing on the CPU. INT8 yields more person detections after NMS on val2017 than FP16, 398837 against 365070, the `detections` count in the eval logs. Whether more detections give the postprocess more work during the benchmark is a hypothesis: no profile here separates it from run-to-run variation.
-<!-- int8:end -->
+```sh
+git clone https://github.com/ahmedhassan-eng/peddet-orin.git
+cd peddet-orin
+export TORCH_HOME="$PWD/.cache/torch" PIP_CACHE_DIR="$PWD/.cache/pip" XDG_CACHE_HOME="$PWD/.cache/xdg"
+export MPLCONFIGDIR="$PWD/.cache/mpl" CUDA_CACHE_PATH="$PWD/.cache/cuda"
+python3.12 -m venv .venv --system-site-packages
+. .venv/bin/activate
+pip install -c constraints/jetson-orin.txt --extra-index-url https://download.pytorch.org/whl/cu130 "torch==2.14.1+cu130" "torchvision==0.29.1+cu130"
+pip install -c constraints/jetson-orin.txt -e ".[test]"
+```
 
-## Limitations
+The venv uses `--system-site-packages` because TensorRT 10.16.2.10 comes from the JetPack system Python. `constraints/jetson-orin.txt` pins every package that pip installs into the venv; TensorRT, and any package the system Python already provides at a compatible version, are used from the system.
 
-- One model, one dataset and one board. The numbers do not transfer to other Jetson modules, power modes or JetPack versions.
-- The export uses PyTorch's TorchScript-based ONNX exporter, which PyTorch has deprecated; `pyproject.toml` bounds torch below 2.15 for that reason.
-- CI runs on x86_64 CPUs only. The aarch64 build, the GPU tests and TensorRT run only on the Jetson, by hand, before a release.
-- Batch size 1 only.
-- FP32 runs in PyTorch and FP16 and INT8 in TensorRT, so the gap between FP32 and the other two is runtime and precision together, not precision alone.
-- `jetson_clocks` is not run, memory clocks are not read, and a tegrastats reader thread runs in the timed process. For the judged runs, the QUIET gates and the measurement window excluded what the repeat block and the Provenance notes name: the board's other scheduled jobs and loop services, sessions over their CPU budget or not allowed, swap use and swap-outs, available memory under the bound, and a load1 at or above the gate's bound. They did not exclude the operating system's own processes or the tegrastats reader, so latencies still vary between runs, as the min-max notes show. The earlier run in `runs/` had no such gate.
-- The system RAM rise in each benchmark log is reported per run and not judged.
-- Power is the average of `tegrastats` VDD_IN readings during the timed end-to-end loop. It is the whole board's input power, not the GPU's alone, and no power was read for inference alone, so there is no energy figure at the engine rate.
-- INT8 is calibrated on one set, 500 seeded train2017 images. INT8 accuracy with another calibration set was not measured here.
-- Person-only fine-tuning was tried and not shipped. See `QUEUE.md`.
+The package runs from this source checkout, not from an installed wheel. Its commands find the checkout two levels above the package, or the directory `PDORIN_ROOT` names, and refuse to start anywhere else. `python -m peddet_orin` lists the commands; each is also installed as a `peddet-orin-<command>` script.
+
+Run the tests. They need no network. On the Jetson, the GPU and TensorRT tests in `tests/test_gpu.py` run too, so the suite takes about fifteen minutes while it builds TensorRT engines:
+
+```sh
+python -m pytest -rs
+```
+
+Export the network and build an FP16 engine. This downloads the pretrained weights once, and checks their sha256 before every load:
+
+```sh
+python -m peddet_orin.export
+python -m peddet_orin.engine_build --precision fp16
+```
+
+## Reproduce the results
+
+After the quickstart, fetch the data over HTTPS, check the GPU, then build and measure. `nvpmodel` and `tegrastats` must be on `PATH`; `nvpmodel` lives in the system sbin directory, which a user's `PATH` may leave out. A log records `UNREADABLE` for anything it cannot read, so a `power_mode` of `UNREADABLE` usually means `nvpmodel` was not found; it is also recorded when `nvpmodel -q` fails, times out or prints nothing. Run the measurements from a clean tree, one at a time, with nothing else using the GPU.
+
+```sh
+python scripts/fetch_coco.py annotations
+python scripts/fetch_coco.py val
+python scripts/fetch_coco.py calibration
+
+python -m peddet_orin.gpu_check
+python -m peddet_orin.export
+python -m peddet_orin.engine_build --precision fp16
+python -m peddet_orin.engine_build --precision int8
+
+python -m peddet_orin.evaluate --precision fp32
+python -m peddet_orin.evaluate --precision fp16
+python -m peddet_orin.evaluate --precision int8
+
+python -m peddet_orin.benchmark --precision fp32
+python -m peddet_orin.benchmark --precision fp16
+python -m peddet_orin.benchmark --precision int8
+
+python scripts/generate_table.py --write
+```
+
+Each command writes a JSON log to `runs/`, and the last one rewrites the README's generated blocks. With quieted runs committed under `runs-repeat/`, the results table is their median; without them, it is the newest clean logs in `runs/`, which must all come from one commit. `--data-dir`, `--engine`, `--onnx`, `--output` and `--calibration-dir` override the default locations, and `python -m peddet_orin.<command> --help` lists each command's options. A missing input stops a command with one line naming the command that makes it.
+
+To check a re-measure against the published numbers, write its logs to another directory, for example a fresh clone's `runs/`, and compare: `python scripts/compare_logs.py <that runs dir>`. It compares the newest clean eval and benchmark log of each precision with what the results table is built from, the median of the judged runs in `runs-repeat/`, applies the tolerances of `PRD.md` R-11 and prints one line per metric. A set without a clean eval and benchmark log for every precision fails. Set `DEBUG=1` to turn on diagnostic logging and profiling.
 
 ## Continuous integration
 

@@ -36,6 +36,9 @@ All notable changes to this project are recorded here. The format follows
 - The results table gives end-to-end energy per frame, each run's mean power over the timed loop divided by its
   end-to-end FPS, then the median. Power and energy sit with the end-to-end columns and engine FPS with the engine
   latency: power was sampled over the end-to-end loop, never at the engine rate.
+- The README leads with Results and Limitations. The hardware and software follow, then a Judged runs section
+  with the generated repeat block (gates, memory, swap, temperature and sampler records) and Provenance, then the
+  Quickstart and how to reproduce the results.
 
 ### Security
 
