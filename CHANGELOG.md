@@ -17,6 +17,30 @@ All notable changes to this project are recorded here. The format follows
   `scripts/generate_table.py` refuses a sampler file that does not name the recorded sampler's sha256.
 - Generated README text for the INT8 against FP16 comparison and for the check of `PRD.md` R-11 among the judged
   runs, so every number in it comes from the logs.
+- `engine_build --precision fp32-trt` builds a TensorRT FP32 engine, `artifacts/fp32-trt.engine`, the precision
+  baseline: it sets neither `FP16` nor `INT8` and clears `TF32`, so it is FP32 throughout. Its build log records
+  `builder_flags` `[]`, read back from the config. evaluate and
+  benchmark accept `--precision fp32-trt`; `fp32` stays PyTorch, the PyTorch baseline, so the committed logs keep
+  their meaning. `tests/test_gpu.py` gains a sixth GPU test, which builds the engine and checks it against the CPU.
+- The results table names the PyTorch FP32 row `GPU, PyTorch FP32 (PyTorch baseline)` and gains a
+  `GPU, TensorRT FP32 (precision baseline)` row when the judged runs carry TensorRT FP32 logs. The committed judged
+  runs have none, so the row is left out and one generated note says it is not yet measured;
+  judged runs that carry it in some runs and not others, or only some of its logs, stop `scripts/generate_table.py`.
+  `scripts/compare_logs.py` judges TensorRT FP32 against R-11's FP32 tolerances once the reference has it, AP within
+  0.10 points, and reports it without judging until then.
+- `python -m peddet_orin.benchmark --precision <p> --postprocess deploy` runs a deployment-style benchmark: the
+  postprocess keeps the person class only, COCO category 1, at one fixed score threshold, 0.5, a fixed midpoint
+  chosen before any deployment-style run and not tuned on the results, with no recall or AP reported at it; the rest
+  is torchvision's settings. It
+  writes a log of its own kind, `benchmark_deploy`, whose results are the benchmark's with `stages`,
+  `postprocess_settings` (with `kept_labels`), `engine_sha256` and `torch_num_threads` required. `--postprocess`
+  defaults to `standard`, the main benchmark, which is unchanged.
+- The README gains a generated deployment-style block right after the results table: per precision, end-to-end
+  p50/p90/p99, end-to-end FPS, power and energy per frame from the `benchmark_deploy` logs, and the postprocess
+  settings they record. The committed judged runs have no such logs, so the block says in one line that they are
+  not yet measured; judged runs that carry them in some runs and not others stop
+  `scripts/generate_table.py`. `scripts/compare_logs.py` never judges them, and prints one REPORTED line per
+  deployment-style metric when the new logs carry it. The README's reproduce steps run it for all four precisions.
 
 ### Changed
 
@@ -118,24 +142,10 @@ All notable changes to this project are recorded here. The format follows
   layout but not every pixel's range, so the full-frame `min()` and `max()` are out of the timed loop. evaluate and
   calibration keep the full check on every image. The judged runs ran the check inside each timed iteration, so
   their end-to-end times include it and were not re-measured.
-- `engine_build --precision fp32-trt` builds a TensorRT FP32 engine, `artifacts/fp32-trt.engine`, the precision
-  baseline: it sets neither `FP16` nor `INT8` and clears `TF32`, so it is FP32 throughout. Its build log records
-  `builder_flags` `[]`, read back from the config. evaluate and
-  benchmark accept `--precision fp32-trt`; `fp32` stays PyTorch, the PyTorch baseline, so the committed logs keep
-  their meaning. `tests/test_gpu.py` gains a sixth GPU test, which builds the engine and checks it against the CPU.
-- The results table names the PyTorch FP32 row `GPU, PyTorch FP32 (PyTorch baseline)` and gains a
-  `GPU, TensorRT FP32 (precision baseline)` row when the judged runs carry TensorRT FP32 logs. The committed judged
-  runs have none, so the row is left out and one generated note says it is measured from the next judged runs on;
-  judged runs that carry it in some runs and not others, or only some of its logs, stop `scripts/generate_table.py`.
-  `scripts/compare_logs.py` judges TensorRT FP32 against R-11's FP32 tolerances once the reference has it, AP within
-  0.10 points, and reports it without judging until then. The README's sentence on 0.1.1's `src/` changes no longer
-  says none changes a computation: two do, and neither was re-measured.
-- `python -m peddet_orin.benchmark --precision <p> --postprocess deploy` runs a deployment-style benchmark: the
-  postprocess keeps the person class only, COCO category 1, at one fixed score threshold, 0.5, a fixed midpoint
-  chosen before any deployment-style run and not tuned on the results; the rest is torchvision's settings. It
-  writes a log of its own kind, `benchmark_deploy`, whose results are the benchmark's with `stages`,
-  `postprocess_settings` (with `kept_labels`), `engine_sha256` and `torch_num_threads` required. `--postprocess`
-  defaults to `standard`, the main benchmark, which is unchanged.
+- The README's sentence on 0.1.1's `src/` changes no longer says none changes a computation: two do, and neither
+  was re-measured. It also says the timed loop holds one more `perf_counter` call, between decode and preprocess,
+  and that the TensorRT FP32 baseline differs from FP16 and INT8 by their reduced-precision flags, not precision
+  alone: tactics, TF32 in fallback layers and the Q/DQ fallback's graph can differ too.
 - The log check refuses a precision a kind does not have: `build` takes `fp16`, `int8` and `fp32-trt`; `eval`,
   `benchmark` and `benchmark_deploy` take `fp32`, `fp16`, `int8` and `fp32-trt`; `gpu_check` takes `fp32` and
   `export` `onnx`, as the committed logs name them. It requires a benchmark's `stages` to hold the `engine` summary
@@ -152,13 +162,6 @@ All notable changes to this project are recorded here. The format follows
 - `scripts/compare_logs.py` fails new logs of any kind, build and deployment-style included, from more than one
   commit. A dirty newest deployment-style log, or one with another commit or setup than the main benchmark of its
   precision, prints a REPORTED line saying so.
-- The README gains a generated deployment-style block right after the results table: per precision, end-to-end
-  p50/p90/p99, end-to-end FPS, power and energy per frame from the `benchmark_deploy` logs, and the postprocess
-  settings they record. The committed judged runs have no such logs, so the block says in one line that they are
-  measured from the next judged runs on; judged runs that carry them in some runs and not others stop
-  `scripts/generate_table.py`. `scripts/compare_logs.py` never judges them, and prints one REPORTED line per
-  deployment-style metric when the new logs carry it. The README's reproduce steps run it for all four precisions.
-
 ### Security
 
 - `requirements/ci-cpu.txt` pins pillow 13.0.0, pytest 9.0.3 and filelock 4.2.10 on every Python, the first

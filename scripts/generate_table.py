@@ -37,8 +37,7 @@ DEPLOY_MARKERS = ("<!-- deploy:begin -->", "<!-- deploy:end -->")
 # The deployment-style benchmark's log kind, which never feeds the results table or R-11.
 DEPLOY = "benchmark_deploy"
 DEPLOY_PENDING = (
-    "The deployment-style benchmark (`--postprocess deploy`) is measured from the next judged runs on; these logs "
-    "have none of it."
+    "The deployment-style benchmark (`--postprocess deploy`) is not yet measured: these logs have none of it."
 )
 DEPLOY_HEADER = (
     "| Device and precision | End-to-end p50/p90/p99 (ms) | End-to-end FPS | Avg power VDD_IN (W) | "
@@ -46,8 +45,8 @@ DEPLOY_HEADER = (
 )
 # The precisions every judged run carries: PyTorch FP32, the PyTorch baseline, and TensorRT FP16 and INT8.
 PRECISIONS = ("fp32", "fp16", "int8")
-# TensorRT FP32, the precision baseline. The committed judged runs predate it; from the next judged runs on, each
-# carries it, and the table shows its row.
+# TensorRT FP32, the precision baseline. It is not yet measured: the committed judged runs predate it, and the table
+# shows its row once judged runs carry it.
 TENSORRT_FP32 = "fp32-trt"
 # Every precision the table can show, in row order.
 TABLE_PRECISIONS = ("fp32", TENSORRT_FP32, "fp16", "int8")
@@ -56,8 +55,7 @@ PRECISION_NAMES = {"fp32": "FP32", TENSORRT_FP32: "TensorRT FP32", "fp16": "FP16
 ROW_PRECISION = {TENSORRT_FP32: "FP32"}
 BASELINES = {"fp32": " (PyTorch baseline)", TENSORRT_FP32: " (precision baseline)"}
 TENSORRT_FP32_PENDING = (
-    "TensorRT FP32, the precision baseline, is measured from the next judged runs on; these logs have none of it, so "
-    "its row is not shown."
+    "TensorRT FP32, the precision baseline, is not yet measured: these logs have none of it, so its row is not shown."
 )
 INT8_DROP_LIMIT_POINTS = 2.0
 POINTS = 100.0
@@ -1122,7 +1120,7 @@ def readme_block(text: str, markers: tuple[str, str] = (BEGIN_MARKER, END_MARKER
 def readme_matches(text: str, runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> bool:
     """Report whether every generated block whose markers the text carries is exactly what the logs make.
 
-    The results markers are required; ``test_readme_table`` checks that the README carries all three pairs.
+    The results markers are required; ``test_readme_table`` checks that the README carries every pair in ``BLOCKS``.
     """
     readme_block(text)
     return all(

@@ -27,7 +27,8 @@ BACKGROUND_LABEL = 0
 PERSON_LABEL = 1
 LOGITS_DIM = -1
 # The deployment-style postprocess keeps the person class only, with one fixed score threshold. 0.5 is a fixed
-# midpoint chosen before any deployment-style run; it is not tuned on the results. Everything else is torchvision's.
+# midpoint chosen before any deployment-style run; it is not tuned on the results, and no recall or AP is reported at
+# this threshold. Everything else is torchvision's.
 DEPLOY_SCORE_THRESHOLD = 0.5
 DEPLOY_LABELS = (PERSON_LABEL,)
 

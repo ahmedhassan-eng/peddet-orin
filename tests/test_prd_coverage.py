@@ -40,7 +40,7 @@ def coverage_problems(rows: dict[str, list[tuple[str, str]]], nodes: frozenset[t
 
 def test_every_requirement_is_covered_by_a_ci_test():
     rows = coverage(PRD.read_text())
-    assert len(rows) == 14
+    assert len(rows) == 15
     assert coverage_problems(rows, collected()) == []
 
 

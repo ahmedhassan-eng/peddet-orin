@@ -563,7 +563,7 @@ INT8_ENTROPY_PATH = "IInt8EntropyCalibrator2"
 # The precision that runs in PyTorch, with no engine file: the PyTorch baseline.
 PYTORCH_PRECISION = "fp32"
 # The TensorRT engine built in FP32 throughout: the precision baseline, against which FP16 and INT8 differ in
-# precision alone. "fp32" stays PyTorch's key, so the committed logs keep their meaning.
+# reduced-precision flags. "fp32" stays PyTorch's key, so the committed logs keep their meaning.
 TENSORRT_FP32_PRECISION = "fp32-trt"
 # The TensorRT precision flags a build controls, in the order a build log lists them.
 PRECISION_FLAG_NAMES = ("FP16", "INT8", "TF32", "BF16", "FP8")
