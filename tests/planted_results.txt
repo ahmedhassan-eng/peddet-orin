@@ -15,6 +15,7 @@ PLANT commit-id-not-in-history clean-rc=0 planted-rc=1 caught
 PLANT int8-limit-raised clean-rc=0 planted-rc=1 caught
 PLANT nms-ignores-class clean-rc=0 planted-rc=1 caught
 PLANT runlog-fields-unchecked clean-rc=0 planted-rc=1 caught
+PLANT cuda-forward-other-weights clean-rc=0 planted-rc=1 caught
 PLANT eval-bbox-xyxy clean-rc=0 planted-rc=1 caught
 PLANT eval-all-categories clean-rc=0 planted-rc=1 caught
 PLANT eval-ap50-as-ap clean-rc=0 planted-rc=1 caught
@@ -37,4 +38,3 @@ PLANT compare-against-earlier-run clean-rc=0 planted-rc=1 caught
 PLANT compare-skips-missing-log clean-rc=0 planted-rc=1 caught
 PLANT gpu-check-ignores-nms clean-rc=0 planted-rc=1 caught
 PLANT readme-repeat-count-typed-wrong clean-rc=0 planted-rc=1 caught
-PLANT cuda-forward-other-weights clean-rc=0 planted-rc=1 caught
