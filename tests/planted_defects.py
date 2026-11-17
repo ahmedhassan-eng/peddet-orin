@@ -278,4 +278,11 @@ DEFECTS = [
         "new": "usable = matmul_ok",
         "catches": "tests/test_gpu_check.py::test_a_failed_comparison_makes_the_gpu_unusable",
     },
+    {
+        "id": "readme-repeat-count-typed-wrong",
+        "file": "README.md",
+        "old": "Each benchmark pools three timed repeats",
+        "new": "Each benchmark pools five timed repeats",
+        "catches": "tests/test_readme_numbers.py::test_the_repeat_count_and_the_baseline_window_match_the_benchmark",
+    },
 ]

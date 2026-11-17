@@ -7,13 +7,24 @@ refused. Every test file has one or the other.
 """
 
 import re
+import subprocess
 from pathlib import Path
 
+import pytest
+
 import planted_defects
+from strict_skips import checkout_skip_reason
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 README = REPO_ROOT / "README.md"
 PLANTED_RESULTS = REPO_ROOT / "tests" / "planted_results.txt"
+RESULTS_NAME = "tests/planted_results.txt"
+RESULTS_HEADER = (
+    "# Output of python scripts/check_planted_defects.py on the files of the commit that last changed this file "
+    "(git log -1 -- tests/planted_results.txt), as they were before this file was written:"
+)
+HISTORY_SKIP = checkout_skip_reason(REPO_ROOT, history=True)
+needs_history = pytest.mark.skipif(HISTORY_SKIP is not None, reason=HISTORY_SKIP or "")
 # One in-file negative test for each test file that no registry entry names; each must exist in its file.
 NEGATIVE_TESTS = {
     "tests/test_checkout_kinds.py": "test_a_shallow_clone_in_ci_still_fails_a_strict_run",
@@ -90,6 +101,33 @@ def test_the_readme_states_the_registrys_true_coverage():
 
 def test_the_committed_planted_output_shows_every_entry_caught():
     assert planted_result_problems(PLANTED_RESULTS.read_text(), planted_defects.DEFECTS) == []
+
+
+def changed_since_the_planted_run(changed: list[str]) -> list[str]:
+    """The files changed since the commit that last wrote the planted output, other than the output itself. Any
+    tracked file can be read by the planted script or a test it runs, so any change makes the output stale."""
+    return sorted(name for name in changed if name != RESULTS_NAME)
+
+
+@needs_history
+def test_the_planted_output_was_made_from_the_current_files():
+    assert PLANTED_RESULTS.read_text().startswith(RESULTS_HEADER)
+    last = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", RESULTS_NAME], cwd=REPO_ROOT, capture_output=True, text=True
+    ).stdout.strip()
+    changed = subprocess.run(
+        ["git", "diff", "--name-only", last, "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    # Regenerate the output with scripts/check_planted_defects.py, and the GPU entry on the board, after any change.
+    assert changed_since_the_planted_run(changed) == []
+
+
+def test_a_file_changed_after_the_planted_run_makes_the_output_stale():
+    assert changed_since_the_planted_run([RESULTS_NAME]) == []
+    assert changed_since_the_planted_run(["src/peddet_orin/benchmark.py", RESULTS_NAME, "README.md"]) == [
+        "README.md",
+        "src/peddet_orin/benchmark.py",
+    ]
 
 
 def test_a_planted_output_with_a_missing_or_failed_entry_is_refused():

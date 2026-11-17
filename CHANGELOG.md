@@ -229,6 +229,12 @@ All notable changes to this project are recorded here. The format follows
   window the RAM rise is measured against; the builder flags sentence says the build logs record them from 0.1.1
   on. `constraints/jetson-orin.txt` names the hashed install line the README uses.
 - `scripts/ci_local.sh` waits for its log's `tee` before it exits, so the log is never cut short.
+- `tests/test_readme_numbers.py` ties the figures typed into the README's and CHANGELOG's prose to their sources: the
+  repeat count, the baseline window, the torch wheel, the compute capability, the quieting figure, the postprocess
+  settings and the FP16 change. A planted defect checks the first.
+- `tests/test_internal_ids.py` also finds review-finding ids and scans every commit message.
+- `tests/planted_results.txt` names the files it was made from as those of the commit that last changed it, and
+  `tests/test_negative_controls.py` fails once any other file has changed since, so the output is never stale.
 
 ## [0.1.0] - 2026-11-14
 

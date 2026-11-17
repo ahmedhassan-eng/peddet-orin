@@ -1,4 +1,4 @@
-# Output of python scripts/check_planted_defects.py at cc8f76bf35a1ef523a2995dbd35dbf3fd1d98d0c: the CPU run, then the one GPU entry run on its own on the board.
+# Output of python scripts/check_planted_defects.py on the files of the commit that last changed this file (git log -1 -- tests/planted_results.txt), as they were before this file was written: the CPU run, then the one GPU entry run on its own on the board.
 PLANT readme-tree-stale clean-rc=0 planted-rc=1 caught
 PLANT agents-rule-edited clean-rc=0 planted-rc=1 caught
 PLANT test-name-shared clean-rc=0 planted-rc=1 caught
@@ -36,4 +36,5 @@ PLANT detections-cap-ignored clean-rc=0 planted-rc=1 caught
 PLANT compare-against-earlier-run clean-rc=0 planted-rc=1 caught
 PLANT compare-skips-missing-log clean-rc=0 planted-rc=1 caught
 PLANT gpu-check-ignores-nms clean-rc=0 planted-rc=1 caught
+PLANT readme-repeat-count-typed-wrong clean-rc=0 planted-rc=1 caught
 PLANT cuda-forward-other-weights clean-rc=0 planted-rc=1 caught
