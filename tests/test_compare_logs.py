@@ -297,3 +297,24 @@ def test_logs_of_any_kind_from_another_commit_fail_and_the_deploy_log_says_so(tm
     (tmp_path / "build").mkdir()
     status, lines = run(tmp_path / "build", [*complete(), make_log("build", "fp16", commit="f" * 40)])
     assert status == 1 and line(lines, "-", "-", "commit").endswith(" OUT")
+
+
+def test_a_build_with_other_builder_flags_fails_and_an_unrecorded_reference_is_reported(tmp_path):
+    build = make_log(
+        "build", "int8", results={"int8_path": "IInt8EntropyCalibrator2", "builder_flags": ["FP16", "INT8"]}
+    )
+    reference = published(tmp_path, [*complete(), build])
+    alone = make_log("build", "int8", results={"int8_path": "IInt8EntropyCalibrator2", "builder_flags": ["INT8"]})
+    for name in ("same", "other", "unrecorded"):
+        (tmp_path / name).mkdir()
+    status, lines = run(tmp_path / "same", [*complete(), build], reference)
+    assert status == 0 and line(lines, "build", "int8", "builder_flags").endswith(
+        "published=FP16,INT8 new=FP16,INT8 delta=n/a tol=- OK"
+    )
+    status, lines = run(tmp_path / "other", [*complete(), alone], reference)
+    assert status == 1 and line(lines, "build", "int8", "builder_flags").endswith("new=INT8 delta=n/a tol=- OUT")
+    old = make_log("build", "int8", results={"int8_path": "IInt8EntropyCalibrator2"})
+    status, lines = run(
+        tmp_path / "unrecorded", [*complete(), build], published(tmp_path / "unrecorded", [*complete(), old])
+    )
+    assert status == 0 and line(lines, "build", "int8", "builder_flags").endswith(" REPORTED")

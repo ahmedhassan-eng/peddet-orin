@@ -11,3 +11,5 @@
 | The deployment-style benchmark (`--postprocess deploy`) measured in judged runs; its code ships and no deployment setting was measured | not yet measured |
 | One shared image decode for the benchmark's timed loop and `preprocess.load_rgb`, which today hold two copies of the same decode | planned for 0.1.2 |
 | A guard in the test suite that refuses the GPU tests unless the run holds the board's GPU lock; today none exists | planned for 0.1.2 |
+| Scope the test that the committed planted-defect output is fresh, so a contributor's commit does not fail CI for want of a board run; today any change after the planted run fails it until the output, its GPU entry included, is made again | planned for 0.1.2 |
+| Benchmark the precisions in an order randomised per run, so a drift within a run does not fall on the later precisions; today every run uses one fixed order | planned for 0.2.0 |

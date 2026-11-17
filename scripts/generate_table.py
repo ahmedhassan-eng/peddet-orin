@@ -195,6 +195,12 @@ def check_engines(chosen: dict) -> None:
             for kind in ("build", "eval", "benchmark", DEPLOY)
             if (kind, precision) in chosen
         }
+        recorded = [log["results"].get("engine_sha256") not in (None, "-") for log in logs.values()]
+        if any(recorded) and not all(recorded):
+            raise TableError(
+                f"{PRECISION_NAMES[precision]} logs name an engine in {sum(recorded)} of {len(recorded)}; a log that "
+                "names none cannot be tied to the others' engine"
+            )
         hashes = {log["results"].get("engine_sha256") for log in logs.values()} - {None, "-"}
         if len(hashes) > 1:
             raise TableError(
@@ -929,6 +935,29 @@ def gate_lines(runs: list[Path]) -> list[str]:
     return lines
 
 
+def required_gates(precisions: list[str]) -> list[str]:
+    """The gates a quieted run must have passed: its start, and one before each benchmark it publishes."""
+    return ["start", *[f"bench_{precision}" for precision in precisions]]
+
+
+def _is_decimal(text: str) -> bool:
+    return re.fullmatch(r"\d+(\.\d+)?", text) is not None
+
+
+def _breached_terms(path: Path) -> list[str]:
+    """The gate terms a passing try line breaks by its own fields: load1 not below its bound, or available memory
+    under its floor, where the line records them. The gate's PASS word is not taken on trust."""
+    breached = set()
+    for entry in _passing_tries(path):
+        load, bound = entry.get("load1"), entry.get("bound")
+        if load is not None and bound is not None and not (_is_decimal(load) and float(load) < float(bound)):
+            breached.add("load1")
+        memory, floor = entry.get("mem_available_kb"), entry.get("mem_min_kb")
+        if memory is not None and floor is not None and not (memory.isdigit() and int(memory) >= int(floor)):
+            breached.add("mem_available")
+    return sorted(breached)
+
+
 def _counts_allowed_timers(path: Path) -> bool:
     """Whether every try line carries ``allowed_timers=``; an earlier gate wrote the same line without that count."""
     tries = [line.split() for line in path.read_text().splitlines() if line.startswith("QUIET ") and "try=" in line]
@@ -953,6 +982,13 @@ def host_state(run_dir: Path | None, chosen: dict) -> str:
         gates = _quiet_gates(quiet)
         passed = bool(gates) and all(verdicts == ["PASS"] for verdicts in gates.values())
         state = "quieted, every QUIET gate passed" if passed else "not quieted, a QUIET gate did not pass"
+        absent = [gate for gate in required_gates(precisions) if gate not in gates]
+        breached = _breached_terms(quiet)
+        if passed and absent:
+            state = f"not quieted, no QUIET gate for {', '.join(absent)}"
+        elif passed and breached:
+            state = f"not quieted, a passing QUIET line breaks its own {', '.join(breached)} term"
+        passed = passed and not absent and not breached
         record = system_record(run_dir, precisions) if passed and is_recorded(run_dir) else None
         unsampled = [
             PRECISION_NAMES[precision] for precision in precisions if record is not None and precision not in record

@@ -595,6 +595,11 @@ def _add_tensorrt_fp32(run_dir, kinds=("benchmark", "eval", "build")):
         if kind == "build":
             log["results"]["builder_flags"] = []
         (run_dir / source.name.replace("_fp16_", "_fp32-trt_")).write_text(json.dumps(log))
+    quiet = run_dir / "quiet.txt"
+    if "benchmark" in kinds and quiet.is_file():
+        # A quieted run passes a gate before each benchmark it publishes, this one too.
+        gate = "".join(line for line in QUIET_PASSED.splitlines(keepends=True) if " bench_fp16 " in line)
+        quiet.write_text(quiet.read_text() + gate.replace("bench_fp16", "bench_fp32-trt"))
 
 
 def _judged(tmp_path, names=("run1", "run2")):
@@ -815,3 +820,34 @@ def test_tensorrt_rows_must_name_one_engine_and_fp32_no_reduced_precision(tmp_pa
     flagged[("build", "fp32-trt")]["results"]["builder_flags"] = ["TF32"]
     with pytest.raises(generate_table.TableError, match="builder flags"):
         generate_table.check_engines(flagged)
+
+
+def test_a_judged_run_without_a_gate_before_a_published_benchmark_is_not_quieted(tmp_path):
+    _copy_runs(generate_table.RUNS_DIR, tmp_path / "run1")
+    gate = "".join(line for line in QUIET_PASSED.splitlines(keepends=True) if " bench_int8 " not in line)
+    (tmp_path / "run1" / "quiet.txt").write_text(gate)
+    with pytest.raises(generate_table.TableError, match="not quieted .not quieted, no QUIET gate for bench_int8"):
+        generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "term"),
+    [("load1=0.80", "load1=1.20", "load1"), ("mem_available_kb=6000000", "mem_available_kb=5000000", "mem_available")],
+)
+def test_a_pass_whose_own_line_breaks_a_term_is_not_quieted(tmp_path, field, value, term):
+    # The PASS word is not taken on trust: the passing try line's own fields are judged again.
+    _copy_runs(generate_table.RUNS_DIR, tmp_path / "run1")
+    (tmp_path / "run1" / "quiet.txt").write_text(QUIET_PASSED.replace(field, value, 2))
+    with pytest.raises(generate_table.TableError, match=f"breaks its own {term} term"):
+        generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
+
+
+def test_a_log_naming_no_engine_beside_logs_that_name_one_stops_the_generator(tmp_path):
+    _copy_runs(generate_table.RUNS_DIR, tmp_path / "run1")
+    chosen = generate_table.select(generate_table.load_logs(tmp_path / "run1"))
+    generate_table.check_engines(chosen)
+    for kind in ("eval", "benchmark"):
+        mixed = {key: json.loads(json.dumps(log)) for key, log in chosen.items()}
+        mixed[(kind, "fp16")]["results"]["engine_sha256"] = "a" * 64
+        with pytest.raises(generate_table.TableError, match="FP16 logs name an engine in 1 of"):
+            generate_table.check_engines(mixed)

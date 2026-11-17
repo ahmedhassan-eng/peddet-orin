@@ -47,6 +47,16 @@ All notable changes to this project are recorded here. The format follows
 
 ### Changed
 
+- `scripts/generate_table.py` no longer takes a QUIET gate's PASS on trust: a judged run is quieted only when it
+  has a start gate and a gate before each benchmark it publishes, and when each passing line's own load is below its
+  bound and its available memory at least its floor. A TensorRT precision whose logs name an engine in some logs
+  and not in others stops the generator, as such a log cannot be tied to the others' engine.
+- `scripts/compare_logs.py` judges each TensorRT build's `builder_flags` against the reference's, so an engine
+  built another way is never judged against it; a reference that records no flags gives a line that is reported,
+  not judged.
+- The README says before the table which columns are what the board delivers, names the scripts as installed
+  (`peddet-orin-engine-build`), says JetPack 6 is not supported and gives the `apt` line for the system packages. It states each benchmark's
+  sample counts, image pool and seed, and that the precisions run in one fixed order every run.
 - The published numbers changed, the end-to-end latencies most: the FP16 end-to-end p50 went from 75.1 ms in
   0.1.0 to 60.6 ms. The results table is the median of the judged quieted runs at commit `025171d`;
   0.1.0's table came from one run at `17a1ee2` on a host that was not quieted. That run stays in `runs/` and is

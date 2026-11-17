@@ -85,3 +85,18 @@ def test_the_changelog_fp16_change_matches_the_logs():
     after = published[("benchmark", "fp16")]["results"]["end_to_end"]["p50_ms"]
     sentence = f"the FP16 end-to-end p50 went from {before:.1f} ms in 0.1.0 to {after:.1f} ms"
     assert sentence in flat(CHANGELOG.read_text())
+
+
+def test_the_sample_counts_image_pool_and_seed_match_the_benchmark():
+    benchmark = REPO_ROOT / "src" / "peddet_orin" / "benchmark.py"
+    timed, warmup = constant(benchmark, "TIMED_ITERATIONS"), constant(benchmark, "WARMUP_ITERATIONS")
+    pool, seed, repeats = (
+        constant(benchmark, "IMAGE_POOL_SIZE"),
+        constant(benchmark, "BENCHMARK_SEED"),
+        constant(benchmark, "REPEATS"),
+    )
+    assert (
+        f"Each repeat times {timed} iterations, after {warmup} untimed warm-up iterations, so each percentile pools "
+        f"{timed * repeats} samples; the images are the first {pool} val2017 images in file-name order, taken in an "
+        f"order drawn with seed {seed}," in flat(README.read_text())
+    )

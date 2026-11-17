@@ -186,6 +186,9 @@ def compare(new_dir: Path, published_logs: dict | None = None, committed: set[tu
     path_lines = int8_path_lines(new_logs, published_logs)
     failures += sum(line.endswith(" OUT") for line in path_lines)
     lines += path_lines
+    flag_lines = builder_flags_lines(new_logs, published_logs)
+    failures += sum(line.endswith(" OUT") for line in flag_lines)
+    lines += flag_lines
     lines += deploy_lines(new_logs, published_logs)
     lines.append("COMPARE DONE PASS" if failures == 0 else f"COMPARE DONE FAIL {failures}")
     return lines
@@ -203,6 +206,33 @@ def int8_path_lines(new_logs: list[dict], published_logs: dict) -> list[str]:
     got = new["results"].get("int8_path") if new else "missing"
     verdict = "OK" if got == want else "OUT"
     return [f"COMPARE build int8 int8_path published={want} new={got} delta=n/a tol=- {verdict}"]
+
+
+def builder_flags_lines(new_logs: list[dict], published_logs: dict) -> list[str]:
+    """One line per TensorRT precision whose reference has a build log: the newest build log of that precision must
+    record the reference's builder flags, so an engine built another way is never judged against it. A reference
+    that records no flags gives a REPORTED line, not judged."""
+    lines = []
+    for precision in generate_table.TABLE_PRECISIONS:
+        published = published_logs.get(("build", precision))
+        if published is None:
+            continue
+        new = _newest(new_logs, "build", precision)
+        want = published["results"].get("builder_flags")
+        got = new["results"].get("builder_flags", "missing") if new else "missing"
+        shown = ",".join(got) if isinstance(got, list) else got
+        if want is None:
+            lines.append(
+                f"COMPARE build {precision} builder_flags published=unrecorded new={shown or 'none'} delta=n/a tol=- "
+                "REPORTED"
+            )
+            continue
+        verdict = "OK" if got == want else "OUT"
+        lines.append(
+            f"COMPARE build {precision} builder_flags published={','.join(want) or 'none'} new={shown or 'none'} "
+            f"delta=n/a tol=- {verdict}"
+        )
+    return lines
 
 
 def deploy_lines(new_logs: list[dict], published_logs: dict) -> list[str]:
