@@ -9,7 +9,8 @@ from test_run_logs import COMMIT, make_log
 OTHER_COMMIT = "f" * 40
 EMPTY_BLOCK = "\n".join(
     [
-        "| Device and precision | Engine p50/p90/p99 (ms) | Engine FPS | End-to-end p50/p90/p99 (ms) | "
+        "| Device and precision | Engine p50/p90/p99 (ms) | Engine-only bound FPS (1 / engine mean latency) | "
+        "End-to-end p50/p90/p99 (ms) | "
         "End-to-end FPS | Avg power VDD_IN (W) | End-to-end energy per frame (J) | Peak process RSS (MiB) | "
         "Person AP@[.5:.95] | Person AP50 | INT8 path |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
@@ -174,12 +175,27 @@ def test_the_gpu_check_note_quotes_the_warning_and_states_tf32(tmp_path):
         '"Found GPU0 Orin which is of compute capability 8.7."'
     ) in block
     assert "Minimum and Maximum" not in block and "binary-compatibility" not in block
-    assert "cudnn.allow_tf32 False and cuda.matmul.allow_tf32 True" in block
+    # The flags are the GPU check's own read-back; the benchmark's backend turning TF32 off is said first, apart.
+    assert (
+        "8.7.\"; the benchmark's PyTorch backend turns TF32 off for cuDNN and matmul when it is built, and the GPU "
+        "check process set both flags itself and read back cudnn.allow_tf32 False and cuda.matmul.allow_tf32 True; "
+        "the eval and benchmark logs record neither flag."
+    ) in block
+    assert "FP32 ran with" not in block
+
+
+def test_the_gpu_check_note_drops_the_neither_flag_clause_when_a_benchmark_log_records_one(tmp_path):
+    logs = [make_log("gpu_check"), make_log("benchmark", "fp16", results={"cudnn_allow_tf32": False})]
+    block = generate_table.build_block(write_logs(tmp_path, logs))
+    assert "cuda.matmul.allow_tf32 False." in block and "record neither flag" not in block
 
 
 def test_the_gpu_check_note_says_when_there_was_no_warning(tmp_path):
     write_logs(tmp_path, [make_log("gpu_check")])
-    assert "PyTorch emitted no unsupported-GPU warning at first CUDA use." in generate_table.build_block(tmp_path)
+    assert (
+        "PyTorch emitted no unsupported-GPU warning at first CUDA use; the benchmark's"
+        in generate_table.build_block(tmp_path)
+    )
 
 
 def test_a_relative_runs_path_to_the_repository_runs_still_uses_the_judged_runs(monkeypatch):

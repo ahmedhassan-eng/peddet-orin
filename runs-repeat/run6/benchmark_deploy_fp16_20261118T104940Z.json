@@ -1,0 +1,142 @@
+{
+  "command": "python -m peddet_orin.benchmark --precision fp16 --postprocess deploy",
+  "commit": "84271330d28b3fb779ea495de9b711759c9f51ba",
+  "dirty": false,
+  "end_utc": "2026-11-18T10:49:40Z",
+  "environment": {
+    "cuda": "13.0",
+    "cuda_driver": "13.2",
+    "cuda_runtime": "13.0",
+    "libjpeg": "libjpeg-turbo 3.2.0",
+    "numpy": "1.26.4",
+    "nv_tegra_release": "# R39 (release), REVISION: 2.1, GCID: 46758480, BOARD: generic, EABI: aarch64, DATE: Fri Aug  7 05:54:22 AM UTC 2026\n# KERNEL_VARIANT: oot\nTARGET_USERSPACE_LIB_DIR=nvidia\nTARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia",
+    "nvpmodel": "NV Power Mode: MAXN_SUPER\n2",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.31.1",
+    "peddet_orin": "0.1.1",
+    "pillow": "13.0.0",
+    "pycocotools": "2.0.11",
+    "python": "3.12.3",
+    "tensorrt": "10.16.2.10",
+    "torch": "2.14.1+cu130",
+    "torchvision": "0.29.1+cu130"
+  },
+  "iterations": {
+    "batch": 1,
+    "repeats": 3,
+    "timed": 1000,
+    "warmup": 50
+  },
+  "kind": "benchmark_deploy",
+  "other_gpu_processes": "UNREADABLE",
+  "precision": "fp16",
+  "results": {
+    "avg_power_w": 7.9985625,
+    "cpu_clocks": {
+      "policy0": {
+        "at_max_samples": 213,
+        "cur_khz_counts": {
+          "1728000": 213,
+          "729600": 1
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 214,
+        "unreadable_samples": 0
+      },
+      "policy4": {
+        "at_max_samples": 2,
+        "cur_khz_counts": {
+          "1728000": 2,
+          "729600": 212
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 214,
+        "unreadable_samples": 0
+      }
+    },
+    "cpu_load_1min_before_timing": 0.27880859375,
+    "end_to_end": {
+      "fps": 69.94617093437003,
+      "p50_ms": 14.239121577702463,
+      "p90_ms": 16.601930442266166,
+      "p99_ms": 19.408688992261883
+    },
+    "end_to_end_p50_ms_per_repeat": [
+      14.246850041672587,
+      14.148015528917313,
+      14.29461152292788
+    ],
+    "engine": {
+      "fps": 266.23643711626715,
+      "p50_ms": 3.7514404393732548,
+      "p90_ms": 3.8157035363838077,
+      "p99_ms": 3.9108743635006245
+    },
+    "engine_p50_ms_per_repeat": [
+      3.751872689463198,
+      3.746753092855215,
+      3.7555519957095385
+    ],
+    "engine_sha256": "ad5e49f7e894e947f04139c9eb5472b3301389abe899b19bac31c61d0a035694",
+    "gpu_busy_pct_before_timing": 0.0,
+    "gpu_clock": {
+      "at_max_samples": 214,
+      "cur_hz_counts": {
+        "1020000000": 214
+      },
+      "governor": "performance",
+      "max_hz": 1020000000,
+      "min_hz": 306000000,
+      "samples": 214,
+      "unreadable_samples": 0
+    },
+    "peak_process_rss_mib": 1146.1953125,
+    "postprocess_settings": {
+      "detections_per_image": 300,
+      "kept_labels": [
+        1
+      ],
+      "nms_iou_threshold": 0.55,
+      "num_classes": 91,
+      "score_threshold": 0.5,
+      "top_k_per_class": 300
+    },
+    "power_mode": "NV Power Mode: MAXN_SUPER\n2",
+    "power_samples": 208,
+    "repeats": 3,
+    "runtime": "tensorrt-gpu",
+    "stages": {
+      "decode": {
+        "fps": 167.50784346304113,
+        "p50_ms": 5.90361503418535,
+        "p90_ms": 7.6737233670428395,
+        "p99_ms": 9.861808435525736
+      },
+      "engine": {
+        "fps": 266.23643711626715,
+        "p50_ms": 3.7514404393732548,
+        "p90_ms": 3.8157035363838077,
+        "p99_ms": 3.9108743635006245
+      },
+      "postprocess": {
+        "fps": 333.10046176410486,
+        "p50_ms": 2.933887531980872,
+        "p90_ms": 3.3232262590900064,
+        "p99_ms": 4.021974557545035
+      },
+      "preprocess": {
+        "fps": 637.4780878838092,
+        "p50_ms": 1.4257589355111122,
+        "p90_ms": 2.2657832829281688,
+        "p99_ms": 3.011415717191993
+      }
+    },
+    "system_ram_rise_mib": 78.0,
+    "torch_num_threads": 6
+  },
+  "schema_version": 2,
+  "seed": 7,
+  "start_utc": "2026-11-18T10:48:52Z"
+}

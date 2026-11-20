@@ -4,11 +4,12 @@
 # from the JetPack system Python, not from pip. The README installs from the hashed lock made from this file:
 #   pip install --require-hashes -r constraints/jetson-orin.lock
 #
-# Every package pinned both here and in requirements/ci-cpu.txt carries the same version in both, and every package
+# Every package pinned both here and in requirements/ci-cpu.txt carries the same version in both, apart from the
+# local suffix (+cu130 here, +cpu there) of torch and torchvision, and every package
 # pinned there is pinned here too (tests/test_packaging_metadata.py). CI audits both files with pip-audit --strict.
-# The judged runs' venv, by its pip freeze (a host record; the run logs do not record these packages), had other
-# versions of seven pins: filelock 3.32.0, fsspec 2026.6.0, networkx 3.6.1, protobuf 7.35.1, setuptools 83.0.0,
-# pytest 7.4.4 (the system Python's) and pillow 12.3.0. numpy 1.26.4 comes from the system Python's python3-numpy.
+# The venv's pip freeze, read on 2026-11-18 after the judged runs (a host record), matches every pin below;
+# numpy 1.26.4 comes from the system Python's python3-numpy. Every judged run log records the versions of torch,
+# torchvision, onnx, onnxruntime, pycocotools, pillow and numpy; the logs do not record the other pins' versions.
 # ruff is pinned at the version CI lints with.
 cuda-bindings==13.3.1 \
     --hash=sha256:04436a9364059c84b8f9636f359eccda1cf814341f5b670c71d80d2f79dbc708 \

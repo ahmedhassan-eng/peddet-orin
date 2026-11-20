@@ -3,6 +3,7 @@
 
 import json
 import re
+import shutil
 
 import pytest
 
@@ -178,7 +179,9 @@ def test_energy_per_frame_is_power_over_the_end_to_end_rate(tmp_path):
     header = generate_table.HEADER.split(" | ")
     assert row[header.index("End-to-end energy per frame (J)")] == "0.362"
     # Engine FPS stays beside the engine latency, apart from power, which sits with the end-to-end columns.
-    assert header.index("Engine FPS") == header.index("Engine p50/p90/p99 (ms)") + 1
+    assert (
+        header.index("Engine-only bound FPS (1 / engine mean latency)") == header.index("Engine p50/p90/p99 (ms)") + 1
+    )
     assert header.index("Avg power VDD_IN (W)") == header.index("End-to-end FPS") + 1
     unread = _benchmark_dir(tmp_path / "two", "UNREADABLE", 20.0)
     assert unread[("benchmark", "fp16")]["results"][generate_table.ENERGY] == "UNREADABLE"
@@ -615,7 +618,9 @@ def test_without_tensorrt_fp32_logs_its_row_is_left_out_with_one_note(tmp_path):
     assert "TensorRT FP32" not in "".join(line for line in block.splitlines() if line.startswith("| GPU"))
     assert block.count(generate_table.TENSORRT_FP32_PENDING) == 1
     readme = generate_table.README.read_text()
-    assert readme.count(generate_table.TENSORRT_FP32_PENDING) == 1
+    measured = ("benchmark", "fp32-trt") in generate_table.headline()[0]
+    # The committed README carries the note exactly when the committed judged runs lack the row.
+    assert readme.count(generate_table.TENSORRT_FP32_PENDING) == (0 if measured else 1)
 
 
 def test_tensorrt_fp32_in_every_judged_run_gives_the_precision_baseline_row(tmp_path):
@@ -690,7 +695,10 @@ def test_without_deploy_logs_the_deploy_block_says_so_in_one_line(tmp_path):
     _judged(tmp_path)
     assert generate_table.build_deploy_block(generate_table.RUNS_DIR, tmp_path) == generate_table.DEPLOY_PENDING
     readme = generate_table.README.read_text()
-    assert generate_table.readme_block(readme, generate_table.DEPLOY_MARKERS) == generate_table.DEPLOY_PENDING
+    measured = (generate_table.DEPLOY, "fp16") in generate_table.headline()[0]
+    # The committed README says so exactly when the committed judged runs carry no deploy logs.
+    shown = generate_table.readme_block(readme, generate_table.DEPLOY_MARKERS)
+    assert (shown != generate_table.DEPLOY_PENDING) if measured else (shown == generate_table.DEPLOY_PENDING)
     # The block sits right after the results table.
     after = readme.split(generate_table.END_MARKER, 1)[1]
     assert after.index(generate_table.DEPLOY_MARKERS[0]) < after.index("\n## ")
@@ -713,7 +721,7 @@ def test_deploy_logs_in_every_judged_run_give_their_own_block_and_leave_the_tabl
     ]
     assert block.startswith("Each cell is the median over the 2 judged runs")
     assert "labels kept 1 (COCO category 1, person), score threshold 0.5, NMS IoU threshold 0.55" in block
-    assert "it is not tuned on the results" in block
+    assert "and not tuned on the results" in block
     fp16 = generate_table.headline(generate_table.RUNS_DIR, tmp_path)[0][("benchmark", "fp16")]["results"]
     fp16_row = next(row for row in rows if row.startswith("| GPU, TensorRT FP16"))
     assert f" {fp16['end_to_end']['p50_ms'] * 0.9:.1f} / " in fp16_row
@@ -748,7 +756,10 @@ def test_the_deploy_block_shows_both_postprocess_stages_and_where_gates_are_read
     assert "| Postprocess p50 (ms) | Main benchmark postprocess p50 (ms) |" in block
     assert all(row.endswith(" | 0.50 | 2.00 |") for row in block.splitlines() if row.startswith("| GPU"))
     assert "No recall or AP is reported at this threshold." in block
-    assert "power-mode evidence that the other blocks read are those of the main benchmark jobs" in block
+    assert (
+        "The gate and sampler tables below list the deployment-style jobs' gates and samples beside the main jobs'"
+        in block
+    )
 
 
 def _set(path, value):
@@ -851,3 +862,426 @@ def test_a_log_naming_no_engine_beside_logs_that_name_one_stops_the_generator(tm
         mixed[(kind, "fp16")]["results"]["engine_sha256"] = "a" * 64
         with pytest.raises(generate_table.TableError, match="FP16 logs name an engine in 1 of"):
             generate_table.check_engines(mixed)
+
+
+def test_the_gate_block_counts_the_runs_with_a_gate_below_the_earlier_bound(tmp_path):
+    for name, memory in (("run3", "6100000"), ("run4", "6400000")):
+        _copy_runs(generate_table.RUNS_DIR, tmp_path / name)
+        (tmp_path / name / "quiet.txt").write_text(
+            QUIET_PASSED.replace("mem_available_kb=6000000", f"mem_available_kb={memory}")
+        )
+        _sysmon(tmp_path / name)
+    block = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
+    assert "1 of the 2 judged runs had a gate below the earlier attempts' bound of 6.5e9 bytes, 6347657 kB," in block
+    for name in ("run3", "run4"):
+        quiet = tmp_path / name / "quiet.txt"
+        quiet.write_text(re.sub(r"mem_available_kb=\d+", "mem_available_kb=6400000", quiet.read_text()))
+    block = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
+    assert "No judged run had a gate below the earlier attempts' bound of 6.5e9 bytes, 6347657 kB." in block
+    for name in ("run3", "run4"):
+        quiet = tmp_path / name / "quiet.txt"
+        quiet.write_text(re.sub(r"mem_available_kb=\d+", "mem_available_kb=6000000", quiet.read_text()))
+    block = generate_table.build_repeat_block(generate_table.RUNS_DIR, tmp_path)
+    assert "Each of the 2 judged runs had a gate below the earlier attempts' bound" in block
+
+
+def _tolerance_arms():
+    import compare_logs
+
+    arms = [
+        ((1.05, 1.07), ("wide", "wide")),
+        ((1.05, 1.30), ("wide", "band")),
+        ((1.20, 1.07), ("band", "wide")),
+        ((1.20, 1.30), ("band", "band")),
+    ]
+    for index, metric in enumerate(("engine_p50_ms", "end_to_end_p50_ms")):
+        t = compare_logs.TOLERANCES[metric]["relative"]
+        bound = (1 + t) / (1 - t)
+        for ratio, case in ((1 + t - 1e-6, "wide"), (1 + t, "band"), (bound - 1e-6, "band"), (bound + 1e-6, "beyond")):
+            ratios, cases = [1.0, 1.0], ["wide", "wide"]
+            ratios[index], cases[index] = ratio, case
+            arms.append((tuple(ratios), tuple(cases)))
+            # INT8 faster: the same ratio the other way round reads the same case.
+            arms.append(((1 / ratios[0], 1 / ratios[1]), tuple(cases)))
+    return arms
+
+
+@pytest.mark.parametrize(("ratios", "cases"), _tolerance_arms())
+def test_the_tolerance_sentence_reads_each_latency_metric_in_one_of_three_cases(ratios, cases):
+    def bench(engine_ms, end_to_end_ms):
+        return {"results": {"engine": {"p50_ms": engine_ms}, "end_to_end": {"p50_ms": end_to_end_ms}}}
+
+    chosen = {("benchmark", "fp16"): bench(4.0, 60.0), ("benchmark", "int8"): bench(4.0 * ratios[0], 60.0 * ratios[1])}
+    sentence = generate_table.tolerance_sentence(chosen)
+    clause = {"wide": "the {} p50 tolerance, ", "band": "the {} p50 differs by ", "beyond": "the {} p50 by "}
+    assert sentence.count(" tolerances allow") == cases.count("beyond")
+    for name, case in zip(("engine", "end-to-end"), cases, strict=True):
+        assert clause[case].format(name) in sentence
+        for other in set(clause) - {case}:
+            assert clause[other].format(name) not in sentence
+    assert ("R-11 cannot order INT8 and FP16: " in sentence) == ("beyond" not in cases or len(set(cases)) > 1)
+    assert ("differ by more than R-11's tolerances let either move: " in sentence) == ("beyond" in cases)
+
+
+@pytest.mark.parametrize("part", ["engine", "end_to_end"])
+@pytest.mark.parametrize("side", ["fp16", "int8"])
+@pytest.mark.parametrize("value", [0.0, None, "missing"])
+def test_the_tolerance_sentence_raises_on_a_zero_or_missing_p50(part, side, value):
+    def bench():
+        return {"results": {"engine": {"p50_ms": 4.0}, "end_to_end": {"p50_ms": 60.0}}}
+
+    chosen = {("benchmark", "fp16"): bench(), ("benchmark", "int8"): bench()}
+    if value == "missing":
+        del chosen[("benchmark", side)]["results"][part]["p50_ms"]
+    else:
+        chosen[("benchmark", side)]["results"][part]["p50_ms"] = value
+    with pytest.raises(generate_table.TableError, match="p50 must both be positive numbers"):
+        generate_table.tolerance_sentence(chosen)
+
+
+# A reader who subtracts or divides the printed figures gets the printed result.
+SPREAD_ROW = re.compile(
+    r"^\| (?P<metric>\w+) \| (?P<precision>[^|]+?) \|.*?"
+    r"\| (?P<low>\d+\.\d+)-(?P<high>\d+\.\d+) \| (?P<spread>\d+\.\d+) \|",
+    re.M,
+)
+SHARE = re.compile(
+    r"the INT8 engine p50 is \w+ than FP16's, \d+\.\d+ against (?P<engine>\d+\.\d+) ms, and its end-to-end p50 is \w+ "
+    r"than FP16's, \d+\.\d+ against (?P<end_to_end>\d+\.\d+) ms;"
+    r".*?The FP16 engine p50 is (?P<share>\d+(?:\.\d)?)% of its",
+    re.S,
+)
+
+
+def spread_problems(readme: str) -> list[str]:
+    """Each repeat-table row whose spread is not the difference of its printed min-max endpoints."""
+    block = generate_table.readme_block(readme, generate_table.REPEAT_MARKERS)
+    rows = list(SPREAD_ROW.finditer(block))
+    problems = [] if rows else ["no spread rows"]
+    for row in rows:
+        difference = f"{float(row['high']) - float(row['low']):.2f}"
+        if difference != row["spread"]:
+            problems.append(f"{row['metric']} {row['precision']}: spread {row['spread']}, endpoints give {difference}")
+    return problems
+
+
+def share_problems(readme: str) -> list[str]:
+    """The engine share sentence, read against the two FP16 p50s it prints."""
+    match = SHARE.search(readme)
+    if not match:
+        return ["no engine-share sentence"]
+    share = f"{float(match['engine']) / float(match['end_to_end']) * 100:.1f}"
+    return [] if share == match["share"] else [f"share {match['share']}%, printed p50s give {share}%"]
+
+
+def test_every_printed_spread_is_the_difference_of_its_printed_endpoints():
+    assert spread_problems(generate_table.README.read_text()) == []
+
+
+def test_a_spread_that_differs_from_its_endpoints_is_refused():
+    readme = generate_table.README.read_text()
+    row = next(SPREAD_ROW.finditer(generate_table.readme_block(readme, generate_table.REPEAT_MARKERS)))
+    wrong = f"{float(row['spread']) + 0.01:.2f}"
+    planted = readme.replace(row.group(0), row.group(0)[: -len(row["spread"]) - 2] + f"{wrong} |", 1)
+    assert spread_problems(planted) != []
+
+
+def test_the_engine_share_follows_the_printed_p50s():
+    assert share_problems(generate_table.README.read_text()) == []
+
+
+def test_an_engine_share_rounded_to_a_whole_percent_is_refused():
+    readme = generate_table.README.read_text()
+    match = SHARE.search(readme)
+    planted = readme.replace(f"is {match['share']}% of its", f"is {float(match['share']):.0f}% of its", 1)
+    assert share_problems(planted) != []
+
+
+@pytest.mark.parametrize(
+    ("values", "printed", "unrounded"),
+    [([30.044, 30.6575], "0.62", "0.61"), ([49.4849, 49.5151], "0.04", "0.03"), ([5.7949, 5.8451], "0.06", "0.05")],
+)
+def test_the_spread_is_printed_from_the_rounded_endpoints(values, printed, unrounded):
+    assert generate_table._range(values, 2) == f"{values[0]:.2f}-{values[1]:.2f}"
+    assert generate_table._printed_spread(values, 2) == printed
+    # The unrounded difference would print another figure: the case the old code got wrong.
+    assert f"{max(values) - min(values):.2f}" == unrounded
+
+
+@pytest.mark.parametrize(
+    ("part", "whole", "share"),
+    [(3.84, 58.71, "6.5"), (3.8449, 58.7149, "6.5"), (3.835, 60.0, "6.4"), (3.8359, 58.604, "6.6")],
+)
+def test_the_share_is_printed_to_one_decimal_from_the_rounded_values(part, whole, share):
+    assert generate_table._printed_share(part, whole) == share
+
+
+LOAD_NOTE = re.compile(r"one-minute CPU load before timing: (?P<load>[^,]+),")
+
+
+def test_the_load_before_timing_is_printed_to_two_decimals():
+    # A load of 1.027 must not read as 1.0 beside a gate bound of 1.0.
+    loads = LOAD_NOTE.findall(generate_table.README.read_text())
+    assert loads and all(re.fullmatch(r"\d+\.\d\d", load) for load in loads), loads
+
+
+def test_the_int8_ap_sentence_names_the_superseded_runs_scores():
+    sentence = next(
+        line for line in generate_table.build_block().splitlines() if line.startswith("- INT8 person AP is")
+    )
+    superseded = generate_table.superseded_int8(generate_table.REPEATS_DIR)
+    assert len(superseded) == 3
+    scores = sorted({f"{log['results']['ap'] * generate_table.POINTS:.2f}" for log in superseded})
+    assert f"{scores[0]} in each of the 3 superseded runs at `025171d`" in sentence
+    assert "Why the superseded runs score differently from the judged runs is not known." in sentence
+
+
+def test_the_int8_ap_sentence_names_the_attempts_own_int8_builds():
+    sentence = next(
+        line for line in generate_table.build_block().splitlines() if line.startswith("- INT8 person AP is")
+    )
+    attempts = generate_table.attempt_int8(generate_table.REPEATS_DIR)
+    assert [name for name, _ in attempts] == ["run3-attempt2", "run6-window1"]
+    assert sentence.endswith(
+        " The attempts' own INT8 builds scored 26.74 in `runs-attempts/run3-attempt2/` at `025171d`, "
+        "26.83 in `runs-attempts/run6-window1/` at `8ce8f5c`."
+    )
+
+
+def _summary_rows(summary: str) -> dict[str, dict[str, str]]:
+    """The summary table's rows by their first cell, each as its cells by column header."""
+    lines = [line for line in summary.splitlines() if line.startswith("| ")]
+    header = [cell.strip() for cell in lines[0].strip("|").split(" | ")]
+    rows = [[cell.strip() for cell in line.strip("|").split(" | ")] for line in lines[1:]]
+    return {cells[0]: dict(zip(header, cells, strict=True)) for cells in rows}
+
+
+def _copy_repeats(tmp_path, change=None):
+    """The committed judged runs, copied; ``change(run_dir)`` edits each copy's logs."""
+    for source in generate_table.repeat_dirs():
+        shutil.copytree(source, tmp_path / source.name)
+        if change is not None:
+            change(tmp_path / source.name)
+    return tmp_path
+
+
+def _edit_log(run_dir, pattern, edit):
+    """Apply ``edit`` to the results of the one log in ``run_dir`` matching ``pattern``."""
+    (path,) = sorted(run_dir.glob(pattern))
+    log = json.loads(path.read_text())
+    edit(log["results"])
+    path.write_text(json.dumps(log))
+
+
+def test_the_summary_block_is_generated_from_the_same_median_as_the_results_table():
+    # The opening summary is made from the logs, not typed: each row's engine p50, end-to-end p50 and person AP are
+    # the results table's cells for that row, and the engine share is recomputed from the median.
+    chosen, _ = generate_table.headline()
+    summary = generate_table.build_summary_block()
+    for precision in generate_table.measured(chosen):
+        cells = [cell.strip() for cell in generate_table._row(chosen, precision).strip("|").split("|")]
+        row = _summary_rows(summary)[cells[0]]
+        engine, end_to_end, ap = (
+            row["Engine p50 (ms)"],
+            row["End-to-end p50, evaluation setting (ms)"],
+            row["Person AP@[.5:.95], evaluation setting"],
+        )
+        assert engine == cells[1].split(" / ")[0] and end_to_end == cells[3].split(" / ")[0] and ap == cells[8]
+    timing = [chosen[("benchmark", p)]["results"] for p in generate_table.measured(chosen)]
+    share = max(t["engine"]["p50_ms"] / t["end_to_end"]["p50_ms"] for t in timing) * 100
+    printed = float(
+        re.search(
+            r"The engine is at most ([0-9.]+)% of a frame's end-to-end p50 at the evaluation setting in the median "
+            r"cells\.",
+            summary,
+        ).group(1)
+    )
+    # "At most" must hold: the printed bound is never below the real share, and is within one printed step of it.
+    assert share <= printed < share + 0.1, (share, printed)
+    governors = {
+        policy["governor"] for results in timing for policy in results["cpu_clocks"].values() if "governor" in policy
+    }
+    assert governors == {"schedutil"} and "measurements under the `schedutil` governor" in summary
+    assert generate_table.readme_block(generate_table.README.read_text(), generate_table.SUMMARY_MARKERS) == summary
+
+
+def test_the_int8_fp16_gaps_recompute_from_the_printed_figures():
+    # A reader who divides the printed two-decimal p50s gets the printed percentage, for engine and end-to-end alike.
+    block = " ".join(generate_table.build_int8_block().split())
+    pairs = re.findall(r"p50 is (?:lower|higher) than FP16's, ([0-9.]+) against ([0-9.]+) ms", block)
+    gaps = re.findall(r"is wider than their ([0-9.]+)% difference|differs by ([0-9.]+)%|p50 by ([0-9.]+)%", block)
+    printed = [float(next(value for value in found if value)) for found in gaps]
+    assert len(pairs) == 2 and len(printed) == 2, (pairs, gaps)
+    for (first, second), gap in zip(pairs, printed, strict=True):
+        a, b = float(first), float(second)
+        assert f"{(max(a, b) / min(a, b) - 1) * 100:.1f}" == f"{gap:.1f}", (a, b, gap)
+
+
+def test_the_summary_names_the_pytorch_wheel_warning_and_each_builds_flags_beside_their_rows(tmp_path):
+    # The PyTorch row carries the wheel's unsupported-GPU warning and the INT8 row its builder flags, both read from
+    # the logs: a flag list recorded twice over is shown once, in its recorded order.
+    warning = (
+        "Found GPU0 Board.\n- 8.0 which supports hardware CC >=8.0\nNo wheel built here supports this GPU. Visit x."
+    )
+
+    def change(run_dir):
+        _edit_log(run_dir, "gpu_check_fp32_*.json", lambda results: results.update(torch_warning=warning))
+        flags = ["FP16", "INT8", "TF32", "FP16", "INT8", "TF32"]
+        _edit_log(run_dir, "build_int8_*.json", lambda results: results.update(builder_flags=flags))
+
+    rows = _summary_rows(generate_table.build_summary_block(generate_table.RUNS_DIR, _copy_repeats(tmp_path, change)))
+    note = "From the logs"
+    assert rows["GPU, PyTorch FP32 (PyTorch baseline)"][note] == (
+        'PyTorch warned at first CUDA use: "No wheel built here supports this GPU."'
+    )
+    assert rows["GPU, TensorRT INT8"][note] == "TensorRT builder flags FP16, INT8, TF32"
+    assert rows["GPU, TensorRT FP16"][note] == "TensorRT builder flags FP16, TF32"
+    assert rows["GPU, TensorRT FP32 (precision baseline)"][note] == "TensorRT builder flags none"
+    assert generate_table.builder_flags("FP16,INT8,TF32,FP16,INT8,TF32") == ["FP16", "INT8", "TF32"]
+    # The committed summary quotes the committed check's warning, and the INT8 build's flags, as the logs give them.
+    chosen = generate_table.headline()[0]
+    committed = _summary_rows(generate_table.build_summary_block())
+    recorded = chosen[("gpu_check", "fp32")]["results"]["torch_warning"]
+    shown = committed["GPU, PyTorch FP32 (PyTorch baseline)"][note]
+    assert shown.startswith("PyTorch warned at first CUDA use") and shown.split('"')[1].rstrip(".") in recorded
+    flags = list(dict.fromkeys(chosen[("build", "int8")]["results"]["builder_flags"]))
+    assert committed["GPU, TensorRT INT8"][note] == f"TensorRT builder flags {', '.join(flags)}"
+
+
+def test_the_summary_shows_the_deploy_style_end_to_end_p50_beside_the_evaluation_settings(tmp_path):
+    # Each row's deploy-style end-to-end p50 is its benchmark_deploy log's median, in the column after the
+    # evaluation-setting one; the committed judged runs carry the deploy logs, so the README's first screen shows it.
+    def change(run_dir):
+        _edit_log(run_dir, "benchmark_deploy_int8_*.json", lambda results: results["end_to_end"].update(p50_ms=12.34))
+
+    summary = generate_table.build_summary_block(generate_table.RUNS_DIR, _copy_repeats(tmp_path, change))
+    header = [line for line in summary.splitlines() if line.startswith("| ")][0].strip("|").split(" | ")
+    assert (
+        header.index("End-to-end p50, deploy-style (ms)") == header.index("End-to-end p50, evaluation setting (ms)") + 1
+    )
+    assert _summary_rows(summary)["GPU, TensorRT INT8"]["End-to-end p50, deploy-style (ms)"] == "12.3"
+    assert "keeping labels 1 at score threshold 0.5; no accuracy is measured at that setting." in summary
+    chosen = generate_table.headline()[0]
+    committed = _summary_rows(generate_table.build_summary_block())
+    for precision in generate_table.measured(chosen):
+        row = committed[generate_table._device(chosen[("benchmark", precision)]["results"]["runtime"], precision)]
+        deploy = chosen[(generate_table.DEPLOY, precision)]["results"]["end_to_end"]["p50_ms"]
+        assert row["End-to-end p50, deploy-style (ms)"] == f"{deploy:.1f}"
+
+
+def test_the_engine_fps_column_is_labelled_as_derived_from_the_engine_latency_alone():
+    # The engine FPS is 1 / the engine's mean latency: the board never ran frames at it, so its column says so.
+    header = [cell.strip() for cell in generate_table.HEADER.strip("|").split(" | ")]
+    engine = [cell for cell in header if "FPS" in cell and "End-to-end" not in cell]
+    assert engine == ["Engine-only bound FPS (1 / engine mean latency)"]
+    assert "Engine FPS" not in header
+    shown = generate_table.readme_block(generate_table.README.read_text()).splitlines()[0]
+    assert shown == generate_table.HEADER and "| Engine-only bound FPS (1 / engine mean latency) |" in shown
+
+
+@pytest.mark.parametrize(
+    ("int8", "overlap"),
+    [((14.0, 14.3, 14.1), True), ((10.0, 10.2, 10.1), False)],
+)
+def test_the_deploy_block_gives_each_precisions_repeat_range_and_says_when_fp16_and_int8_overlap(
+    tmp_path, int8, overlap
+):
+    # Each run's per-repeat deploy p50s are pooled over the judged runs: min-max per precision, and an overlap
+    # sentence only when the FP16 and INT8 ranges meet.
+    fp16 = {"run6": (14.2, 14.25, 14.22), "run7": (14.1, 14.4, 14.3), "run8": (14.15, 14.35, 14.2)}
+
+    def change(run_dir):
+        for precision, values in (("fp16", fp16[run_dir.name]), ("int8", int8)):
+            _edit_log(
+                run_dir,
+                f"benchmark_deploy_{precision}_*.json",
+                lambda results, values=values: results.update(end_to_end_p50_ms_per_repeat=list(values)),
+            )
+
+    block = generate_table.build_deploy_block(generate_table.RUNS_DIR, _copy_repeats(tmp_path, change))
+    assert "- FP16 deploy end-to-end p50 across repeats: 14.10-14.40 ms over 9 repeats of the 3 judged runs." in block
+    low, high = min(int8), max(int8)
+    assert f"- INT8 deploy end-to-end p50 across repeats: {low:.2f}-{high:.2f} ms over 9 repeats of the 3" in block
+    sentence = (
+        f"FP16 and INT8 deploy end-to-end p50 ranges overlap (14.10-14.40 ms vs {low:.2f}-{high:.2f} ms), so their "
+        "order is not settled by these runs."
+    )
+    assert (sentence in block) == overlap
+    assert ("ranges overlap" in block) == overlap
+    # The committed block gives the same lines from the committed logs.
+    chosen = generate_table.headline()[0]
+    committed = generate_table.build_deploy_block()
+    for precision in generate_table.TABLE_PRECISIONS:
+        values = chosen[(generate_table.DEPLOY, precision)]["results"]["end_to_end_p50_ms_per_repeat"]
+        name = generate_table.DEPLOY_RANGE_NAMES.get(precision, generate_table.PRECISION_NAMES[precision])
+        assert f"- {name} deploy end-to-end p50 across repeats: {min(values):.2f}-{max(values):.2f} ms" in committed
+    # The PyTorch line names PyTorch, so that beside "TensorRT FP32" it cannot be read as a TensorRT figure.
+    assert "- PyTorch FP32 deploy end-to-end p50 across repeats: " in committed
+    assert "\n- FP32 deploy end-to-end" not in committed
+
+
+def test_the_summary_gives_the_postprocess_share_to_one_decimal_rounded_to_nearest(tmp_path):
+    # Postprocess p50 over end-to-end p50 of the evaluation-setting benchmark: 1/3 prints 33.3%, not 33.4%, and
+    # 2/3 prints 66.7%, not 66.6%.
+    def change(run_dir):
+        for precision, part in (("fp16", 1.0), ("int8", 2.0)):
+            _edit_log(
+                run_dir,
+                f"benchmark_{precision}_*.json",
+                lambda results, part=part: (
+                    results["stages"]["postprocess"].update(p50_ms=part),
+                    results["end_to_end"].update(p50_ms=3.0),
+                ),
+            )
+
+    rows = _summary_rows(generate_table.build_summary_block(generate_table.RUNS_DIR, _copy_repeats(tmp_path, change)))
+    column = "Postprocess share of end-to-end p50, evaluation setting"
+    assert rows["GPU, TensorRT FP16"][column] == "33.3%"
+    assert rows["GPU, TensorRT INT8"][column] == "66.7%"
+    chosen = generate_table.headline()[0]
+    committed = _summary_rows(generate_table.build_summary_block())
+    for precision in generate_table.measured(chosen):
+        results = chosen[("benchmark", precision)]["results"]
+        share = results["stages"]["postprocess"]["p50_ms"] / results["end_to_end"]["p50_ms"] * 100
+        assert committed[generate_table._device(results["runtime"], precision)][column] == f"{share:.1f}%"
+
+
+def test_the_summary_labels_its_ap_and_engine_share_as_at_the_evaluation_setting():
+    summary = generate_table.build_summary_block()
+    header = [cell.strip() for cell in [line for line in summary.splitlines() if line.startswith("| ")][0].split("|")]
+    assert "Person AP@[.5:.95], evaluation setting" in header and "Person AP@[.5:.95]" not in header
+    assert re.search(
+        r"The engine is at most \d+\.\d% of a frame's end-to-end p50 at the evaluation setting in the median cells\. ",
+        summary,
+    )
+
+
+@pytest.mark.parametrize(
+    ("fraction", "printed"), [(0.3431, "34.4"), (0.344, "34.4"), (0.34401, "34.5"), (0.0649, "6.5")]
+)
+def test_the_engine_share_bound_is_rounded_up_so_at_most_holds(fraction, printed):
+    # "At most" is printed rounded up, never to nearest: 34.31% prints as 34.4, and an exact 34.4% stays 34.4.
+    assert generate_table._ceil_percent(fraction) == printed
+
+
+def test_the_summary_says_its_one_decimal_cells_can_read_outside_the_two_decimal_ranges():
+    # The cells stay at one decimal while the notes give min-max to two, so the committed FP16 engine p50 cell reads
+    # 3.8 beside notes of 3.83-3.86: the summary says so, once, before the engine share.
+    summary = generate_table.build_summary_block()
+    sentence = (
+        "The millisecond and watt cells are rounded to one decimal; the ranges in the notes below are given to two, "
+        "so a cell can read just outside the range of the runs it is the median of. The engine is at most"
+    )
+    assert summary.count(sentence) == 1
+    assert _summary_rows(summary)["GPU, TensorRT FP16"]["Engine p50 (ms)"] == "3.8"
+    results = generate_table.readme_block(generate_table.README.read_text())
+    assert "FP16 min-max over the 3 runs: ap 28.00-28.01, ap50 49.48-49.52, engine_p50_ms 3.83-3.86," in results
+    assert "rounded to one decimal" in generate_table.readme_block(
+        generate_table.README.read_text(), generate_table.SUMMARY_MARKERS
+    )
+
+
+def test_the_int8_fp16_text_says_its_percentage_is_from_the_rounded_figures_and_its_counts_are_medians():
+    block = generate_table.build_int8_block()
+    assert "difference, computed from the rounded figures shown" in block
+    assert "the medians of the judged runs' `detections` counts in the eval logs." in block

@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "peddet-orin"
 version = "0.1.1"
-description = "Person detection with torchvision SSDLite on a Jetson Orin Nano, in FP32, FP16 and INT8."
+description = "Person detection with torchvision SSDLite on a Jetson Orin Nano Super, in FP32, FP16 and INT8."
 readme = "README.md"
-license = "Apache-2.0"
+license = "Apache-2.0 AND BSD-3-Clause"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11,<3.13"
 authors = [{ name = "Ahmed Hassan" }]

@@ -241,7 +241,7 @@ def test_a_skipped_or_softened_step_is_detected():
     assert "checkout keeps the token in the clone" in hardening_problems(text.replace("persist-credentials: false", ""))
 
 
-def test_ci_runs_on_push_to_main_and_on_pull_requests_only():
+def test_ci_runs_only_on_its_listed_triggers():
     assert trigger_problems(WORKFLOW.read_text()) == []
 
 
@@ -315,3 +315,20 @@ def test_ci_installs_from_the_hashed_locks_without_build_isolation():
     assert "python -m pip install --require-hashes -r requirements/ci-cpu.lock" in commands
     assert "python -m pip install --no-deps --no-build-isolation -e ." in commands
     assert not any(" -r requirements/ci-cpu.txt" in command and "install" in command for command in commands)
+
+
+def test_a_cpu_only_run_passes_only_when_every_cpu_entry_is_caught_and_only_gpu_entries_are_not_run():
+    import check_planted_defects
+    from planted_defects import DEFECTS
+
+    gpu_entries = sum(defect.get("needs") == "gpu" for defect in DEFECTS)
+    status = check_planted_defects.cpu_only_status
+    assert status(f"PLANTED DONE INCOMPLETE {gpu_entries} not run", gpu_entries, gpu_entries) == 0
+    assert status("PLANTED DONE FAIL", gpu_entries, gpu_entries) == 1
+    assert status(f"PLANTED DONE INCOMPLETE {gpu_entries + 1} not run", gpu_entries + 1, gpu_entries) == 1
+    assert status("PLANTED DONE PASS", 0, gpu_entries) == (0 if gpu_entries == 0 else 1)
+
+
+def test_ci_runs_the_cpu_planted_defects():
+    workflow = WORKFLOW.read_text()
+    assert "run: python scripts/check_planted_defects.py --cpu-only" in workflow

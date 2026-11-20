@@ -6,21 +6,24 @@ test when NEGATIVE_TESTS below names one of its tests that plants or feeds a bad
 refused. Every test file has one or the other.
 """
 
+import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 import planted_defects
-from strict_skips import checkout_skip_reason
+from strict_skips import checkout_skip_reason, release_skip_reason
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 README = REPO_ROOT / "README.md"
 PLANTED_RESULTS = REPO_ROOT / "tests" / "planted_results.txt"
 RESULTS_NAME = "tests/planted_results.txt"
 RESULTS_HEADER = (
-    "# Output of python scripts/check_planted_defects.py on the files of the commit that last changed this file "
+    "# Recorded lines of python scripts/check_planted_defects.py, assembled by the release helper, on the files of the "
+    "commit that last changed this file "
     "(git log -1 -- tests/planted_results.txt), as they were before this file was written:"
 )
 HISTORY_SKIP = checkout_skip_reason(REPO_ROOT, history=True)
@@ -30,6 +33,7 @@ NEGATIVE_TESTS = {
     "tests/test_checkout_kinds.py": "test_a_shallow_clone_in_ci_still_fails_a_strict_run",
     "tests/test_debug.py": "test_the_generic_debug_variable_turns_nothing_on",
     "tests/test_device_resources.py": "test_write_rejects_a_wrong_shape_with_the_same_byte_count",
+    "tests/test_host_scripts.py": "test_root_refuses_a_units_file_it_should_not_trust",
     "tests/test_internal_ids.py": "test_an_id_planted_in_any_tracked_path_is_found",
     "tests/test_locks.py": "test_a_lock_that_drifts_from_its_pin_file_is_detected",
     "tests/test_measure_cli_checks.py": "test_measure_corrupt_engine_is_refused",
@@ -39,14 +43,16 @@ NEGATIVE_TESTS = {
     "tests/test_pins_match_logs.py": "test_a_pin_that_differs_from_the_logs_is_detected",
     "tests/test_planted_defects.py": "test_a_stale_registry_entry_is_detected",
     "tests/test_preprocess.py": "test_uint8_pixels_are_rejected",
+    "tests/test_recompute_ap.py": "test_a_wrong_ap_or_another_detections_file_fails",
+    "tests/test_recompute_stats.py": "test_a_raw_file_that_disagrees_with_the_log_fails",
     "tests/test_repo_root.py": "test_pdorin_root_without_a_pyproject_is_refused",
     "tests/test_strict_skips.py": "test_an_unexpected_skip_fails_a_strict_run",
     "tests/test_weights.py": "test_a_weights_file_with_another_sha256_is_refused",
 }
 SENTENCE = re.compile(
     r"`tests/planted_defects\.py` registers (?P<n>\d+) planted defects.*?the release check requires all "
-    r"(?P<caught>\d+) to be caught.*?\. They cover (?P<x>\d+) of the (?P<y>\d+) test files, (?P<z>\d+) more carry "
-    r"in-file negative tests"
+    r"(?P<caught>\d+) to be caught.*?\. They cover (?P<x>\d+) of the (?P<y>\d+) test files, (?P<z>\d+) more each "
+    r"define a named negative test"
 )
 
 
@@ -111,6 +117,9 @@ def changed_since_the_planted_run(changed: list[str]) -> list[str]:
 
 @needs_history
 def test_the_planted_output_was_made_from_the_current_files():
+    # Only a release tip, whose last commit is the planted run's, can pass this; CI and contributors skip it.
+    if release_skip_reason():
+        pytest.skip(release_skip_reason())
     assert PLANTED_RESULTS.read_text().startswith(RESULTS_HEADER)
     last = subprocess.run(
         ["git", "log", "-1", "--format=%H", "--", RESULTS_NAME], cwd=REPO_ROOT, capture_output=True, text=True
@@ -118,7 +127,7 @@ def test_the_planted_output_was_made_from_the_current_files():
     changed = subprocess.run(
         ["git", "diff", "--name-only", last, "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
     ).stdout.splitlines()
-    # Regenerate the output with scripts/check_planted_defects.py, and the GPU entry on the board, after any change.
+    # Regenerate the output with scripts/check_planted_defects.py, and the GPU entries on the board, after any change.
     assert changed_since_the_planted_run(changed) == []
 
 
@@ -131,7 +140,8 @@ def test_a_file_changed_after_the_planted_run_makes_the_output_stale():
 
 
 def test_a_planted_output_with_a_missing_or_failed_entry_is_refused():
-    text = PLANTED_RESULTS.read_text()
+    # A complete output made from the registry, so that this test does not wait for the board's run.
+    text = "".join(f"PLANT {defect['id']} clean-rc=0 planted-rc=1 caught\n" for defect in planted_defects.DEFECTS)
     first, second = (defect["id"] for defect in planted_defects.DEFECTS[:2])
     caught = f"PLANT {first} clean-rc=0 planted-rc=1 caught"
     failed = text.replace(caught, f"PLANT {first} clean-rc=0 planted-rc=0 FAIL")
@@ -171,3 +181,23 @@ def test_every_named_negative_test_exists_in_its_file():
 def test_a_named_negative_test_that_does_not_exist_is_refused():
     named = {**NEGATIVE_TESTS, "tests/test_weights.py": "test_no_such_test_is_refused"}
     assert missing_negative_tests(listed_test_files(), named) == ["tests/test_weights.py::test_no_such_test_is_refused"]
+
+
+@needs_history
+def test_a_later_commit_passes_ci_and_fails_the_release_check(tmp_path):
+    # An ordinary commit after the planted run: CI (strict skips, no release variable) skips the freshness test, and
+    # the release check, which sets PDORIN_RELEASE_CHECK=1, still fails on the stale output.
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(REPO_ROOT), str(clone)], check=True)
+    (clone / "README.md").write_text((clone / "README.md").read_text() + "\nA later line.\n")
+    identity = ["-c", "user.name=test", "-c", "user.email="]
+    subprocess.run(["git", *identity, "commit", "-q", "-am", "A later commit"], cwd=clone, check=True)
+    test_id = "tests/test_negative_controls.py::test_the_planted_output_was_made_from_the_current_files"
+    base = {key: value for key, value in os.environ.items() if key != "PDORIN_RELEASE_CHECK"}
+    command = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", test_id]
+    ci = subprocess.run(command, cwd=clone, env={**base, "PDORIN_STRICT_SKIPS": "1"}, capture_output=True, text=True)
+    assert ci.returncode == 0 and "1 skipped" in ci.stdout, ci.stdout
+    release = subprocess.run(
+        command, cwd=clone, env={**base, "PDORIN_RELEASE_CHECK": "1"}, capture_output=True, text=True
+    )
+    assert release.returncode == 1 and "1 failed" in release.stdout, release.stdout

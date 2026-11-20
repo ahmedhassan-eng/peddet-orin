@@ -37,6 +37,7 @@ for version in $VERSIONS; do
     ruff check .
     ruff format --check .
     PDORIN_STRICT_SKIPS=1 python -m pytest -rs
+    python scripts/check_planted_defects.py --cpu-only
     # ci:commands:end
   )
   if [ $? = 0 ]; then

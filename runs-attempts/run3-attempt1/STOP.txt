@@ -1,0 +1,4 @@
+RUN3 start=2026-11-14T21:39:55Z commit=025171d54142efdb806c38ede6ee067dc82cd2ad dirty=0
+QUIET run3-start FAIL
+STEP run3 quiet_start rc=1 2026-11-14T21:59:57Z
+STEP run3 STOP at quiet_start

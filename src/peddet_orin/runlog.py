@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """JSON run logs: writing them, recording host facts, and validating their shape.
 
-Every number published by this project comes from a log: the judged runs' under ``runs-repeat/``, the earlier
-run's under ``runs/``. A log is written only if the run completes, so a crashed run cannot supply a number.
+Every number published by this project comes from a log: the judged runs' under ``runs-repeat/``, the superseded
+runs' under ``runs-superseded/`` and the earlier run's under ``runs/``, apart from figures the README marks as the
+author's record. A log is written only if the run completes, so a crashed run cannot supply a number.
 Paths under the repository root are written relative to it, and every other
 absolute, home or ``file:`` path in a log string is replaced by ``<path>``
 before the log is written. Validation still rejects any such path that is not
@@ -18,6 +19,7 @@ to a checkout, never to the interpreter's installation tree.
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import json
 import math
 import os
@@ -55,6 +57,8 @@ SUBPROCESS_TIMEOUT_S = 20
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 FILE_STAMP_FORMAT = "%Y%m%dT%H%M%SZ"
 TEGRA_RELEASE_FILE = "/etc/nv_tegra_release"
+# The board's own model string, as the kernel reads it from the device tree; built from parts, as a path.
+DEVICE_TREE_MODEL_FILE = os.sep.join(("", "proc", "device-tree", "model"))
 ABSOLUTE_PATH_ALLOWLIST = frozenset({TEGRA_RELEASE_FILE})
 REDACTED_PATH = "<path>"
 # A slash that begins a token, so URLs and relative paths such as lib/x do not match.
@@ -105,6 +109,9 @@ DECODE_ENVIRONMENT = ("numpy", "pillow", "libjpeg", "pycocotools")
 # collected when the log is written, after the run, so the library is the one the run already loaded: torch's for
 # PyTorch, the one TensorRT runs with for engines. Recorded from 0.1.1 on, not required.
 RUNTIME_ENVIRONMENT = ("cuda_runtime", "cuda_driver")
+# The board model from the device tree, so a log names the hardware it ran on. Logs written from the 0.1.1 release
+# commit on record it; the committed logs, written at 8427133, carry none. Not required.
+BOARD_ENVIRONMENT = ("board_model",)
 # The stages of a timed benchmark iteration, in the order they run; their times add up to the end-to-end time.
 BENCHMARK_STAGES = ("decode", "preprocess", "engine", "postprocess")
 
@@ -218,26 +225,57 @@ def environment_facts() -> dict[str, str]:
     facts["libjpeg"] = _libjpeg_version()
     facts["pycocotools"] = _distribution_version("pycocotools")
     facts["cuda_runtime"], facts["cuda_driver"] = _cuda_versions()
+    facts["board_model"] = board_model()
     return facts
 
 
+def _is_sha256(value: Any) -> bool:
+    return isinstance(value, str) and SHA256_PATTERN.fullmatch(value) is not None
+
+
+def file_sha256(path: Path) -> str:
+    """The sha256 of a file's bytes."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def names_sha256(names: list[str]) -> str:
+    """The sha256 of a list of names, one per line, each ending in a newline."""
+    return hashlib.sha256("".join(f"{name}\n" for name in names).encode()).hexdigest()
+
+
+def board_model() -> str:
+    """The device tree's model string, without its trailing NUL, or UNREADABLE where there is none."""
+    try:
+        text = Path(DEVICE_TREE_MODEL_FILE).read_bytes().rstrip(b"\x00\n").decode("utf-8", "replace").strip()
+    except OSError:
+        return UNREADABLE
+    return text or UNREADABLE
+
+
 def other_gpu_process_count() -> int | str:
-    """Count compute processes through NVML; only the number is ever kept."""
+    """Count compute processes through NVML; only the number is ever kept. When it cannot be read, the log records
+    why: ``UNREADABLE:import`` when pynvml is not importable, else ``UNREADABLE:`` and the NVML error's class."""
     try:
         import pynvml
-
+    except ImportError:
+        return f"{UNREADABLE}:import"
+    try:
         pynvml.nvmlInit()
         try:
             handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             return len(pynvml.nvmlDeviceGetComputeRunningProcesses(handle))
         finally:
             pynvml.nvmlShutdown()
-    except Exception:  # NVML raises its own error family, and may be absent on Jetson.
-        return UNREADABLE
+    except Exception as error:  # NVML raises its own error family, and may not support this query on Jetson.
+        return f"{UNREADABLE}:{type(error).__name__}"
 
 
-def _git(*arguments: str) -> str:
-    """Return a git command's stripped stdout in the repository root, or "" if it fails."""
+def _git_result(*arguments: str) -> tuple[bool, str]:
+    """Run git in the repository root: whether it succeeded, and its stripped stdout."""
     try:
         done = subprocess.run(
             ["git", *arguments],
@@ -248,13 +286,21 @@ def _git(*arguments: str) -> str:
             timeout=SUBPROCESS_TIMEOUT_S,
         )
     except (OSError, subprocess.SubprocessError):
-        return ""
-    return done.stdout.strip() if done.returncode == 0 else ""
+        return False, ""
+    return done.returncode == 0, done.stdout.strip()
+
+
+def _git(*arguments: str) -> str:
+    """Return a git command's stripped stdout in the repository root, or "" if it fails."""
+    ok, output = _git_result(*arguments)
+    return output if ok else ""
 
 
 def tree_is_dirty() -> bool:
-    """Report whether any file outside ``runs/`` differs from the commit, untracked files included."""
-    return bool(_git("status", "--porcelain", "--", ".", *DIRTY_EXCLUDES))
+    """Report whether any file outside ``runs/`` differs from the commit, untracked files included. A git status
+    that fails or times out reads as dirty, so a log never records a clean tree it did not check."""
+    ok, output = _git_result("status", "--porcelain", "--", ".", *DIRTY_EXCLUDES)
+    return not ok or bool(output)
 
 
 def relative_command(arguments: list[str]) -> str:
@@ -298,6 +344,8 @@ class RunLog:
         self.seed = seed
         self.iterations = iterations
         self.results: dict[str, Any] = {}
+        # A benchmark's raw per-iteration times and power samples, written beside the log by _write when set.
+        self.raw: dict[str, Any] | None = None
         self.path: Path | None = None
 
     def __enter__(self) -> RunLog:
@@ -317,6 +365,13 @@ class RunLog:
     def _write(self) -> Path:
         module = getattr(sys.modules["__main__"], "__spec__", None)
         program = f"python -m {module.name}" if module else "python"
+        stamp = datetime.now(UTC).strftime(FILE_STAMP_FORMAT)
+        stem = f"{self.kind}_{self.precision}_{stamp}"
+        raw_bytes = None
+        if self.raw is not None:
+            raw_bytes = json.dumps(self.raw, separators=(",", ":")).encode()
+            self.results["raw_file"] = f"{stem}{RAW_SUFFIX}"
+            self.results["raw_sha256"] = hashlib.sha256(raw_bytes).hexdigest()
         record = redacted(
             {
                 "schema_version": SCHEMA_VERSION,
@@ -338,8 +393,9 @@ class RunLog:
         if problems:
             raise ValueError(f"refusing to write an invalid log: {problems}")
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(UTC).strftime(FILE_STAMP_FORMAT)
-        path = RUNS_DIR / f"{self.kind}_{self.precision}_{stamp}.json"
+        path = RUNS_DIR / f"{stem}.json"
+        if raw_bytes is not None:
+            (RUNS_DIR / self.results["raw_file"]).write_bytes(raw_bytes)
         path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
         print(f"log written: {relative_command([str(path)])}")
         return path
@@ -478,11 +534,12 @@ RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
         # Both come from tegrastats, so a host without it records them as UNREADABLE.
         "system_ram_rise_mib": lambda value: _is_number(value) or value == UNREADABLE,
         "avg_power_w": lambda value: _is_number(value) or value == UNREADABLE,
-        "power_samples": lambda value: _is_integer(value) and value >= 0,
+        "power_samples": lambda value: _is_integer(value) and value > 0,
         "power_mode": _is_string,
         "cpu_load_1min_before_timing": _is_number,
         "gpu_busy_pct_before_timing": lambda value: _is_number(value) or value == UNREADABLE,
-        # Read from sysfs during timing; a host without a file records UNREADABLE for it.
+        # Only the current clocks are sampled during timing; a missing current-clock file is counted in
+        # unreadable_samples. The governor and limits are read once after timing.
         "gpu_clock": lambda value: _is_clock(value, "hz", ("min_hz",)),
         "cpu_clocks": _is_cpu_clocks,
     },
@@ -517,7 +574,8 @@ RESULT_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
     },
 }
 # Keys a kind may carry beyond its required ones, with the test each value must pass when present. Logs written
-# from 0.1.1 on carry them; the committed logs predate them and stay valid without them.
+# from 0.1.1 on carry them, the committed judged runs' logs included; a log without them still passes, except a
+# TensorRT FP32 build log, which must carry builder_flags and engine_sha256 (see validate_log).
 OPTIONAL_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
     "eval": {
         # The sha256 of the TensorRT engine file that ran, or "-" for fp32, which runs no engine file.
@@ -552,6 +610,45 @@ RESULT_CHECKS[DEPLOY_BENCHMARK_KIND] = {
     "postprocess_settings": _is_deploy_settings,
 }
 BENCHMARK_KINDS = ("benchmark", DEPLOY_BENCHMARK_KIND)
+# benchmark.IMAGE_POOL_SIZE, kept here as well since benchmark imports this module; a test ties the two.
+POOL_IMAGES = 200
+# The inputs a run read, by sha256, in logs written from the 0.1.1 release commit on; the committed logs, written at
+# 8427133, carry none. Optional, so they stay valid.
+# The annotations file and the sorted names of the images an eval or benchmark read; the sha256 of the eval's raw
+# detections, written outside the tree; the ONNX file an export wrote and a build read. A benchmark that finds no
+# annotations file records UNREADABLE for it.
+DETECTIONS_FILE_PATTERN = re.compile(r"eval_[a-z0-9-]+_[0-9]{8}T[0-9]{6}Z\.detections\.json")
+INPUT_HASH_CHECKS: dict[str, dict[str, Callable[[Any], bool]]] = {
+    "eval": {
+        "annotations_sha256": lambda value: _is_sha256(value),
+        "images_sha256": lambda value: _is_sha256(value),
+        "detections_sha256": lambda value: _is_sha256(value),
+        "detections_file": lambda value: (
+            isinstance(value, str) and DETECTIONS_FILE_PATTERN.fullmatch(value) is not None
+        ),
+    },
+    **{
+        kind: {
+            "annotations_sha256": lambda value: _is_sha256(value) or value == UNREADABLE,
+            "images_sha256": lambda value: _is_sha256(value),
+            # The number of images timed: exactly the benchmark's IMAGE_POOL_SIZE, which it refuses to run short of.
+            "pool_images": lambda value: _is_integer(value) and value == POOL_IMAGES,
+        }
+        for kind in BENCHMARK_KINDS
+    },
+    "export": {"onnx_sha256": lambda value: _is_sha256(value)},
+    "build": {"onnx_sha256": lambda value: _is_sha256(value)},
+}
+# A benchmark's raw side file, in logs written from the 0.1.1 release commit on (the committed logs, written at
+# 8427133, carry none): its name beside the log, and the sha256 of its bytes. It is JSON, named
+# <log stem>.raw so that no reader of *.json logs takes it for a log.
+RAW_SUFFIX = ".raw"
+RAW_FILE_PATTERN = re.compile(r"[A-Za-z0-9_.-]+\.raw")
+for _kind in BENCHMARK_KINDS:
+    INPUT_HASH_CHECKS[_kind]["raw_file"] = lambda value: isinstance(value, str) and RAW_FILE_PATTERN.fullmatch(value)
+    INPUT_HASH_CHECKS[_kind]["raw_sha256"] = lambda value: _is_sha256(value)
+for _kind, _checks in INPUT_HASH_CHECKS.items():
+    OPTIONAL_CHECKS.setdefault(_kind, {}).update(_checks)
 # Logs written before 0.1.1 carry an inferred_slice, which gpu_check no longer records: no slice can be inferred
 # for a device that PyTorch itself says its build excludes. It is allowed unchecked.
 OPTIONAL_RESULTS: dict[str, frozenset[str]] = {
@@ -675,6 +772,26 @@ def _stage_problems(kind: str, results: dict) -> list[str]:
     return problems
 
 
+def _latency_problems(kind: str, results: dict) -> list[str]:
+    """Every latency and FPS in the engine, end-to-end and stage summaries must be positive, with p50 <= p90 <= p99."""
+    summaries = {name: results.get(name) for name in ("engine", "end_to_end")}
+    stages = results.get("stages")
+    if _is_stages(stages):
+        summaries.update({f"stages {name}": summary for name, summary in stages.items()})
+    problems = []
+    for name, summary in summaries.items():
+        if not _is_latency(summary):
+            continue
+        problems += [
+            f"bad result: {kind} {name} {key} is not positive"
+            for key in ("p50_ms", "p90_ms", "p99_ms", "fps")
+            if summary[key] <= 0
+        ]
+        if not summary["p50_ms"] <= summary["p90_ms"] <= summary["p99_ms"]:
+            problems.append(f"bad result: {kind} {name} percentiles are not ordered p50_ms <= p90_ms <= p99_ms")
+    return problems
+
+
 def _deploy_problems(kind: str, results: dict) -> list[str]:
     """The main benchmark keeps every class; the deployment-style one keeps the deploy labels at its threshold."""
     settings = results.get("postprocess_settings")
@@ -716,8 +833,22 @@ def _results_problems(kind: Any, precision: Any, results: Any) -> list[str]:
         f"bad result: {kind} {key}" for key, check in checks.items() if key in results and not check(results[key])
     ]
     if kind in BENCHMARK_KINDS:
-        problems += _stage_problems(kind, results) + _deploy_problems(kind, results)
+        problems += _stage_problems(kind, results) + _latency_problems(kind, results) + _deploy_problems(kind, results)
     return precision_problems + problems + _cross_field_problems(kind, precision, results)
+
+
+def raw_file_problems(log_path: Path) -> list[str]:
+    """The problems with the raw side file a log names: it must lie beside the log and match the logged sha256."""
+    record = json.loads(Path(log_path).read_text())
+    name = record.get("results", {}).get("raw_file")
+    if name is None:
+        return []
+    raw = Path(log_path).parent / str(name)
+    if not raw.is_file():
+        return [f"missing raw file: {name}"]
+    if hashlib.sha256(raw.read_bytes()).hexdigest() != record["results"].get("raw_sha256"):
+        return [f"raw file does not match its sha256: {name}"]
+    return []
 
 
 def validate_log(record: Any) -> list[str]:
@@ -740,7 +871,7 @@ def validate_log(record: Any) -> list[str]:
         problems += [f"missing fact: {name}" for name in REQUIRED_ENVIRONMENT if name not in environment]
         problems += [
             f"fact is not a string: {name}"
-            for name in (*REQUIRED_ENVIRONMENT, *DECODE_ENVIRONMENT, *RUNTIME_ENVIRONMENT)
+            for name in (*REQUIRED_ENVIRONMENT, *DECODE_ENVIRONMENT, *RUNTIME_ENVIRONMENT, *BOARD_ENVIRONMENT)
             if name in environment and not isinstance(environment[name], str)
         ]
     times = {}

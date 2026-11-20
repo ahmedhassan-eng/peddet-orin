@@ -51,6 +51,9 @@ RESULT_KEYS = {
     "postprocess_settings",
     "engine_sha256",
     "torch_num_threads",
+    "annotations_sha256",
+    "images_sha256",
+    "pool_images",
 }
 SUMMARY_KEYS = {"p50_ms", "p90_ms", "p99_ms", "fps"}
 
@@ -216,6 +219,19 @@ def test_clock_paths_are_the_ten_sysfs_files():
     )
 
 
+REAL_TEGRASTATS = benchmark.TegrastatsSampler
+
+
+class FakeTegrastats(REAL_TEGRASTATS):
+    """Three tegrastats readings at 5 W, without a process."""
+
+    def start(self) -> None:
+        self.lines += ["RAM 1000/7620MB GR3D_FREQ 0% VDD_IN 5000mW/5000mW\n"] * 3
+
+    def stop(self) -> None:
+        pass
+
+
 @pytest.fixture
 def cpu_benchmark(tmp_path, monkeypatch):
     """Run benchmark.main on CPU with tiny images, no tegrastats and no log file; return the results."""
@@ -223,6 +239,8 @@ def cpu_benchmark(tmp_path, monkeypatch):
     images.mkdir()
     for number in range(3):
         Image.new("RGB", (40 + number, 30)).save(images / f"{number:012d}.jpg")
+    # The real pool is 200 images; these runs time the 3 tiny ones.
+    monkeypatch.setattr(benchmark, "IMAGE_POOL_SIZE", 3)
     written = {}
 
     def capture(self):
@@ -233,6 +251,7 @@ def cpu_benchmark(tmp_path, monkeypatch):
     monkeypatch.setattr(runlog, "other_gpu_process_count", lambda: 0)
     monkeypatch.setattr(runlog, "command_output", lambda arguments: "MODE TEST")
     monkeypatch.setattr(benchmark, "TEGRASTATS", "peddet-orin-absent-tegrastats")
+    monkeypatch.setattr(benchmark, "TegrastatsSampler", FakeTegrastats)
     monkeypatch.setattr(benchmark, "BASELINE_SAMPLE_S", 0.0)
     # Never read the host's own devfreq node in a test: point all four files into tmp_path.
     _patch(monkeypatch, fake_clocks(tmp_path, BOARD["gpu"], BOARD["cpus"]))
@@ -259,6 +278,7 @@ def test_benchmark_result_record_has_the_schema_keys(cpu_benchmark):
         assert len(results[key]) == 2
         assert all(isinstance(value, float) for value in results[key])
     assert results["runtime"] == "fake-cpu"
+    assert results["pool_images"] == 3
     clock = results["gpu_clock"]
     assert clock["governor"] == "performance" and (clock["min_hz"], clock["max_hz"]) == (306000000, 1020000000)
     assert clock["at_max_samples"] == clock["samples"] >= 1 and clock["unreadable_samples"] == 0
@@ -266,8 +286,8 @@ def test_benchmark_result_record_has_the_schema_keys(cpu_benchmark):
     assert results["cpu_clocks"]["policy4"]["at_max_samples"] == 0
     assert isinstance(results["cpu_load_1min_before_timing"], float)
     assert isinstance(results["peak_process_rss_mib"], float)
-    assert results["power_samples"] == 0
-    assert results["avg_power_w"] == runlog.UNREADABLE
+    assert results["power_samples"] >= 3
+    assert results["avg_power_w"] == 5.0
     assert results["power_mode"] == "MODE TEST"
 
 
@@ -430,3 +450,93 @@ def test_the_standard_run_prints_its_old_line_and_the_deploy_run_names_itself(cp
     assert re.search(r"^fp32: end-to-end p50 \d+\.\d\d ms$", capsys.readouterr().out, re.M)
     cpu_benchmark("--postprocess", "deploy")
     assert re.search(r"^fp32 deploy: end-to-end p50 \d+\.\d\d ms$", capsys.readouterr().out, re.M)
+
+
+def test_a_benchmark_without_power_samples_stops_with_one_line_and_writes_no_log(cpu_benchmark, monkeypatch, capsys):
+    monkeypatch.setattr(benchmark, "TegrastatsSampler", REAL_TEGRASTATS)
+    with pytest.raises(SystemExit) as stopped:
+        cpu_benchmark()
+    assert stopped.value.code == 2
+    assert "gave no power samples; no log written" in capsys.readouterr().err
+
+
+def test_a_timed_iteration_that_raises_still_stops_the_samplers_and_closes_the_backend(cpu_benchmark, monkeypatch):
+    """Released in reverse order of acquisition: clock reader, tegrastats sampler, backend; and no log is written."""
+    events = []
+
+    class RecordingTegrastats(FakeTegrastats):
+        def start(self) -> None:
+            events.append("tegrastats start")
+            super().start()
+
+        def stop(self) -> None:
+            events.append("tegrastats stop")
+
+    real_clock = benchmark.ClockSampler
+
+    class RecordingClock(real_clock):
+        def start(self) -> None:
+            events.append("clock start")
+            super().start()
+
+        def stop(self) -> None:
+            events.append("clock stop")
+            super().stop()
+
+    class ClosingBackend(FakeBackend):
+        def close(self) -> None:
+            events.append("backend close")
+
+    monkeypatch.setattr(benchmark, "TegrastatsSampler", RecordingTegrastats)
+    monkeypatch.setattr(benchmark, "ClockSampler", RecordingClock)
+    monkeypatch.setattr(
+        benchmark, "load_backend", lambda prog, precision, device, detector, engine: ClosingBackend(detector)
+    )
+    written = []
+    monkeypatch.setattr(runlog.RunLog, "_write", lambda self: written.append(self))
+    real_iteration = benchmark._iteration
+    calls = []
+
+    def failing_iteration(*arguments):
+        calls.append(1)
+        if len(calls) == 3:  # One warm-up, then the second timed iteration raises.
+            raise RuntimeError("timed iteration failed")
+        return real_iteration(*arguments)
+
+    monkeypatch.setattr(benchmark, "_iteration", failing_iteration)
+    with pytest.raises(RuntimeError, match="timed iteration failed"):
+        cpu_benchmark()
+    assert events == [
+        "tegrastats start",
+        "tegrastats stop",
+        "tegrastats start",
+        "clock start",
+        "clock stop",
+        "tegrastats stop",
+        "backend close",
+    ]
+    assert written == []
+
+
+def test_the_benchmark_hashes_its_annotations_and_the_names_of_the_images_it_times(tmp_path):
+    images = tmp_path / "val2017"
+    images.mkdir()
+    for name in ("000000000002.jpg", "000000000001.jpg"):
+        (images / name).write_bytes(b"jpeg")
+    annotations = tmp_path / "instances_val2017.json"
+    annotations.write_bytes(b"{}")
+    hashes = benchmark.input_hashes(annotations, images)
+    assert hashes["annotations_sha256"] == hashlib.sha256(b"{}").hexdigest()
+    assert hashes["images_sha256"] == hashlib.sha256(b"000000000001.jpg\n000000000002.jpg\n").hexdigest()
+    assert benchmark.input_hashes(tmp_path / "absent.json", images)["annotations_sha256"] == runlog.UNREADABLE
+
+
+def test_the_benchmark_keeps_every_timed_iteration_and_power_reading_for_its_raw_file():
+    times = [
+        benchmark.IterationTimes(0.001, 0.002, 0.003, 0.004, 0.010),
+        benchmark.IterationTimes(0.0011, 0, 0, 0, 0.02),
+    ]
+    raw = benchmark.raw_record([times[:1], times[1:]], [5000, 5100])
+    assert raw["columns"] == ["decode", "preprocess", "engine", "postprocess", "end_to_end"]
+    assert raw["repeats"] == [[[1.0, 2.0, 3.0, 4.0, 10.0]], [[1.1, 0.0, 0.0, 0.0, 20.0]]]
+    assert raw["vdd_in_mw"] == [5000, 5100] and raw["unit"] == "ms" and raw["decimals"] == 4

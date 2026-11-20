@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Each hashed lock holds exactly its pin file's pins, each with at least one sha256, so an install from the lock
-with --require-hashes is the pinned set and nothing else. scripts/lock_hashes.py writes the locks."""
+"""Each project lock holds exactly its pin file's pins, each with at least one sha256, so an install from the lock
+with --require-hashes is the pinned set and nothing else; requirements/pip-audit.lock also pins pip-audit's own
+dependencies. scripts/lock_hashes.py writes the locks."""
 
 import re
 from pathlib import Path

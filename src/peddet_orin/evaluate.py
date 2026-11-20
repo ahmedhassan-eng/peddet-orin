@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import io
+import json
 import sys
 from pathlib import Path
 
@@ -35,7 +37,9 @@ PERSON_CATEGORY_ID = 1
 AP_INDEX = 0  # COCOeval.stats[0] is AP@[.5:.95].
 AP50_INDEX = 1  # COCOeval.stats[1] is AP at IoU 0.50.
 PROGRESS_EVERY = 500
-EVAL_SEED = 0  # Evaluation is deterministic; the field is logged for uniformity.
+# The eval of one engine is deterministic; INT8 engines from different builds score differently, as the notes show.
+# The field is logged for uniformity.
+EVAL_SEED = 0
 
 
 def person_ap(ground_truth: COCO, detections: list[dict], image_ids: list[int]) -> dict[str, float]:
@@ -97,6 +101,32 @@ def check_data(prog: str, data_dir: Path) -> tuple[Path, Path]:
     return annotations, images
 
 
+# The raw detections of each eval, under the git-ignored data directory: their sha256 is logged, the file is not
+# committed.
+DETECTIONS_RELATIVE = Path("detections")
+# Each eval's detections file is named for its precision and start time, so the runs of a window do not overwrite
+# each other; the eval log names it, and the file stays under the git-ignored data directory.
+DETECTIONS_SUFFIX = ".detections.json"
+
+
+def input_hashes(annotations: Path, image_names: list[str], detections: list[dict], detections_path: Path) -> dict:
+    """The sha256 of the annotations file, of the sorted image names and of the raw detections, which are written
+    to ``detections_path`` in the canonical form whose bytes the hash covers."""
+    raw = json.dumps(detections, sort_keys=True, separators=(",", ":")).encode()
+    detections_path.parent.mkdir(parents=True, exist_ok=True)
+    detections_path.write_bytes(raw)
+    return {
+        "annotations_sha256": runlog.file_sha256(annotations),
+        "images_sha256": runlog.names_sha256(sorted(image_names)),
+        "detections_sha256": hashlib.sha256(raw).hexdigest(),
+    }
+
+
+def score_line(precision: str, scores: dict) -> str:
+    """The line evaluate prints: person AP and AP50 in percentage points, as the README's table gives them."""
+    return f"{precision}: person AP {scores['ap'] * 100:.2f}, AP50 {scores['ap50'] * 100:.2f} (percentage points)"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -120,6 +150,11 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             release_backend(backend)
         scores = person_ap(ground_truth, detections, image_ids)
+        names = [image["file_name"] for image in ground_truth.loadImgs(image_ids)]
+        stamp = log.start_utc.replace("-", "").replace(":", "")
+        detections_path = args.data_dir / DETECTIONS_RELATIVE / f"eval_{args.precision}_{stamp}{DETECTIONS_SUFFIX}"
+        log.results.update(input_hashes(annotations, names, detections, detections_path))
+        log.results["detections_file"] = detections_path.name
         log.results.update(
             {
                 **scores,
@@ -129,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
                 "torch_num_threads": threads,
             }
         )
-    print(f"{args.precision}: person AP {scores['ap']:.4f}, AP50 {scores['ap50']:.4f}")
+    print(score_line(args.precision, scores))
     return 0
 
 

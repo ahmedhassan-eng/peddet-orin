@@ -1,0 +1,14 @@
+RUN3 start=2026-11-15T14:38:21Z commit=025171d54142efdb806c38ede6ee067dc82cd2ad dirty=0
+QUIET run3-start PASS
+STEP run3 quiet_start rc=0 2026-11-15T14:40:21Z
+STEP run3 gpu_check rc=0 2026-11-15T14:40:31Z
+STEP run3 export rc=0 2026-11-15T14:40:42Z
+STEP run3 build_fp16 rc=0 2026-11-15T14:44:49Z
+STEP run3 build_int8 rc=0 2026-11-15T14:51:09Z
+STEP run3 eval_fp32 rc=0 2026-11-15T14:59:33Z
+STEP run3 eval_fp16 rc=0 2026-11-15T15:05:35Z
+STEP run3 eval_int8 rc=0 2026-11-15T15:11:50Z
+QUIET run3-bench_fp32 FAIL terms=swap_used
+STEP run3 quiet_bench_fp32 rc=1 2026-11-15T15:31:52Z
+STEP run3 STOP at quiet_bench_fp32
+RUN3 PARKED repeat/run3-failed dirty=0

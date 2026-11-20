@@ -1,0 +1,10 @@
+SYSMON sha256=aa30652bf11859de67420a4e6b64f53cc9348254f03b8a5dea424b94ed2a93ce interval_s=1
+SYS 2026-11-18T10:59:43Z mem_available_kb=6399844 swap_used_kb=0 pswpin=43914039 pswpout=36127324 cpu-thermal_mc=52062 gpu-thermal_mc=52406 soc0-thermal_mc=51562 soc1-thermal_mc=52562 soc2-thermal_mc=50843 tj-thermal_mc=52562
+SYS 2026-11-18T10:59:44Z mem_available_kb=6157844 swap_used_kb=0 pswpin=43914039 pswpout=36127324 cpu-thermal_mc=51968 gpu-thermal_mc=52812 soc0-thermal_mc=51625 soc1-thermal_mc=52625 soc2-thermal_mc=51000 tj-thermal_mc=52812
+SYS 2026-11-18T10:59:45Z mem_available_kb=6117792 swap_used_kb=0 pswpin=43914039 pswpout=36127324 cpu-thermal_mc=52250 gpu-thermal_mc=52406 soc0-thermal_mc=51625 soc1-thermal_mc=52656 soc2-thermal_mc=51031 tj-thermal_mc=52656
+SYS 2026-11-18T10:59:46Z mem_available_kb=6076968 swap_used_kb=0 pswpin=43914039 pswpout=36127324 cpu-thermal_mc=52093 gpu-thermal_mc=52468 soc0-thermal_mc=51625 soc1-thermal_mc=52843 soc2-thermal_mc=51062 tj-thermal_mc=52843
+SYS 2026-11-18T10:59:47Z mem_available_kb=6040428 swap_used_kb=0 pswpin=43914039 pswpout=36127324 cpu-thermal_mc=52000 gpu-thermal_mc=52656 soc0-thermal_mc=51593 soc1-thermal_mc=52906 soc2-thermal_mc=51093 tj-thermal_mc=52906
+SYS 2026-11-18T10:59:48Z mem_available_kb=6016740 swap_used_kb=0 pswpin=43914039 pswpout=36127324 cpu-thermal_mc=51937 gpu-thermal_mc=52437 soc0-thermal_mc=51843 soc1-thermal_mc=52781 soc2-thermal_mc=51187 tj-thermal_mc=52968
+SYS 2026-11-18T10:59:49Z mem_available_kb=5887736 swap_used_kb=0 pswpin=43914039 pswpout=36127324 cpu-thermal_mc=51718 gpu-thermal_mc=52718 soc0-thermal_mc=51812 soc1-thermal_mc=52812 soc2-thermal_mc=51093 tj-thermal_mc=52812
+SYS 2026-11-18T10:59:50Z mem_available_kb=5891380 swap_used_kb=0 pswpin=43914039 pswpout=36127324 cpu-thermal_mc=51781 gpu-thermal_mc=52687 soc0-thermal_mc=51781 soc1-thermal_mc=52718 soc2-thermal_mc=51062 tj-thermal_mc=52718
+SYS 2026-11-18T10:59:50Z mem_available_kb=6419136 swap_used_kb=0 pswpin=43914039 pswpout=36127324 cpu-thermal_mc=51937 gpu-thermal_mc=52781 soc0-thermal_mc=51625 soc1-thermal_mc=52718 soc2-thermal_mc=50937 tj-thermal_mc=52781

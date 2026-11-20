@@ -1,0 +1,7 @@
+RUN6 start=2026-11-17T08:59:24Z commit=8ce8f5c4288521ce805e1a7e4126834fb125ebf4 dirty=0
+RUN6 POWER-MODE NV Power Mode: MAXN_SUPER
+QUIET run6-start PASS
+STEP run6 quiet_start rc=0 2026-11-17T09:01:24Z
+STEP run6 gpu_check rc=75 2026-11-17T09:01:24Z
+STEP run6 STOP at gpu_check
+RUN6 PARKED repeat/run6-failed dirty=0

@@ -14,7 +14,15 @@ BEGIN_MARKER = "<!-- tree:start -->"
 END_MARKER = "<!-- tree:end -->"
 ROOT_NAME = "peddet-orin/"
 # Directories shown as one line, without their files.
-COLLAPSED = ("runs/", "runs-repeat/", "src/peddet_orin/", "tests/", ".github/ISSUE_TEMPLATE/")
+COLLAPSED = (
+    "runs/",
+    "runs-attempts/",
+    "runs-repeat/",
+    "runs-superseded/",
+    "src/peddet_orin/",
+    "tests/",
+    ".github/ISSUE_TEMPLATE/",
+)
 # A short note after a path; every key must be a tracked file or a shown directory.
 DESCRIPTIONS = {
     ".github/ISSUE_TEMPLATE/": "bug report, feature request and the private security link",
@@ -27,14 +35,30 @@ DESCRIPTIONS = {
     "requirements/pip-audit.txt": "the pip-audit release CI audits with",
     "requirements/pip-audit.lock": "pip-audit and its dependencies, with hashes",
     "runs/": "the earlier run's JSON logs, one per measurement, shown apart from the judged runs",
+    "runs-attempts/": "the measurement attempts that are not judged runs, each with where it stopped",
     "runs-repeat/": "the judged runs the results table is built from, with their QUIET lines and samples",
+    "runs-superseded/": "earlier judged runs, replaced by those under runs-repeat/ and kept with their files",
     "scripts/check_planted_defects.py": "plants each registered defect and checks that its test fails",
     "scripts/ci_local.sh": "runs the CI matrix locally, one venv per Python version",
     "scripts/compare_logs.py": "checks a re-measure against the judged median within the PRD tolerances",
-    "scripts/fetch_coco.py": "fetches COCO 2017 over HTTPS from the official URLs into data/",
-    "scripts/generate_table.py": "writes the README's generated blocks from runs/ and runs-repeat/",
+    "scripts/host/": (
+        "generic QUIET gate, sampler and root setup, written after the judged runs; not the scripts that ran them"
+    ),
+    "scripts/host/host_setup.py": "quiets a host for a window as root, and restores it, from a units file",
+    "scripts/host/quiet.py": "the QUIET gate and the host sampler",
+    "scripts/fetch_coco.py": "fetches COCO 2017 over HTTPS from COCO's S3 bucket, path-style, into data/",
+    "scripts/generate_table.py": "writes the README's generated blocks from runs/, runs-repeat/ and runs-superseded/",
     "scripts/generate_tree.py": "writes this tree from git ls-files",
+    "scripts/gpu_bounds.py": "measures on the board what the GPU tests' bounds are set from",
     "scripts/lock_hashes.py": "writes a hashed .lock beside a pin file",
+    "scripts/recompute_ap.py": (
+        "recomputes an eval log's AP from its detections file; logs written from the 0.1.1 release commit on, "
+        "the committed ones carry none"
+    ),
+    "scripts/recompute_stats.py": (
+        "recomputes a benchmark log's figures from its raw side file; logs written from the 0.1.1 release commit on, "
+        "the committed ones carry none"
+    ),
     "src/peddet_orin/": "export, engine builds, evaluation, benchmarks and run logs",
     "tests/": "CPU tests, GPU and TensorRT tests, and the repository-rule tests",
     "AGENTS.md": "rules for changes, with the commit-message rule",

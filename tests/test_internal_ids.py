@@ -1,11 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""No tracked file cites a message id from the project's private working notes.
+"""No tracked file cites an identifier that resolves only in notes outside this repository.
 
-Those ids name messages nobody outside can read, so a file citing one points at nothing. The patterns are a role
-letter, a hyphen and four digits, with an optional second role letter and hyphen between the two; and the ids of
-review findings, a letter and one or two digits in parentheses at the end of a subject, or a reviewer
-letter, a hyphen, a severity letter and a number. Commit messages are scanned too. The planted ids below are built
-from parts, so this file does not match itself.
+Such an identifier points at nothing a reader can open. The patterns are in the code below. Commit messages are
+scanned too. The planted ids below are built from parts, so this file does not match itself.
 """
 
 import re
@@ -26,6 +23,7 @@ INTERNAL_ID = re.compile(
     rf"|\({FINDING}(?:,\s*{FINDING})*\)"
     r"|\b[ABCD]-[BMmn][0-9]{1,2}\b"
     r"|\(items? [0-9]"
+    r"|\b[Rr]eview [0-9]+,? F[0-9]{1,2}\b"
 )
 HISTORY_SKIP = checkout_skip_reason(REPO_ROOT, history=True)
 needs_history = pytest.mark.skipif(HISTORY_SKIP is not None, reason=HISTORY_SKIP or "")
@@ -100,6 +98,8 @@ def test_an_id_planted_in_any_tracked_path_is_found():
         "Compare with the judged median (" + "X" + "1, " + "F" + "20)",
         "a finding " + "-".join(["A", "M1"]) + " of the review",
         "the review's (" + "items 2" + " and 3)",
+        "the logs these checks read (" + "review 3" + ", F4).",
+        "# " + "Review 1" + " F6: a reader who subtracts",
     ],
 )
 def test_a_planted_id_is_found(line):

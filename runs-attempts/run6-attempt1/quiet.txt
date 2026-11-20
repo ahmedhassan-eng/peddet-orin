@@ -1,0 +1,2 @@
+QUIET start try=1 held_active=0 allowed_timers=3 scopes_over=0 busy_services=0 load1=0.01 bound=1.0 swap_used_kb=0 pswpout_delta=0 mem_available_kb=6535680 mem_min_kb=5859375 cpu-thermal_mc=50062 gpu-thermal_mc=50562 soc0-thermal_mc=49843 soc1-thermal_mc=50750 soc2-thermal_mc=49000 tj-thermal_mc=50750 fail=none 2026-11-17T09:01:24Z
+QUIET start PASS

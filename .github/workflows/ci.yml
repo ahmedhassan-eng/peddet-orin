@@ -46,3 +46,5 @@ jobs:
           ruff format --check .
       - name: Test
         run: PDORIN_STRICT_SKIPS=1 python -m pytest -rs
+      - name: Plant each CPU defect and check that its test catches it
+        run: python scripts/check_planted_defects.py --cpu-only

@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The shared postprocess, on synthetic tensors whose answers are known."""
 
+from pathlib import Path
+
 import pytest
 import torch
 from torchvision.models.detection._utils import BoxCoder
@@ -142,3 +144,13 @@ def test_the_deployment_postprocess_keeps_only_people_above_one_half():
     standard = Postprocessor(ANCHORS, BoxCoder(CODER_WEIGHTS), 0.001, NMS_THRESHOLD, MAX_DETECTIONS, TOP_K)
     assert standard(zero_regression(), logits, INPUT_SIZE).labels.numel() > 0
     assert standard.for_deployment()(zero_regression(), logits, INPUT_SIZE).labels.numel() == 0
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_the_postprocess_names_both_licences_and_torchvision():
+    lines = (REPO_ROOT / "src" / "peddet_orin" / "postprocess.py").read_text().splitlines()
+    assert lines[0] == "# SPDX-License-Identifier: Apache-2.0 AND BSD-3-Clause"
+    assert "Copyright (c) Soumith Chintala 2016" in lines[1] and "torchvision" in lines[1]
+    assert "Copyright (c) Soumith Chintala 2016" in (REPO_ROOT / "NOTICE").read_text()

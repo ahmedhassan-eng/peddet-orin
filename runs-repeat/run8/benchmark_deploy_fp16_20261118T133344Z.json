@@ -1,0 +1,145 @@
+{
+  "command": "python -m peddet_orin.benchmark --precision fp16 --postprocess deploy",
+  "commit": "84271330d28b3fb779ea495de9b711759c9f51ba",
+  "dirty": false,
+  "end_utc": "2026-11-18T13:33:44Z",
+  "environment": {
+    "cuda": "13.0",
+    "cuda_driver": "13.2",
+    "cuda_runtime": "13.0",
+    "libjpeg": "libjpeg-turbo 3.2.0",
+    "numpy": "1.26.4",
+    "nv_tegra_release": "# R39 (release), REVISION: 2.1, GCID: 46758480, BOARD: generic, EABI: aarch64, DATE: Fri Aug  7 05:54:22 AM UTC 2026\n# KERNEL_VARIANT: oot\nTARGET_USERSPACE_LIB_DIR=nvidia\nTARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia",
+    "nvpmodel": "NV Power Mode: MAXN_SUPER\n2",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.31.1",
+    "peddet_orin": "0.1.1",
+    "pillow": "13.0.0",
+    "pycocotools": "2.0.11",
+    "python": "3.12.3",
+    "tensorrt": "10.16.2.10",
+    "torch": "2.14.1+cu130",
+    "torchvision": "0.29.1+cu130"
+  },
+  "iterations": {
+    "batch": 1,
+    "repeats": 3,
+    "timed": 1000,
+    "warmup": 50
+  },
+  "kind": "benchmark_deploy",
+  "other_gpu_processes": "UNREADABLE",
+  "precision": "fp16",
+  "results": {
+    "avg_power_w": 7.969111111111111,
+    "cpu_clocks": {
+      "policy0": {
+        "at_max_samples": 212,
+        "cur_khz_counts": {
+          "1267200": 1,
+          "1728000": 212,
+          "729600": 1
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 214,
+        "unreadable_samples": 0
+      },
+      "policy4": {
+        "at_max_samples": 1,
+        "cur_khz_counts": {
+          "1728000": 1,
+          "729600": 211,
+          "806400": 1,
+          "883200": 1
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 214,
+        "unreadable_samples": 0
+      }
+    },
+    "cpu_load_1min_before_timing": 0.7060546875,
+    "end_to_end": {
+      "fps": 70.28891003342012,
+      "p50_ms": 14.146681991405785,
+      "p90_ms": 16.434694547206163,
+      "p99_ms": 19.27034637192264
+    },
+    "end_to_end_p50_ms_per_repeat": [
+      14.122202061116695,
+      14.18476295657456,
+      14.12016898393631
+    ],
+    "engine": {
+      "fps": 265.9829547957747,
+      "p50_ms": 3.755459445528686,
+      "p90_ms": 3.8208755664527416,
+      "p99_ms": 3.9323882153257714
+    },
+    "engine_p50_ms_per_repeat": [
+      3.7602115189656615,
+      3.7580200005322695,
+      3.7474280688911676
+    ],
+    "engine_sha256": "037bd5486296f6aeff04c8a5ba888d8cc797c49194ea87532a2a9c2fce5ff23a",
+    "gpu_busy_pct_before_timing": 0.0,
+    "gpu_clock": {
+      "at_max_samples": 214,
+      "cur_hz_counts": {
+        "1020000000": 214
+      },
+      "governor": "performance",
+      "max_hz": 1020000000,
+      "min_hz": 306000000,
+      "samples": 214,
+      "unreadable_samples": 0
+    },
+    "peak_process_rss_mib": 1150.64453125,
+    "postprocess_settings": {
+      "detections_per_image": 300,
+      "kept_labels": [
+        1
+      ],
+      "nms_iou_threshold": 0.55,
+      "num_classes": 91,
+      "score_threshold": 0.5,
+      "top_k_per_class": 300
+    },
+    "power_mode": "NV Power Mode: MAXN_SUPER\n2",
+    "power_samples": 207,
+    "repeats": 3,
+    "runtime": "tensorrt-gpu",
+    "stages": {
+      "decode": {
+        "fps": 167.336000596974,
+        "p50_ms": 5.916771478950977,
+        "p90_ms": 7.652829214930534,
+        "p99_ms": 9.917350641917434
+      },
+      "engine": {
+        "fps": 265.9829547957747,
+        "p50_ms": 3.755459445528686,
+        "p90_ms": 3.8208755664527416,
+        "p99_ms": 3.9323882153257714
+      },
+      "postprocess": {
+        "fps": 342.6132097115798,
+        "p50_ms": 2.827022923156619,
+        "p90_ms": 3.250260977074504,
+        "p99_ms": 4.050423849839716
+      },
+      "preprocess": {
+        "fps": 635.8846116880688,
+        "p50_ms": 1.40831945464015,
+        "p90_ms": 2.2421236615627995,
+        "p99_ms": 3.1654747901484366
+      }
+    },
+    "system_ram_rise_mib": 60.0,
+    "torch_num_threads": 6
+  },
+  "schema_version": 2,
+  "seed": 7,
+  "start_utc": "2026-11-18T13:32:56Z"
+}

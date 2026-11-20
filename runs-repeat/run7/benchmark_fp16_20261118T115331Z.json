@@ -1,0 +1,141 @@
+{
+  "command": "python -m peddet_orin.benchmark --precision fp16",
+  "commit": "84271330d28b3fb779ea495de9b711759c9f51ba",
+  "dirty": false,
+  "end_utc": "2026-11-18T11:53:31Z",
+  "environment": {
+    "cuda": "13.0",
+    "cuda_driver": "13.2",
+    "cuda_runtime": "13.0",
+    "libjpeg": "libjpeg-turbo 3.2.0",
+    "numpy": "1.26.4",
+    "nv_tegra_release": "# R39 (release), REVISION: 2.1, GCID: 46758480, BOARD: generic, EABI: aarch64, DATE: Fri Aug  7 05:54:22 AM UTC 2026\n# KERNEL_VARIANT: oot\nTARGET_USERSPACE_LIB_DIR=nvidia\nTARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia",
+    "nvpmodel": "NV Power Mode: MAXN_SUPER\n2",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.31.1",
+    "peddet_orin": "0.1.1",
+    "pillow": "13.0.0",
+    "pycocotools": "2.0.11",
+    "python": "3.12.3",
+    "tensorrt": "10.16.2.10",
+    "torch": "2.14.1+cu130",
+    "torchvision": "0.29.1+cu130"
+  },
+  "iterations": {
+    "batch": 1,
+    "repeats": 3,
+    "timed": 1000,
+    "warmup": 50
+  },
+  "kind": "benchmark",
+  "other_gpu_processes": "UNREADABLE",
+  "precision": "fp16",
+  "results": {
+    "avg_power_w": 7.080549707602339,
+    "cpu_clocks": {
+      "policy0": {
+        "at_max_samples": 873,
+        "cur_khz_counts": {
+          "1728000": 873,
+          "729600": 2,
+          "883200": 1
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 876,
+        "unreadable_samples": 0
+      },
+      "policy4": {
+        "at_max_samples": 3,
+        "cur_khz_counts": {
+          "1267200": 1,
+          "1728000": 3,
+          "729600": 872
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 876,
+        "unreadable_samples": 0
+      }
+    },
+    "cpu_load_1min_before_timing": 0.490234375,
+    "end_to_end": {
+      "fps": 17.226224447606416,
+      "p50_ms": 58.49611933808774,
+      "p90_ms": 71.1635699495673,
+      "p99_ms": 78.08707240270448
+    },
+    "end_to_end_p50_ms_per_repeat": [
+      58.59559343662113,
+      58.132286998443305,
+      58.84462338872254
+    ],
+    "engine": {
+      "fps": 259.0404254633676,
+      "p50_ms": 3.8559590466320515,
+      "p90_ms": 3.9219153346493845,
+      "p99_ms": 4.003329647239296
+    },
+    "engine_p50_ms_per_repeat": [
+      3.8548869779333472,
+      3.8526790449395776,
+      3.860151395201683
+    ],
+    "engine_sha256": "3185280dce2b3883264f30807133b6ce93b0ddbc81dcf97df74404bdb38e7653",
+    "gpu_busy_pct_before_timing": 0.0,
+    "gpu_clock": {
+      "at_max_samples": 876,
+      "cur_hz_counts": {
+        "1020000000": 876
+      },
+      "governor": "performance",
+      "max_hz": 1020000000,
+      "min_hz": 306000000,
+      "samples": 876,
+      "unreadable_samples": 0
+    },
+    "peak_process_rss_mib": 1151.86328125,
+    "postprocess_settings": {
+      "detections_per_image": 300,
+      "nms_iou_threshold": 0.55,
+      "num_classes": 91,
+      "score_threshold": 0.001,
+      "top_k_per_class": 300
+    },
+    "power_mode": "NV Power Mode: MAXN_SUPER\n2",
+    "power_samples": 855,
+    "repeats": 3,
+    "runtime": "tensorrt-gpu",
+    "stages": {
+      "decode": {
+        "fps": 143.6161531575975,
+        "p50_ms": 6.944349035620689,
+        "p90_ms": 8.913423400372267,
+        "p99_ms": 11.181642431765793
+      },
+      "engine": {
+        "fps": 259.0404254633676,
+        "p50_ms": 3.8559590466320515,
+        "p90_ms": 3.9219153346493845,
+        "p99_ms": 4.003329647239296
+      },
+      "postprocess": {
+        "fps": 22.13217670596808,
+        "p50_ms": 45.245676999911666,
+        "p90_ms": 58.466855087317526,
+        "p99_ms": 64.03401971329004
+      },
+      "preprocess": {
+        "fps": 489.1086741232321,
+        "p50_ms": 2.080462872982025,
+        "p90_ms": 2.5840588845312595,
+        "p99_ms": 3.4283984894864217
+      }
+    },
+    "system_ram_rise_mib": 151.21428571428578,
+    "torch_num_threads": 6
+  },
+  "schema_version": 2,
+  "seed": 7,
+  "start_utc": "2026-11-18T11:50:28Z"
+}

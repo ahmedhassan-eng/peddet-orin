@@ -3,7 +3,7 @@
 
 constraints/jetson-orin.txt pins the packages the board ran with. The judged logs under runs-repeat/ record the
 versions of torch, torchvision, onnx and onnxruntime, so each of those pins must equal what every judged log
-records. numpy, pycocotools and pillow are pinned too but no log records them, so they cannot be checked here.
+records. The judged logs record numpy, pycocotools and pillow too; this file does not check those yet.
 """
 
 import json
@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONSTRAINTS = REPO_ROOT / "constraints" / "jetson-orin.txt"
-JUDGED = ("run3", "run4", "run5")
+JUDGED = ("run6", "run7", "run8")
 LOGGED = ("torch", "torchvision", "onnx", "onnxruntime")
 
 
@@ -35,7 +35,8 @@ def pin_problems(pinned: dict[str, str], logs: dict[str, dict]) -> list[str]:
 
 
 def test_there_are_judged_logs_to_compare():
-    assert len(judged_logs()) == 30
+    # One log per GPU job of the 17-step run script, per judged run.
+    assert len(judged_logs()) == 17 * len(JUDGED)
 
 
 def test_every_logged_pin_equals_what_every_judged_log_records():

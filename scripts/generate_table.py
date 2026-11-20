@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Generate the README's results block, and its INT8 and repeat-run blocks, from the committed JSON logs.
+"""Generate the README's summary, results, deployment-style, INT8 and repeat-run blocks from the committed JSON logs.
 
 Each block sits between two HTML comment markers in the README, and ``--write`` replaces them; without it every
 block is printed between its markers. A test calls ``readme_matches`` so that the README cannot drift from the logs.
@@ -7,7 +7,7 @@ With judged runs under ``runs-repeat/``, each cell is the median over them; the 
 apart and not judged. Without them, the newest clean log of each kind and precision in ``runs/`` supplies the
 cells. A log made from a dirty tree is skipped, with a line on stderr. The logs that feed the table must come from
 one commit, and each row's evaluation and benchmark must name the same runtime; otherwise the script exits non-zero.
-TensorRT FP32 has a row only where its logs are present: the committed judged runs predate it, and a judged set
+TensorRT FP32 has a row only where its logs are present: the committed judged runs carry it, and a judged set
 that carries it in some runs and not others stops the script. The deployment-style benchmark's logs feed only
 their own block, under the same all-or-none rule, and never the results table or R-11.
 """
@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import math
 import re
 import statistics
 import sys
@@ -26,6 +27,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNS_DIR = REPO_ROOT / "runs"
 # Further full runs, one directory of logs per run: the judged ones feed the table's medians and the R-11 check.
 REPEATS_DIR = REPO_ROOT / "runs-repeat"
+SUPERSEDED_DIR = REPO_ROOT / "runs-superseded"
+ATTEMPTS_DIR = REPO_ROOT / "runs-attempts"
 # The sha256 of the host's sampler script, as every judged sampler file records it in its first line.
 SYSMON_SHA256 = "aa30652bf11859de67420a4e6b64f53cc9348254f03b8a5dea424b94ed2a93ce"
 README = REPO_ROOT / "README.md"
@@ -34,6 +37,7 @@ END_MARKER = "<!-- results:end -->"
 INT8_MARKERS = ("<!-- int8:begin -->", "<!-- int8:end -->")
 REPEAT_MARKERS = ("<!-- repeats:begin -->", "<!-- repeats:end -->")
 DEPLOY_MARKERS = ("<!-- deploy:begin -->", "<!-- deploy:end -->")
+SUMMARY_MARKERS = ("<!-- summary:begin -->", "<!-- summary:end -->")
 # The deployment-style benchmark's log kind, which never feeds the results table or R-11.
 DEPLOY = "benchmark_deploy"
 DEPLOY_PENDING = (
@@ -45,8 +49,8 @@ DEPLOY_HEADER = (
 )
 # The precisions every judged run carries: PyTorch FP32, the PyTorch baseline, and TensorRT FP16 and INT8.
 PRECISIONS = ("fp32", "fp16", "int8")
-# TensorRT FP32, the precision baseline. It is not yet measured: the committed judged runs predate it, and the table
-# shows its row once judged runs carry it.
+# TensorRT FP32, the precision baseline. The table shows its row when the judged runs carry it, as the committed
+# judged runs do.
 TENSORRT_FP32 = "fp32-trt"
 # Every precision the table can show, in row order.
 TABLE_PRECISIONS = ("fp32", TENSORRT_FP32, "fp16", "int8")
@@ -55,6 +59,8 @@ MIN_REPEATS = 3
 PRECISION_NAMES = {"fp32": "FP32", TENSORRT_FP32: "TensorRT FP32", "fp16": "FP16", "int8": "INT8"}
 # The precision a row's first cell names after its device and framework, and what the row is a baseline for.
 ROW_PRECISION = {TENSORRT_FP32: "FP32"}
+# The deploy range lines stand beside "TensorRT FP32", so the PyTorch one names its runtime, as its summary row does.
+DEPLOY_RANGE_NAMES = {"fp32": "PyTorch FP32"}
 BASELINES = {"fp32": " (PyTorch baseline)", TENSORRT_FP32: " (precision baseline)"}
 TENSORRT_FP32_PENDING = (
     "TensorRT FP32, the precision baseline, is not yet measured: these logs have none of it, so its row is not shown."
@@ -73,9 +79,11 @@ DEVICE_AND_FRAMEWORK = {
     "tensorrt-gpu": "GPU, TensorRT",
 }
 # Power is sampled over the whole timed loop, which runs at the end-to-end rate, so power and energy per frame sit
-# with the end-to-end columns and engine FPS stays with the engine latency.
+# with the end-to-end columns and engine FPS stays with the engine latency. Its label says it is derived from the
+# engine latency alone, a bound the board never ran at, as every frame also takes the CPU steps.
 HEADER = (
-    "| Device and precision | Engine p50/p90/p99 (ms) | Engine FPS | End-to-end p50/p90/p99 (ms) | "
+    "| Device and precision | Engine p50/p90/p99 (ms) | Engine-only bound FPS (1 / engine mean latency) | "
+    "End-to-end p50/p90/p99 (ms) | "
     "End-to-end FPS | Avg power VDD_IN (W) | End-to-end energy per frame (J) | Peak process RSS (MiB) | "
     "Person AP@[.5:.95] | Person AP50 | INT8 path |"
 )
@@ -108,8 +116,9 @@ WANTED = (
     ("build", "int8"),
     ("gpu_check", "fp32"),
 )
-# Groups of logs the committed judged runs predate. Each group is absent from every judged run or complete in every
-# one; anything between stops the script, so a row or block never mixes runs that measured it with runs that did not.
+# Groups of logs later code added; the committed judged runs carry both. Each group is absent from every judged run
+# or complete in every one; anything between stops the script, so a row or block never mixes runs that measured it
+# with runs that did not.
 OPTIONAL_GROUPS: dict[str, tuple[tuple[str, str], ...]] = {
     "TensorRT FP32": (("benchmark", TENSORRT_FP32), ("eval", TENSORRT_FP32), ("build", TENSORRT_FP32)),
     "deployment-style benchmark": tuple((DEPLOY, precision) for precision in TABLE_PRECISIONS),
@@ -363,7 +372,7 @@ def _notes(chosen: dict) -> list[str]:
             notes.append(
                 f"{name} benchmark: power mode `{mode}`, "
                 f"{_clocks(results)}, "
-                f"one-minute CPU load before timing: {_number(results['cpu_load_1min_before_timing'], 1)}, "
+                f"one-minute CPU load before timing: {_number(results['cpu_load_1min_before_timing'], 2)}, "
                 f"GPU busy before timing: {_percent(results['gpu_busy_pct_before_timing'])}, "
                 f"other GPU processes: {benchmark['other_gpu_processes']}."
             )
@@ -383,10 +392,22 @@ def _notes(chosen: dict) -> list[str]:
         notes.append(
             f"PyTorch GPU check: usable {results['gpu_torch_usable']}, device compute capability "
             f"{results['device_compute_capability']}, wheel slices {', '.join(results['arch_list'])}. "
-            f"{said}. FP32 ran with cudnn.allow_tf32 {results['cudnn_allow_tf32']} and "
-            f"cuda.matmul.allow_tf32 {results['matmul_allow_tf32']}."
+            f"{said}; the benchmark's PyTorch backend turns TF32 off for cuDNN and matmul when it is built, and the "
+            f"GPU check process set both flags itself and read back cudnn.allow_tf32 {results['cudnn_allow_tf32']} "
+            f"and cuda.matmul.allow_tf32 {results['matmul_allow_tf32']}"
+            + ("; the eval and benchmark logs record neither flag." if not _tf32_recorded(chosen) else ".")
         )
     return notes
+
+
+def _tf32_recorded(chosen: dict) -> bool:
+    """Whether any eval or benchmark log records a TF32 flag: only the GPU check's log is expected to."""
+    return any(
+        key in log["results"]
+        for (kind, _), log in chosen.items()
+        if kind == "eval" or kind.startswith("benchmark")
+        for key in ("cudnn_allow_tf32", "matmul_allow_tf32")
+    )
 
 
 def _shown(value: float) -> float:
@@ -404,18 +425,24 @@ def _is_plain_number(value) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def _median(values: list):
+def _median(values: list, name: str = "results"):
     """The median of numbers (an int when every value is an int), field by field for dicts with equal keys.
 
-    Lists are pooled in run order. Any other value is kept when every run agrees and is "varies" otherwise.
+    A list named ``*_per_repeat`` holds samples and is pooled in run order. Any other list is a setting, such as
+    ``builder_flags``, that a re-measure compares by equality: it is kept once when every run agrees, and runs that
+    disagree stop with ``TableError``. Any other value is kept when every run agrees and is "varies" otherwise.
     """
     if all(_is_plain_number(value) for value in values):
         middle = statistics.median(values)
         return int(middle) if all(isinstance(value, int) for value in values) and middle == int(middle) else middle
     if all(isinstance(value, dict) for value in values) and all(set(value) == set(values[0]) for value in values):
-        return {key: _median([value[key] for value in values]) for key in values[0]}
+        return {key: _median([value[key] for value in values], key) for key in values[0]}
     if all(isinstance(value, list) for value in values):
-        return [item for value in values for item in value]
+        if name.endswith("_per_repeat"):
+            return [item for value in values for item in value]
+        if any(value != values[0] for value in values):
+            raise TableError(f"the judged runs disagree on {name}: {', '.join(str(value) for value in values)}")
+        return list(values[0])
     return values[0] if all(value == values[0] for value in values) else "varies"
 
 
@@ -524,20 +551,77 @@ def power_mode_sentence(runs: list[tuple[str, dict]], earlier: dict) -> str:
     )
 
 
-def int8_ap_sentence(runs: list[tuple[str, dict]], earlier: dict) -> str:
-    """INT8 person AP in the judged runs and in the earlier run; each run builds its own INT8 engine."""
-    judged = sorted({f"{chosen[('eval', 'int8')]['results']['ap'] * POINTS:.2f}" for _, chosen in runs})
-    shown = (
-        f"{judged[0]} in each of the {len(runs)} judged runs"
-        if len(judged) == 1
-        else f"{judged[0]}-{judged[-1]} across the {len(runs)} judged runs"
-    )
-    before = earlier.get(("eval", "int8"))
-    then = f" and {before['results']['ap'] * POINTS:.2f} in the earlier run" if before else ""
+def superseded_int8(repeats_dir: Path | None) -> list[dict]:
+    """The newest clean INT8 eval log of each superseded run, for the repo's own runs-repeat/ only."""
+    if repeats_dir is None or Path(repeats_dir).resolve() != REPEATS_DIR.resolve() or not SUPERSEDED_DIR.is_dir():
+        return []
+    found = []
+    for path in sorted(path for path in SUPERSEDED_DIR.iterdir() if re.fullmatch(r"run[0-9]+", path.name)):
+        evals = [
+            log
+            for log in load_logs(path)
+            if log["kind"] == "eval" and log["precision"] == "int8" and log.get("dirty") is False
+        ]
+        if evals:
+            found.append(max(evals, key=lambda log: log["end_utc"]))
+    return found
+
+
+def _ap_range(aps: list[float], count: int, what: str) -> str:
+    shown = sorted({f"{ap * POINTS:.2f}" for ap in aps})
     return (
-        f"INT8 person AP is {shown}{then}; each run builds its own INT8 engine, so each score comes from a "
-        "separate build."
+        f"{shown[0]} in each of the {count} {what}"
+        if len(shown) == 1
+        else (f"{shown[0]}-{shown[-1]} across the {count} {what}")
     )
+
+
+def attempt_int8(repeats_dir: Path | None) -> list[tuple[str, dict]]:
+    """Each attempt under runs-attempts/ that built and scored an INT8 engine: its directory name and its newest clean
+    INT8 eval log, for the repo's own runs-repeat/ only."""
+    if repeats_dir is None or Path(repeats_dir).resolve() != REPEATS_DIR.resolve() or not ATTEMPTS_DIR.is_dir():
+        return []
+    found = []
+    for path in sorted(path for path in ATTEMPTS_DIR.iterdir() if path.is_dir()):
+        evals = [
+            log
+            for log in load_logs(path)
+            if log["kind"] == "eval" and log["precision"] == "int8" and log.get("dirty") is False
+        ]
+        if evals:
+            found.append((path.name, max(evals, key=lambda log: log["end_utc"])))
+    return found
+
+
+def int8_ap_sentence(
+    runs: list[tuple[str, dict]], earlier: dict, superseded: list[dict] = (), attempts: list[tuple[str, dict]] = ()
+) -> str:
+    """INT8 person AP in the judged runs, the superseded runs and the earlier run; each run builds its own engine."""
+    judged = [chosen[("eval", "int8")]["results"]["ap"] for _, chosen in runs]
+    parts = [_ap_range(judged, len(runs), "judged runs")]
+    if superseded:
+        commits = sorted({log["commit"][:7] for log in superseded})
+        at = ", ".join(f"`{commit}`" for commit in commits)
+        parts.append(
+            _ap_range([log["results"]["ap"] for log in superseded], len(superseded), f"superseded runs at {at}")
+        )
+    before = earlier.get(("eval", "int8"))
+    if before:
+        parts.append(f"{before['results']['ap'] * POINTS:.2f} in the earlier run")
+    shown = parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
+    sentence = (
+        f"INT8 person AP is {shown}; each run builds its own INT8 engine, so each score comes from a separate build."
+    )
+    scores = {f"{ap * POINTS:.2f}" for ap in judged} | {f"{log['results']['ap'] * POINTS:.2f}" for log in superseded}
+    if superseded and len(scores) > 1:
+        sentence += " Why the superseded runs score differently from the judged runs is not known."
+    if attempts:
+        builds = ", ".join(
+            f"{log['results']['ap'] * POINTS:.2f} in `runs-attempts/{name}/` at `{log['commit'][:7]}`"
+            for name, log in attempts
+        )
+        sentence += f" The attempts' own INT8 builds scored {builds}."
+    return sentence
 
 
 def provenance(runs: list[tuple[str, dict]]) -> tuple[str, str]:
@@ -572,11 +656,16 @@ def build_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> s
         f"({', '.join(n for n, _ in runs)}),"
         f" this release's count; 0.2.0 plans 5 or more runs.",
         f"The judged runs were made at commit `{commit[:7]}` with package version {version}, as their logs record.",
-        "Memory, swap and temperature are recorded for the judged runs only, over each whole benchmark job, warm-up "
-        "included; the earlier runs have no such record.",
+        "Memory, swap and temperature are recorded for the judged runs and the superseded runs 3-5, over each whole "
+        "benchmark job, warm-up included; the earlier run in `runs/` has no such record.",
         *pending,
         *[note for note in _notes(chosen) if note.startswith("INT8 person AP")],
-        int8_ap_sentence(runs, select_dir(runs_dir)),
+        int8_ap_sentence(
+            runs,
+            select_dir(runs_dir),
+            superseded_int8(_resolve_repeats(runs_dir, repeats_dir)),
+            attempt_int8(_resolve_repeats(runs_dir, repeats_dir)),
+        ),
         power_mode_sentence(runs, select_dir(runs_dir)),
         *[line for precision in measured(chosen) if (line := _ranges(runs, precision))],
     ]
@@ -588,6 +677,181 @@ def build_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> s
 def _than(a: float, b: float, more: str, less: str, same: str = "the same as") -> str:
     """``more`` when a > b, ``less`` when a < b, else ``same``: each call passes the words that fit its sentence."""
     return more if a > b else less if a < b else same
+
+
+def tolerance_sentence(chosen: dict) -> str:
+    """One sentence or two on R-11's relative tolerances against the INT8 to FP16 difference, for both latency
+    metrics, never empty. R-11 lets each engine's p50 move by the tolerance t on its own (compare_logs.judge), so
+    with r = slower / faster the order is fixed by R-11 only when r > (1 + t) / (1 - t). Three cases per metric:
+    r - 1 < t (the tolerance is wider), t <= r - 1 <= the bound (each may move t, so the order can still flip),
+    and r beyond the bound. compare_logs.EPSILON is the same slack at each edge."""
+    import compare_logs
+
+    fp16, int8 = chosen[("benchmark", "fp16")]["results"], chosen[("benchmark", "int8")]["results"]
+    unordered, beyond = [], []
+    metrics = (("engine_p50_ms", "engine", "engine"), ("end_to_end_p50_ms", "end_to_end", "end-to-end"))
+    for metric, part, name in metrics:
+        a, b = int8.get(part, {}).get("p50_ms"), fp16.get(part, {}).get("p50_ms")
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 for v in (a, b)):
+            raise TableError(f"the INT8 and FP16 {name} p50 must both be positive numbers, not {a!r} and {b!r}")
+        gap = max(a, b) / min(a, b) - 1
+        # The case is decided on the medians; the percentage printed beside the two two-decimal figures is computed
+        # from those figures, so a reader who divides them gets the printed value.
+        shown_a, shown_b = _shown(a), _shown(b)
+        printed = max(shown_a, shown_b) / min(shown_a, shown_b) - 1 if min(shown_a, shown_b) > 0 else gap
+        tolerance = compare_logs.TOLERANCES[metric]["relative"]
+        bound = (1 + tolerance) / (1 - tolerance) - 1
+        if gap < tolerance - compare_logs.EPSILON:
+            unordered.append(
+                f"the {name} p50 tolerance, {tolerance:.0%}, is wider than their {printed:.1%} difference, "
+                "computed from the rounded figures shown"
+            )
+        elif gap <= bound + compare_logs.EPSILON:
+            unordered.append(f"the {name} p50 differs by {printed:.1%}, but R-11 lets each move {tolerance:.0%}")
+        else:
+            beyond.append(
+                f"the {name} p50 by {printed:.1%}, past the {bound:.1%} the two {tolerance:.0%} tolerances allow"
+            )
+    parts = []
+    if unordered:
+        parts.append(
+            f"R-11 cannot order INT8 and FP16: {' and '.join(unordered)}, so a re-measure within the "
+            "tolerances does not confirm which of the two is faster."
+        )
+    if beyond:
+        parts.append(f"INT8 and FP16 differ by more than R-11's tolerances let either move: {' and '.join(beyond)}.")
+    return " ".join(parts)
+
+
+def _ceil_percent(fraction: float) -> str:
+    """A fraction as a percentage to one decimal, rounded up, so "at most" it is never below the value."""
+    return f"{math.ceil(fraction * 1000 - 1e-9) / 10:.1f}"
+
+
+def wheel_warning(chosen: dict) -> str | None:
+    """The line of the PyTorch GPU check's recorded warning that says the installed wheel does not support the GPU,
+    up to its first full stop; the warning's first line when no line says so; ``None`` when nothing was recorded."""
+    check = chosen.get(("gpu_check", "fp32"))
+    text = check["results"].get("torch_warning") if check else None
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    if not lines:
+        return None
+    unsupported = [line for line in lines if re.search(r"\bsupports? this GPU\b", line)]
+    line = (unsupported or lines)[0]
+    return line.split(". ")[0].rstrip(".") + "."
+
+
+def builder_flags(flags) -> list[str]:
+    """A build log's ``builder_flags``, a list or a comma-separated string, once each in the order first recorded."""
+    items = flags.split(",") if isinstance(flags, str) else list(flags or [])
+    return list(dict.fromkeys(str(flag).strip() for flag in items if str(flag).strip()))
+
+
+def _summary_note(chosen: dict, precision: str, runtime: str) -> str:
+    """What a summary row's cells need beside them, as the logs record it: the PyTorch wheel's unsupported-GPU warning
+    on a PyTorch GPU row, and the builder flags on a row whose build log records them."""
+    notes = []
+    warning = wheel_warning(chosen) if runtime == "pytorch-cuda" else None
+    if warning:
+        notes.append(f'PyTorch warned at first CUDA use: "{warning}"')
+    build = chosen.get(("build", precision))
+    if build is not None and "builder_flags" in build["results"]:
+        flags = builder_flags(build["results"]["builder_flags"])
+        notes.append(f"TensorRT builder flags {', '.join(flags) if flags else 'none'}")
+    return "; ".join(notes).replace("|", "\\|") or "-"
+
+
+def postprocess_share(results: dict) -> str:
+    """A benchmark's postprocess p50 as a percent of its end-to-end p50, to one decimal, rounded to nearest."""
+    part = results.get("stages", {}).get("postprocess", {}).get("p50_ms")
+    whole = results.get("end_to_end", {}).get("p50_ms")
+    if not (_is_plain_number(part) and _is_plain_number(whole) and whole > 0):
+        return MISSING
+    return f"{part / whole * 100:.1f}%"
+
+
+ROUNDING_SENTENCE = (
+    "The millisecond and watt cells are rounded to one decimal; the ranges in the notes below are given to two, so "
+    "a cell can read just outside the range of the runs it is the median of."
+)
+
+
+def build_summary_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> str:
+    """The README's opening summary: engine and end-to-end p50 and person AP per precision, from the same median as
+    the results table, and the share of a frame the engine takes. The board and model names are fixed text, as in
+    the table's header; every number comes from the logs."""
+    chosen, runs = headline(runs_dir, repeats_dir)
+    basis = (
+        f"the median of the {len(runs)} judged runs at commit `{provenance(runs)[0][:7]}`"
+        if runs
+        else "the newest clean logs in `runs/`"
+    )
+    rows = []
+    shares = []
+    for precision in measured(chosen):
+        if ("benchmark", precision) not in chosen or ("eval", precision) not in chosen:
+            continue
+        timing = chosen[("benchmark", precision)]["results"]
+        scores = chosen[("eval", precision)]["results"]
+        runtime = timing.get("runtime", MISSING)
+        deploy = chosen.get((DEPLOY, precision))
+        rows.append(
+            f"| {_device(runtime, precision)} | {_number(timing['engine']['p50_ms'], 1)} | "
+            f"{_number(timing['end_to_end']['p50_ms'], 1)} | "
+            f"{_number(deploy['results']['end_to_end']['p50_ms'], 1) if deploy else MISSING} | "
+            f"{_number(scores['ap'] * POINTS, 2)} | {postprocess_share(timing)} | "
+            f"{_summary_note(chosen, precision, runtime)} |"
+        )
+        shares.append(timing["engine"]["p50_ms"] / timing["end_to_end"]["p50_ms"])
+    timed = [precision for precision in measured(chosen) if ("benchmark", precision) in chosen]
+    settings = chosen[("benchmark", timed[0])]["results"].get("postprocess_settings", {}) if timed else {}
+    governors = sorted(
+        {
+            str(policy.get("governor"))
+            for precision in timed
+            for policy in chosen[("benchmark", precision)]["results"].get("cpu_clocks", {}).values()
+            if isinstance(policy, dict)
+        }
+    )
+    clocks = (
+        f"; the CPU clocks were not locked, so the end-to-end figures are measurements under the `{governors[0]}` "
+        "governor"
+        if len(governors) == 1
+        else ""
+    )
+    shown = (
+        f" (score threshold {settings['score_threshold']}, {settings['num_classes']} classes)"
+        if {"score_threshold", "num_classes"} <= set(settings)
+        else ""
+    )
+    deploys = [chosen[(DEPLOY, precision)]["results"] for precision in timed if (DEPLOY, precision) in chosen]
+    kept = deploys[0].get("postprocess_settings", {}) if deploys else {}
+    deployed = (
+        f" The deploy-style column is each precision's `{DEPLOY}` log, the same frames with the postprocess the "
+        f"deployment-style block gives, keeping labels {', '.join(str(label) for label in kept['kept_labels'])} at "
+        f"score threshold {kept['score_threshold']:g}; no accuracy is measured at that setting."
+        if {"kept_labels", "score_threshold"} <= set(kept)
+        else ""
+    )
+    return "\n".join(
+        [
+            "Person detection with torchvision's SSDLite320 MobileNetV3-Large and its COCO weights on a Jetson Orin "
+            f"Nano Super, batch size 1; {basis}:",
+            "",
+            "| Device and precision | Engine p50 (ms) | End-to-end p50, evaluation setting (ms) | "
+            "End-to-end p50, deploy-style (ms) | Person AP@[.5:.95], evaluation setting | "
+            "Postprocess share of end-to-end p50, evaluation setting | From the logs |",
+            "|---|---|---|---|---|---|---|",
+            *rows,
+            "",
+            (ROUNDING_SENTENCE + " " if runs else "")
+            + f"The engine is at most {_ceil_percent(max(shares, default=0))}% of a frame's end-to-end p50 "
+            "at the evaluation setting in the median cells. "
+            "The rest is image decoding, "
+            f"preprocessing and the postprocess on the CPU, at torchvision's evaluation setting{shown}, so the "
+            f"end-to-end time is set by the CPU, not the engine{clocks}.{deployed}",
+        ]
+    )
 
 
 def build_int8_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> str:
@@ -616,11 +880,11 @@ def build_int8_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None)
         f"{opening}, the INT8 engine p50 is {_than(e8, e16, 'higher than', 'lower than')} FP16's, "
         f"{e8:.2f} against {e16:.2f} ms, and its end-to-end p50 is {_than(t8, t16, 'higher than', 'lower than')} "
         f"FP16's, {t8:.2f} against {t16:.2f} ms; FP16's and INT8's per-repeat end-to-end ranges in the notes "
-        f"{ranges}. The FP16 engine p50 is {e16 / t16 * 100:.0f}% of its "
+        f"{ranges}. The FP16 engine p50 is {_printed_share(e16, t16)}% of its "
         f"end-to-end p50; the rest is image decoding, preprocessing and postprocessing on the CPU. INT8 yields "
         f"{_than(d8, d16, 'more', 'fewer', 'as many')} person detections after NMS on val2017 "
         f"{'as' if d8 == d16 else 'than'} FP16, {d8} against {d16}, "
-        f"the `detections` count in the eval logs."
+        f"the medians of the judged runs' `detections` counts in the eval logs."
         + (
             f" Whether {_than(d8, d16, 'more', 'fewer')} detections give the postprocess "
             f"{_than(d8, d16, 'more', 'less')} work during the benchmark is a hypothesis: no profile here separates "
@@ -628,6 +892,7 @@ def build_int8_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None)
             if d8 != d16
             else ""
         )
+        + (f" {sentence}" if (sentence := tolerance_sentence(chosen)) else "")
     )
 
 
@@ -639,6 +904,31 @@ def _deploy_settings(runs: list[dict]) -> dict:
     if any(item != settings[0] for item in settings):
         raise TableError("the deployment-style benchmark logs record different postprocess settings")
     return settings[0]
+
+
+def deploy_repeat_lines(chosen: dict, runs: int) -> list[str]:
+    """Each precision's deploy end-to-end p50 min-max over the per-repeat p50s its logs record, pooled over the judged
+    runs, and a sentence when the FP16 and INT8 ranges overlap; none when they do not."""
+    over = f" of the {runs} judged runs" if runs else ""
+    lines, repeats = [], {}
+    for precision in TABLE_PRECISIONS:
+        log = chosen.get((DEPLOY, precision))
+        values = log["results"].get("end_to_end_p50_ms_per_repeat") if log else None
+        if not values or not all(_is_plain_number(value) for value in values):
+            continue
+        repeats[precision] = values
+        lines.append(
+            f"{DEPLOY_RANGE_NAMES.get(precision, PRECISION_NAMES[precision])} deploy end-to-end p50 across "
+            f"repeats: {_spread(values)}{over}."
+        )
+    if "fp16" in repeats and "int8" in repeats:
+        r16, r8 = repeats["fp16"], repeats["int8"]
+        if max(min(r16), min(r8)) <= min(max(r16), max(r8)):
+            lines.append(
+                f"FP16 and INT8 deploy end-to-end p50 ranges overlap ({_range(r16, 2)} ms vs {_range(r8, 2)} ms), "
+                "so their order is not settled by these runs."
+            )
+    return lines
 
 
 def build_deploy_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = None) -> str:
@@ -676,15 +966,16 @@ def build_deploy_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
             f"- Postprocess, as the logs record it: labels kept {labels} (COCO category 1, person), score threshold "
             f"{settings['score_threshold']:g}, NMS IoU threshold {settings['nms_iou_threshold']:g}, top-k "
             f"{settings['top_k_per_class']} per class, at most {settings['detections_per_image']} detections per "
-            f"image, over {settings['num_classes']} classes. The score threshold is a fixed midpoint chosen before "
-            "any deployment-style run; it is not tuned on the results. The other settings are the main benchmark's of "
-            "the same precision.",
+            f"image, over {settings['num_classes']} classes. The score threshold is a fixed midpoint; "
+            "the author's record is that it was set before any deployment-style run and not tuned on the results. "
+            "The other settings are the main benchmark's of the same precision.",
             "- Only end-to-end figures and the postprocess stage are shown: the postprocess runs after the engine, "
             "whose time the results table gives. The main benchmark's postprocess p50, from its own log, stands "
             "beside the deploy run's. No recall or AP is reported at this threshold.",
             "- Each deployment-style log ran with the runtime and iteration counts of the main benchmark of its "
-            "precision, which the script checks. The QUIET gates, sampler records and power-mode evidence that the "
-            "other blocks read are those of the main benchmark jobs.",
+            "precision, which the script checks. The gate and sampler tables below list the deployment-style jobs' "
+            "gates and samples beside the main jobs'.",
+            *[f"- {line}" for line in deploy_repeat_lines(chosen, len(runs))],
         ]
     )
 
@@ -884,8 +1175,8 @@ def _quiet_gates(path: Path) -> dict[str, list[str]]:
 # The QUIET try-line fields that each judged gate must show, as (field, value it must equal, what it counts).
 GATE_ZEROS = (
     ("held_active", "0", "scheduled jobs or path units active other than the ones allowed by name"),
-    ("scopes_over", "0", "sessions over their CPU budget or not allowed"),
-    ("busy_services", "0", "loop services active"),
+    ("scopes_over", "0", "other processes over their CPU budget or not allowed"),
+    ("busy_services", "0", "other host services active"),
     ("swap_used_kb", "0", "kB of swap used"),
     ("pswpout_delta", "0", "pages swapped out during the settle"),
 )
@@ -903,6 +1194,10 @@ def _passing_tries(path: Path) -> list[dict[str, str]]:
                 last = dict(field.split("=", 1) for field in fields[2:] if "=" in field)
                 last["gate"] = fields[1]
     return found
+
+
+# The memory floor of the earlier attempts, 6.5e9 bytes in kB, before it was lowered for the judged runs.
+EARLIER_MEM_MIN_KB = 6347657
 
 
 def gate_lines(runs: list[Path]) -> list[str]:
@@ -926,6 +1221,17 @@ def gate_lines(runs: list[Path]) -> list[str]:
         "| Run | Gate | Try | load1 | Available memory (kB) |",
         "|---|---|---|---|---|",
     ]
+    below = sum(
+        any(int(entry.get("mem_available_kb", EARLIER_MEM_MIN_KB)) < EARLIER_MEM_MIN_KB for entry in entries)
+        for entries in tries.values()
+    )
+    earlier = f"the earlier attempts' bound of 6.5e9 bytes, {EARLIER_MEM_MIN_KB} kB"
+    if below == 0:
+        under = f"No judged run had a gate below {earlier}."
+    else:
+        runs_below = f"Each of the {below}" if below == len(tries) else f"{below} of the {len(tries)}"
+        under = f"{runs_below} judged runs had a gate below {earlier}, and would not have run under it."
+    lines.insert(1, under)
     for name, entries in tries.items():
         lines += [
             f"| {name} | {entry['gate']} | {entry.get('try', MISSING)} | {entry.get('load1', MISSING)} "
@@ -967,7 +1273,8 @@ def _counts_allowed_timers(path: Path) -> bool:
 def host_state(run_dir: Path | None, chosen: dict) -> str:
     """A run's host state, derived from data only.
 
-    With a ``quiet.txt``, the run is quieted when every gate in it ends in exactly one PASS and none in FAIL.
+    With a ``quiet.txt``, the run is quieted only when every gate in it ends in exactly one PASS and none in FAIL,
+    and its passing lines pass the checks below.
     Without one, it is not quieted when every benchmark's load before timing is at or above the gate's bound;
     otherwise its state is not recorded.
     """
@@ -1005,11 +1312,22 @@ def host_state(run_dir: Path | None, chosen: dict) -> str:
         state = f"not quieted, load before every benchmark at or above the QUIET gate's {QUIET_LOAD_BOUND:.1f}"
     else:
         state = "host state not recorded"
-    return f"{state}; one-minute CPU load before timing {_range(loads, 1)}" if loads else state
+    return f"{state}; one-minute CPU load before each main benchmark's timing {_range(loads, 2)}" if loads else state
 
 
 def _range(values: list[float], digits: int) -> str:
     return f"{min(values):.{digits}f}-{max(values):.{digits}f}"
+
+
+def _printed_share(part: float, whole: float) -> str:
+    """``part`` as a percent of ``whole`` to one decimal, from the two values as printed to two decimals."""
+    return f"{float(f'{part:.2f}') / float(f'{whole:.2f}') * 100:.1f}"
+
+
+def _printed_spread(values: list[float], digits: int) -> str:
+    """The spread as the difference of the printed endpoints, so a reader who subtracts gets the printed figure."""
+    low, high = (float(f"{value:.{digits}f}") for value in (min(values), max(values)))
+    return f"{high - low:.{digits}f}"
 
 
 def _deviation(compare_logs, metric: str, precision: str, median: object, value: object) -> str:
@@ -1067,7 +1385,7 @@ def _system_lines(runs: list[Path], precisions: list[str]) -> list[str]:
         "",
         *starts,
         "",
-        f"Memory, swap and temperature of each judged run's benchmark jobs, sampled every {interval} s by "
+        f"Memory, swap and temperature of each judged run's main benchmark jobs, sampled every {interval} s by "
         f"the host's sampler script, a separate process, over the whole job, warm-up included; runs shown apart had "
         f"no sampler. The thermal zones are the ones whose readings the records hold: {', '.join(zones)}.",
         "",
@@ -1111,8 +1429,8 @@ def build_repeat_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
         f"board, which is not a population. avg_power_w is the board's input power, VDD_IN, as its sensor measures "
         f"it. The earlier run in `runs/`, at {', '.join(f'`{c}`' for c in earlier_commits)}, gave 0.1.0's table "
         f"without the quieting{also}; "
-        f"{'they are' if apart_runs else 'it is'} shown apart with the deviation from the median, which is what the "
-        f"quieting is worth, and not judged.",
+        f"{'they are' if apart_runs else 'it is'} shown apart with the deviation from the median, "
+        f"an uncontrolled before-and-after difference that also takes in code and library changes, and not judged.",
         "",
         *gate_lines(runs),
         "",
@@ -1156,7 +1474,7 @@ def build_repeat_block(runs_dir: Path = RUNS_DIR, repeats_dir: Path | None = Non
                 )
                 lines.append(
                     f"| {metric} | {PRECISION_NAMES[precision]} | {value:.2f} | {cells} | {_range(values, 2)} "
-                    f"| {max(values) - min(values):.2f} | {judged[0][1]} | {verdict} | {shown} |"
+                    f"| {_printed_spread(values, 2)} | {judged[0][1]} | {verdict} | {shown} |"
                 )
     lines += [
         "",
@@ -1173,6 +1491,7 @@ BLOCKS = (
     (INT8_MARKERS, lambda runs_dir, repeats_dir: build_int8_block(runs_dir, repeats_dir)),
     (REPEAT_MARKERS, lambda runs_dir, repeats_dir: build_repeat_block(runs_dir, repeats_dir)),
     (DEPLOY_MARKERS, lambda runs_dir, repeats_dir: build_deploy_block(runs_dir, repeats_dir)),
+    (SUMMARY_MARKERS, lambda runs_dir, repeats_dir: build_summary_block(runs_dir, repeats_dir)),
 )
 
 

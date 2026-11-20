@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Under PDORIN_STRICT_SKIPS=1, only the named GPU and TensorRT tests may skip."""
+"""Under PDORIN_STRICT_SKIPS=1, only the named GPU and TensorRT tests, and outside CI the checkout skips, may skip."""
 
 from pathlib import Path
 
 import pytest
 
+import strict_skips
 from strict_skips import EXPECTED_SKIPS, NO_GIT_REASON, SHALLOW_REASON, unexpected_skips
 
 TESTS_DIR = Path(__file__).resolve().parent
@@ -147,3 +148,11 @@ def test_checkout_reasons_are_expected_only_outside_ci():
         "test_other",
         "test_readme_tree_equals_generated_tree",
     ]
+
+
+def test_a_release_only_skip_is_allowed_in_ci_and_the_variable_turns_it_off(monkeypatch):
+    assert strict_skips.unexpected_skips([("test_release", strict_skips.RELEASE_REASON)], ci=True) == []
+    monkeypatch.delenv(strict_skips.RELEASE_VARIABLE, raising=False)
+    assert strict_skips.release_skip_reason() == strict_skips.RELEASE_REASON
+    monkeypatch.setenv(strict_skips.RELEASE_VARIABLE, "1")
+    assert strict_skips.release_skip_reason() is None

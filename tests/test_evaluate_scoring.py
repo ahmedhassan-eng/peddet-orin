@@ -2,6 +2,7 @@
 """Person AP scoring against synthetic COCO annotations whose answers are known by hand."""
 
 import contextlib
+import hashlib
 import io
 import json
 
@@ -120,3 +121,20 @@ def test_evaluate_writes_detection_boxes_as_xywh(tmp_path, ground_truth):
     ]
     assert {result["category_id"] for result in found} == {evaluate.PERSON_CATEGORY_ID}
     assert evaluate.person_ap(ground_truth, found, sorted(PERSON_BOXES))["ap"] == pytest.approx(1.0)
+
+
+def test_the_printed_scores_are_percentage_points_as_the_table_gives_them():
+    line = evaluate.score_line("fp16", {"ap": 0.280108, "ap50": 0.494912})
+    assert line == "fp16: person AP 28.01, AP50 49.49 (percentage points)"
+
+
+def test_the_eval_hashes_its_inputs_and_writes_its_raw_detections(tmp_path):
+    annotations = tmp_path / "instances_val2017.json"
+    annotations.write_bytes(b'{"images": []}')
+    detections = [{"image_id": 1, "category_id": 1, "bbox": [0, 0, 1, 1], "score": 0.5}]
+    path = tmp_path / "detections" / "eval_fp16.json"
+    hashes = evaluate.input_hashes(annotations, ["b.jpg", "a.jpg"], detections, path)
+    assert hashes["annotations_sha256"] == hashlib.sha256(b'{"images": []}').hexdigest()
+    assert hashes["images_sha256"] == hashlib.sha256(b"a.jpg\nb.jpg\n").hexdigest()
+    assert hashes["detections_sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    assert json.loads(path.read_bytes()) == detections

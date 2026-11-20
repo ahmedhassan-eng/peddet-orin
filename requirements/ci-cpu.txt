@@ -1,8 +1,9 @@
 # CPU-only set for CI (ubuntu-24.04, Python 3.11 and 3.12). No CUDA, no TensorRT:
 # the GPU and TensorRT tests skip when those are absent.
 #
-# A complete lock: every package pip installs from this file is pinned here, transitive
-# dependencies included, so nothing floats between runs. It was resolved with
+# A complete set of version pins: every package pip installs from this file is pinned here,
+# transitive dependencies included, so nothing floats between runs. CI installs
+# requirements/ci-cpu.lock, the same version pins with hashes, with --require-hashes. It was resolved with
 # pip install --dry-run --report for manylinux x86_64 on Python 3.11 and 3.12; the
 # packages whose versions differ between those Pythons carry environment markers.
 --extra-index-url https://download.pytorch.org/whl/cpu
@@ -13,7 +14,8 @@ numpy==1.26.4
 onnx==1.23.2
 onnxruntime==1.31.1
 pycocotools==2.0.11
-# pillow 13.0.0 and pytest 9.0.3 are the first releases with the fixes pip-audit names for 12.3.0 and 7.4.4.
+# By the author's pip-audit run when they were set, pillow 13.0.0 and pytest 9.0.3 are the first releases with
+# fixes for the advisories it listed against 12.3.0 and 7.4.4.
 pillow==13.0.0
 pytest==9.0.3
 ruff==0.17.4

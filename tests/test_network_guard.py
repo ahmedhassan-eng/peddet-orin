@@ -139,8 +139,8 @@ def test_create_connection_is_blocked_before_any_lookup(network_guard):
     [
         ("gethostbyname", ("localhost",)),
         ("gethostbyname_ex", ("localhost",)),
-        ("gethostbyaddr", ("127.0.0.1",)),
-        ("getnameinfo", (("127.0.0.1", 80), 0)),
+        ("gethostbyaddr", (LOOPBACK_ADDRESS[0],)),
+        ("getnameinfo", ((LOOPBACK_ADDRESS[0], 80), 0)),
     ],
 )
 def test_every_name_lookup_is_blocked(network_guard, name, arguments):

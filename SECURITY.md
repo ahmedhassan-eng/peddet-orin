@@ -18,12 +18,14 @@ security advisory.
 ## In scope
 
 - Code in this repository: `src/peddet_orin/`, `scripts/` and `tests/`.
-- `scripts/fetch_coco.py`: what it downloads (over HTTPS only), how it checks the MD5 and sha256 digests, and where it
-  extracts archives. It refuses to run without the calibration manifest unless `--write-manifest` is given.
+- `scripts/fetch_coco.py`: what it downloads (over HTTPS; the final URL a download reaches after any redirect is checked too, and a non-HTTPS one is refused before anything is written), how it checks the MD5 and sha256 digests, and where it
+  extracts archives. Its calibration subcommand refuses to run without the calibration manifest unless `--write-manifest` is given.
 - `src/peddet_orin/model.py`: the pretrained weights load only after their full sha256 matches, and only as tensors.
-- The run logs' path hygiene: `src/peddet_orin/runlog.py` replaces any absolute path outside its allowlist with
-  `<path>` before it writes a log.
-- The network guard in `tests/network_guard.py`, which keeps the tests offline.
+- The run logs' path hygiene: `src/peddet_orin/runlog.py` replaces the absolute paths its pattern matches, outside
+  its allowlist, with `<path>` before it writes a log. The pattern misses a path that follows a word character, `.`,
+  `-` or `~`.
+- The network guard in `tests/network_guard.py`, which refuses internet connections from the test process; it does
+  not guard a subprocess a test starts or the C-level `_socket` module.
 - The CI workflow in `.github/workflows/ci.yml`, which audits both pin files with `pip-audit --strict`.
 
 ## Out of scope

@@ -17,7 +17,7 @@ CI_PINS = REPO_ROOT / "requirements" / "ci-cpu.txt"
 JETSON_PINS = REPO_ROOT / "constraints" / "jetson-orin.txt"
 PACKAGE = REPO_ROOT / "src" / "peddet_orin"
 PIN = re.compile(r"^(?P<name>[A-Za-z0-9_.-]+)==(?P<version>[^;\s]+)\s*(?:;\s*(?P<marker>.+))?$")
-# pillow 10.3.0 is the first release with the fix for CVE-2024-28219.
+# The pillow floor is 13.0.0; 10.3.0 was the first release with the fix for CVE-2024-28219.
 # The first releases with the fixes pip-audit lists against the versions before them.
 FIRST_FIXED_PILLOW = (13, 0, 0)
 FIRST_FIXED_PYTEST = (9, 0, 3)
@@ -204,3 +204,26 @@ def test_an_unpinned_transitive_dependency_is_detected():
     pytest_version = metadata.version("pytest")
     planted = {name: version for name, version in chosen.items() if name != "pluggy"} | {"pytest": pytest_version}
     assert "pluggy (needed by pytest)" in unpinned_dependencies(planted)
+
+
+BOARD = "Jetson Orin Nano Super"
+
+
+def test_the_package_names_the_board_as_the_readme_and_citation_do():
+    import peddet_orin
+
+    citation = (REPO_ROOT / "CITATION.cff").read_text()
+    readme = (REPO_ROOT / "README.md").read_text()
+    assert f"on a {BOARD} " in citation and f"on a {BOARD}," in readme
+    assert f"on a {BOARD}," in project()["description"]
+    assert f"on a {BOARD}:" in peddet_orin.__doc__
+
+
+def test_the_package_licence_names_every_spdx_licence_its_sources_declare():
+    declared = set()
+    for path in sorted(PACKAGE.glob("*.py")):
+        match = re.search(r"SPDX-License-Identifier: (.+)", path.read_text())
+        if match:
+            declared.update(part.strip() for part in match.group(1).split(" AND "))
+    assert declared == {"Apache-2.0", "BSD-3-Clause"}
+    assert set(project()["license"].split(" AND ")) == declared

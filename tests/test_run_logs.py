@@ -5,17 +5,20 @@ import copy
 import json
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
 
 from peddet_orin import runlog
 
-# Every committed log: the earlier run in runs/, each judged or further run under runs-repeat/, and any superseded
-# run under runs-superseded/.
+# Every committed log: the earlier run in runs/, each judged or further run under runs-repeat/, any superseded run
+# under runs-superseded/, and the attempts under runs-attempts/, whose logs, from 025171d and 8ce8f5c, meet the same
+# rules: the optional keys newer code adds are checked only where present.
 RUNS = sorted(
     [
         *runlog.RUNS_DIR.glob("*.json"),
+        *(runlog.REPO_ROOT / "runs-attempts").glob("*/*.json"),
         *(runlog.REPO_ROOT / "runs-repeat").glob("*/*.json"),
         *(runlog.REPO_ROOT / "runs-superseded").glob("*/*.json"),
     ]
@@ -447,6 +450,41 @@ def test_the_stages_must_hold_the_engine_summary_and_add_up_to_end_to_end():
     assert problems(dict(STAGES, decode=dict(latency(2.0), fps=1000.0 / (2.0 + 1e-9)))) == []
 
 
+BAD_LATENCIES = {
+    "zero-p50": ("engine", {"p50_ms": 0.0}, "bad result: {kind} engine p50_ms is not positive"),
+    "negative-p90": ("end_to_end", {"p90_ms": -1.0}, "bad result: {kind} end_to_end p90_ms is not positive"),
+    "zero-fps": ("end_to_end", {"fps": 0.0}, "bad result: {kind} end_to_end fps is not positive"),
+    "p99-below-p90": (
+        "engine",
+        {"p99_ms": 4.2},
+        "bad result: {kind} engine percentiles are not ordered p50_ms <= p90_ms <= p99_ms",
+    ),
+    "stage-zero-p50": (
+        "stages decode",
+        {"p50_ms": 0.0},
+        "bad result: {kind} stages decode p50_ms is not positive",
+    ),
+    "stage-p50-above-p90": (
+        "stages postprocess",
+        {"p50_ms": 3.0},
+        "bad result: {kind} stages postprocess percentiles are not ordered p50_ms <= p90_ms <= p99_ms",
+    ),
+}
+
+
+@pytest.mark.parametrize("kind", sorted(runlog.BENCHMARK_KINDS))
+@pytest.mark.parametrize(("summary", "change", "problem"), BAD_LATENCIES.values(), ids=BAD_LATENCIES.keys())
+def test_a_benchmark_log_with_a_non_positive_or_unordered_latency_is_refused(kind, summary, change, problem):
+    log = deploy_log() if kind == "benchmark_deploy" else make_log("benchmark", results={"stages": STAGES})
+    log = copy.deepcopy(log)
+    results = log["results"]
+    if summary.startswith("stages "):
+        results["stages"][summary.split()[1]].update(change)
+    else:
+        results[summary].update(change)
+    assert problem.format(kind=kind) in runlog.validate_log(log)
+
+
 def test_the_postprocess_settings_are_pinned_per_benchmark_kind():
     from peddet_orin.postprocess import DEPLOY_LABELS, DEPLOY_SCORE_THRESHOLD
 
@@ -560,6 +598,7 @@ def fake_repo(tmp_path, monkeypatch):
     monkeypatch.setattr(runlog, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(runlog, "RUNS_DIR", tmp_path / "runs")
     monkeypatch.setattr(runlog, "_git", lambda *arguments: COMMIT if arguments[0] == "rev-parse" else "")
+    monkeypatch.setattr(runlog, "_git_result", lambda *arguments: (True, COMMIT if arguments[0] == "rev-parse" else ""))
     monkeypatch.setattr(runlog, "environment_facts", lambda: {name: "value" for name in runlog.REQUIRED_ENVIRONMENT})
     monkeypatch.setattr(runlog, "other_gpu_process_count", lambda: 0)
     monkeypatch.setattr(sys, "argv", ["evaluate.py", "--precision", "fp16", "--out", str(tmp_path / "x.json")])
@@ -631,7 +670,7 @@ def test_relative_command_leaves_other_paths_for_redaction(monkeypatch, tmp_path
 # The dirty flag, in a real git repository.
 
 
-GIT_IDENTITY = ("-c", "user.name=peddet-orin tests", "-c", "user.email=tests@example.invalid")
+GIT_IDENTITY = ("-c", "user.name=peddet-orin tests", "-c", "user.email=")
 
 
 def _git_in(repo: Path, *arguments: str) -> None:
@@ -680,11 +719,17 @@ def test_new_and_changed_logs_under_runs_leave_the_tree_clean(git_repo):
 @pytest.mark.parametrize("path", RUNS, ids=lambda item: f"{item.parent.name}/{item.name}")
 def test_committed_logs_are_valid(path):
     assert runlog.validate_log(json.loads(path.read_text())) == []
+    assert runlog.raw_file_problems(path) == []
 
 
 def test_the_committed_logs_include_every_judged_run():
-    assert {path.parent.name for path in RUNS} >= {"runs", "run3", "run4", "run5"}
+    assert {path.parent.name for path in RUNS} >= {"runs", "run3", "run4", "run5", "run6", "run7", "run8"}
     assert len(RUNS) >= 40
+
+
+def test_the_committed_logs_include_every_attempt_log():
+    assert {path.parent.name for path in RUNS} >= {"run3-attempt2", "run6-window1"}
+    assert sum(path.parent.parent.name == "runs-attempts" for path in RUNS) == 17
 
 
 def test_the_cuda_runtime_and_driver_are_read_from_the_loaded_runtime(monkeypatch):
@@ -736,3 +781,98 @@ def test_a_tensorrt_fp32_build_log_must_record_its_flags_and_engine():
     problems = runlog.validate_log(log)
     assert "missing result: build builder_flags for fp32-trt" in problems
     assert "missing result: build engine_sha256 for fp32-trt" in problems
+
+
+@pytest.mark.parametrize("failure", ["exit", "timeout"])
+def test_a_failed_or_timed_out_git_status_reads_as_dirty(git_repo, monkeypatch, failure):
+    def failing_run(*arguments, **keywords):
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(arguments[0], 1)
+        return subprocess.CompletedProcess(arguments[0], 128, stdout="", stderr="fatal")
+
+    monkeypatch.setattr(runlog.subprocess, "run", failing_run)
+    assert runlog.tree_is_dirty() is True
+
+
+@pytest.mark.parametrize("count", [0, 150, 199, 201, 1.5, "200"])
+def test_a_benchmark_log_with_a_bad_pool_count_is_refused(count):
+    log = make_log("benchmark", results={"pool_images": count})
+    assert "pool_images" in " ".join(runlog.validate_log(log))
+
+
+def test_a_benchmark_log_that_timed_the_whole_pool_is_accepted():
+    from peddet_orin import benchmark
+
+    assert runlog.POOL_IMAGES == benchmark.IMAGE_POOL_SIZE == 200
+    log = make_log("benchmark", results={"pool_images": 200})
+    assert not [problem for problem in runlog.validate_log(log) if "pool_images" in problem]
+
+
+def test_a_benchmark_log_with_no_power_samples_is_refused():
+    log = make_log("benchmark", results={"power_samples": 0})
+    assert "bad result: benchmark power_samples" in runlog.validate_log(log)
+
+
+def test_the_board_model_is_read_from_the_device_tree_without_its_nul(tmp_path, monkeypatch):
+    model = tmp_path / "model"
+    model.write_bytes(b"NVIDIA Jetson Orin Nano Super Developer Kit\x00")
+    monkeypatch.setattr(runlog, "DEVICE_TREE_MODEL_FILE", str(model))
+    assert runlog.board_model() == "NVIDIA Jetson Orin Nano Super Developer Kit"
+    monkeypatch.setattr(runlog, "DEVICE_TREE_MODEL_FILE", str(tmp_path / "absent"))
+    assert runlog.board_model() == runlog.UNREADABLE
+
+
+def test_a_board_model_that_is_not_a_string_is_refused():
+    log = make_log()
+    log["environment"]["board_model"] = 7
+    assert "fact is not a string: board_model" in runlog.validate_log(log)
+
+
+def test_the_gpu_process_count_records_why_it_was_not_read(monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_pynvml(name, *arguments, **keywords):
+        if name == "pynvml":
+            raise ImportError(name)
+        return real_import(name, *arguments, **keywords)
+
+    monkeypatch.setattr(builtins, "__import__", no_pynvml)
+    assert runlog.other_gpu_process_count() == f"{runlog.UNREADABLE}:import"
+    monkeypatch.setattr(builtins, "__import__", real_import)
+
+    class QueryNotSupported(Exception):
+        pass
+
+    def refuse():
+        raise QueryNotSupported
+
+    fake = types.SimpleNamespace(nvmlInit=refuse, nvmlShutdown=lambda: None)
+    monkeypatch.setitem(sys.modules, "pynvml", fake)
+    assert runlog.other_gpu_process_count() == f"{runlog.UNREADABLE}:QueryNotSupported"
+
+
+@pytest.mark.parametrize(
+    ("kind", "key"), [("eval", "detections_sha256"), ("export", "onnx_sha256"), ("build", "onnx_sha256")]
+)
+def test_an_input_hash_that_is_not_a_sha256_is_refused(kind, key):
+    log = make_log(kind, results={key: "not-a-hash"})
+    assert f"bad result: {kind} {key}" in runlog.validate_log(log)
+    assert runlog.validate_log(make_log(kind, results={key: "a" * 64})) == []
+
+
+def test_a_benchmark_log_writes_its_raw_side_file_and_names_it_by_sha256(fake_repo):
+    raw = {"columns": ["engine"], "unit": "ms", "decimals": 4, "repeats": [[[1.0]]], "vdd_in_mw": [5000]}
+    with runlog.RunLog("benchmark", "fp16", 7, {"timed": 1}) as log:
+        log.results.update(RESULTS["benchmark"])
+        log.raw = raw
+    record = json.loads(log.path.read_text())
+    side = log.path.parent / record["results"]["raw_file"]
+    assert side.name == log.path.name.removesuffix(".json") + ".raw"
+    assert json.loads(side.read_bytes()) == raw
+    assert runlog.validate_log(record) == [] and runlog.raw_file_problems(log.path) == []
+    side.write_bytes(side.read_bytes() + b" ")
+    assert runlog.raw_file_problems(log.path) == [f"raw file does not match its sha256: {side.name}"]
+    side.unlink()
+    assert runlog.raw_file_problems(log.path) == [f"missing raw file: {side.name}"]

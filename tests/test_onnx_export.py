@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """ONNX Runtime on CPU against PyTorch, using an unweighted model and a fixed seed."""
 
+import math
+
+import numpy as np
 import onnx
 import pytest
 import torch
@@ -15,6 +18,7 @@ from peddet_orin.export import (
     assert_matches,
     export,
     export_results,
+    largest_difference,
     max_difference,
     parse_arguments,
     seeded_batches,
@@ -111,3 +115,32 @@ def test_export_cli_help_names_its_module_and_documents_output(capsys):
     assert text.startswith("usage: python -m peddet_orin.export")
     assert "where to write the ONNX file" in text
     assert "(default:" in text
+
+
+@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
+@pytest.mark.parametrize("side", ["want", "got"])
+def test_a_non_finite_value_on_either_side_is_the_largest_difference(bad, side):
+    want, got = np.zeros((2, 3), dtype=np.float32), np.zeros((2, 3), dtype=np.float32)
+    (want if side == "want" else got)[1, 2] = bad
+    assert largest_difference(want, got) == math.inf
+    assert largest_difference(np.zeros(3), np.full(3, 0.25)) == 0.25
+
+
+class _NanNetwork(torch.nn.Module):
+    """The exported network's outputs with one NaN planted, as a broken backend might give."""
+
+    def __init__(self, network):
+        super().__init__()
+        self.network = network
+
+    def forward(self, images):
+        regression, logits = self.network(images)
+        regression = regression.clone()
+        regression[0, 0, 0] = math.nan
+        return regression, logits
+
+
+def test_a_nan_in_the_pytorch_output_fails_the_export_check(exported):
+    network, path = exported
+    with pytest.raises(OnnxMismatch, match="inf"):
+        assert_matches(_NanNetwork(network), path, seeded_batches(SEED, BATCHES))

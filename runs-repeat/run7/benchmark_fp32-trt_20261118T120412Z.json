@@ -1,0 +1,142 @@
+{
+  "command": "python -m peddet_orin.benchmark --precision fp32-trt",
+  "commit": "84271330d28b3fb779ea495de9b711759c9f51ba",
+  "dirty": false,
+  "end_utc": "2026-11-18T12:04:12Z",
+  "environment": {
+    "cuda": "13.0",
+    "cuda_driver": "13.2",
+    "cuda_runtime": "13.0",
+    "libjpeg": "libjpeg-turbo 3.2.0",
+    "numpy": "1.26.4",
+    "nv_tegra_release": "# R39 (release), REVISION: 2.1, GCID: 46758480, BOARD: generic, EABI: aarch64, DATE: Fri Aug  7 05:54:22 AM UTC 2026\n# KERNEL_VARIANT: oot\nTARGET_USERSPACE_LIB_DIR=nvidia\nTARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia",
+    "nvpmodel": "NV Power Mode: MAXN_SUPER\n2",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.31.1",
+    "peddet_orin": "0.1.1",
+    "pillow": "13.0.0",
+    "pycocotools": "2.0.11",
+    "python": "3.12.3",
+    "tensorrt": "10.16.2.10",
+    "torch": "2.14.1+cu130",
+    "torchvision": "0.29.1+cu130"
+  },
+  "iterations": {
+    "batch": 1,
+    "repeats": 3,
+    "timed": 1000,
+    "warmup": 50
+  },
+  "kind": "benchmark",
+  "other_gpu_processes": "UNREADABLE",
+  "precision": "fp32-trt",
+  "results": {
+    "avg_power_w": 7.341692567567567,
+    "cpu_clocks": {
+      "policy0": {
+        "at_max_samples": 901,
+        "cur_khz_counts": {
+          "1344000": 1,
+          "1420800": 2,
+          "1651200": 1,
+          "1728000": 901,
+          "729600": 5
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 910,
+        "unreadable_samples": 0
+      },
+      "policy4": {
+        "at_max_samples": 11,
+        "cur_khz_counts": {
+          "1728000": 11,
+          "729600": 899
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 910,
+        "unreadable_samples": 0
+      }
+    },
+    "cpu_load_1min_before_timing": 0.86669921875,
+    "end_to_end": {
+      "fps": 16.560915320536566,
+      "p50_ms": 60.90061948634684,
+      "p90_ms": 73.54453646112233,
+      "p99_ms": 81.27957334043458
+    },
+    "end_to_end_p50_ms_per_repeat": [
+      60.55134104099125,
+      60.870238463394344,
+      61.08556338585913
+    ],
+    "engine": {
+      "fps": 171.50590241043236,
+      "p50_ms": 5.824728170409799,
+      "p90_ms": 5.8906190097332,
+      "p99_ms": 6.022765273228286
+    },
+    "engine_p50_ms_per_repeat": [
+      5.825895466841757,
+      5.824360414408147,
+      5.823625950142741
+    ],
+    "engine_sha256": "8b8bb06f192969f0828419167aa5b5694fda3047533dcb66eaf4457145d12258",
+    "gpu_busy_pct_before_timing": 0.0,
+    "gpu_clock": {
+      "at_max_samples": 910,
+      "cur_hz_counts": {
+        "1020000000": 910
+      },
+      "governor": "performance",
+      "max_hz": 1020000000,
+      "min_hz": 306000000,
+      "samples": 910,
+      "unreadable_samples": 0
+    },
+    "peak_process_rss_mib": 1154.203125,
+    "postprocess_settings": {
+      "detections_per_image": 300,
+      "nms_iou_threshold": 0.55,
+      "num_classes": 91,
+      "score_threshold": 0.001,
+      "top_k_per_class": 300
+    },
+    "power_mode": "NV Power Mode: MAXN_SUPER\n2",
+    "power_samples": 888,
+    "repeats": 3,
+    "runtime": "tensorrt-gpu",
+    "stages": {
+      "decode": {
+        "fps": 144.01115235952318,
+        "p50_ms": 6.914799916557968,
+        "p90_ms": 8.904527337290347,
+        "p99_ms": 11.288792120758433
+      },
+      "engine": {
+        "fps": 171.50590241043236,
+        "p50_ms": 5.824728170409799,
+        "p90_ms": 5.8906190097332,
+        "p99_ms": 6.022765273228286
+      },
+      "postprocess": {
+        "fps": 21.956823022207054,
+        "p50_ms": 45.576938544400036,
+        "p90_ms": 58.789985394105315,
+        "p99_ms": 64.86759772291403
+      },
+      "preprocess": {
+        "fps": 484.3561242078404,
+        "p50_ms": 2.089658984914422,
+        "p90_ms": 2.637628535740077,
+        "p99_ms": 3.709108787588775
+      }
+    },
+    "system_ram_rise_mib": 176.0,
+    "torch_num_threads": 6
+  },
+  "schema_version": 2,
+  "seed": 7,
+  "start_utc": "2026-11-18T12:01:02Z"
+}

@@ -1,0 +1,146 @@
+{
+  "command": "python -m peddet_orin.benchmark --precision fp16",
+  "commit": "84271330d28b3fb779ea495de9b711759c9f51ba",
+  "dirty": false,
+  "end_utc": "2026-11-18T10:31:44Z",
+  "environment": {
+    "cuda": "13.0",
+    "cuda_driver": "13.2",
+    "cuda_runtime": "13.0",
+    "libjpeg": "libjpeg-turbo 3.2.0",
+    "numpy": "1.26.4",
+    "nv_tegra_release": "# R39 (release), REVISION: 2.1, GCID: 46758480, BOARD: generic, EABI: aarch64, DATE: Fri Aug  7 05:54:22 AM UTC 2026\n# KERNEL_VARIANT: oot\nTARGET_USERSPACE_LIB_DIR=nvidia\nTARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia",
+    "nvpmodel": "NV Power Mode: MAXN_SUPER\n2",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.31.1",
+    "peddet_orin": "0.1.1",
+    "pillow": "13.0.0",
+    "pycocotools": "2.0.11",
+    "python": "3.12.3",
+    "tensorrt": "10.16.2.10",
+    "torch": "2.14.1+cu130",
+    "torchvision": "0.29.1+cu130"
+  },
+  "iterations": {
+    "batch": 1,
+    "repeats": 3,
+    "timed": 1000,
+    "warmup": 50
+  },
+  "kind": "benchmark",
+  "other_gpu_processes": "UNREADABLE",
+  "precision": "fp16",
+  "results": {
+    "avg_power_w": 7.059853362734288,
+    "cpu_clocks": {
+      "policy0": {
+        "at_max_samples": 921,
+        "cur_khz_counts": {
+          "1497600": 1,
+          "1574400": 1,
+          "1651200": 1,
+          "1728000": 921,
+          "729600": 5,
+          "806400": 1
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 930,
+        "unreadable_samples": 0
+      },
+      "policy4": {
+        "at_max_samples": 11,
+        "cur_khz_counts": {
+          "1267200": 1,
+          "1420800": 1,
+          "1728000": 11,
+          "729600": 916,
+          "960000": 1
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 930,
+        "unreadable_samples": 0
+      }
+    },
+    "cpu_load_1min_before_timing": 0.31787109375,
+    "end_to_end": {
+      "fps": 16.21739519387158,
+      "p50_ms": 62.17620288953185,
+      "p90_ms": 75.37238816730678,
+      "p99_ms": 82.62411645613608
+    },
+    "end_to_end_p50_ms_per_repeat": [
+      62.20903049688786,
+      61.73008552286774,
+      62.6390625257045
+    ],
+    "engine": {
+      "fps": 260.39226766224914,
+      "p50_ms": 3.8356754230335355,
+      "p90_ms": 3.898117784410715,
+      "p99_ms": 3.9868069160729647
+    },
+    "engine_p50_ms_per_repeat": [
+      3.8342655170708895,
+      3.8350665709003806,
+      3.8379159523174167
+    ],
+    "engine_sha256": "ad5e49f7e894e947f04139c9eb5472b3301389abe899b19bac31c61d0a035694",
+    "gpu_busy_pct_before_timing": 0.0,
+    "gpu_clock": {
+      "at_max_samples": 930,
+      "cur_hz_counts": {
+        "1020000000": 930
+      },
+      "governor": "performance",
+      "max_hz": 1020000000,
+      "min_hz": 306000000,
+      "samples": 930,
+      "unreadable_samples": 0
+    },
+    "peak_process_rss_mib": 1139.39453125,
+    "postprocess_settings": {
+      "detections_per_image": 300,
+      "nms_iou_threshold": 0.55,
+      "num_classes": 91,
+      "score_threshold": 0.001,
+      "top_k_per_class": 300
+    },
+    "power_mode": "NV Power Mode: MAXN_SUPER\n2",
+    "power_samples": 907,
+    "repeats": 3,
+    "runtime": "tensorrt-gpu",
+    "stages": {
+      "decode": {
+        "fps": 143.3253533296871,
+        "p50_ms": 6.9514819188043475,
+        "p90_ms": 8.934819139540195,
+        "p99_ms": 11.32813208736478
+      },
+      "engine": {
+        "fps": 260.39226766224914,
+        "p50_ms": 3.8356754230335355,
+        "p90_ms": 3.898117784410715,
+        "p99_ms": 3.9868069160729647
+      },
+      "postprocess": {
+        "fps": 20.509238050728197,
+        "p50_ms": 48.716772464104,
+        "p90_ms": 62.594765983521924,
+        "p99_ms": 68.3066306146793
+      },
+      "preprocess": {
+        "fps": 479.34600532119345,
+        "p50_ms": 2.0967290038242936,
+        "p90_ms": 2.601491031236946,
+        "p99_ms": 3.907244026195251
+      }
+    },
+    "system_ram_rise_mib": 180.28571428571422,
+    "torch_num_threads": 6
+  },
+  "schema_version": 2,
+  "seed": 7,
+  "start_utc": "2026-11-18T10:28:30Z"
+}

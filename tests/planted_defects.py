@@ -285,4 +285,32 @@ DEFECTS = [
         "new": "Each benchmark pools five timed repeats",
         "catches": "tests/test_readme_numbers.py::test_the_repeat_count_and_the_baseline_window_match_the_benchmark",
     },
+    {
+        "id": "trt-stream-not-synchronized",
+        "file": "src/peddet_orin/backends.py",
+        "old": "        self.stream.synchronize()\n",
+        "new": "",
+        "catches": "tests/test_gpu.py::test_tensorrt_backend_waits_for_its_stream_before_reading_the_outputs",
+        "needs": "gpu",
+    },
+    {
+        "id": "fp32-trt-keeps-fp16",
+        "file": "src/peddet_orin/engine_build.py",
+        "old": "        _set_builder_flags(config, tensorrt, FP32_TRT)\n",
+        "new": (
+            "        _set_builder_flags(config, tensorrt, FP32_TRT)\n"
+            "        config.set_flag(tensorrt.BuilderFlag.FP16)\n"
+        ),
+        "catches": "tests/test_gpu.py::test_tensorrt_fp32_engine_matches_cpu_and_logs_no_reduced_precision",
+        "needs": "gpu",
+    },
+    {
+        "id": "int8-calibration-unnormalised",
+        "file": "src/peddet_orin/engine_build.py",
+        "old": "            batch = _calibration_batch(path)\n",
+        # Undo the normalisation back to 0-255 pixel values, so the calibrator sees unnormalised input.
+        "new": "            batch = (_calibration_batch(path) * 0.5 + 0.5) * 255.0\n",
+        "catches": "tests/test_gpu.py::test_tensorrt_fp16_and_int8_engines_match_the_fp32_engine",
+        "needs": "gpu",
+    },
 ]

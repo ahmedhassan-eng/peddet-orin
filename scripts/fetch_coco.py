@@ -1,21 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Fetch the COCO 2017 files this project needs, from the official COCO URLs only.
+"""Fetch the COCO 2017 files this project needs, from COCO's S3 bucket, path-style, over HTTPS only.
 
-Four independent subcommands exist so that each artefact can be fetched when it
+Three independent subcommands exist so that each artefact can be fetched when it
 is first needed:
 
-* ``annotations`` -- the trainval annotation archive (needed by everything).
+* ``annotations`` -- the trainval annotation archive (read by evaluation and the calibration fetch).
 * ``val``         -- the val2017 image archive (needed by every accuracy run).
-* ``train``       -- the full train2017 image archive (18 GB; nothing here needs it,
-  because ``calibration`` fetches only the images it uses).
 * ``calibration`` -- a fixed, seeded sample of train2017 images, fetched one file
   at a time and verified against the sha256 hashes in the committed manifest
   ``manifests/calibration_train2017.sha256``. A missing manifest is an error:
   only ``calibration --write-manifest`` records a new one from what it fetches.
 
 Every download uses HTTPS. The archives are also verified against the MD5 digests
-published alongside the COCO downloads, which are also the single-part S3 ETags of
-those objects. A file that fails its check is never deleted from ``data/``: the
+pinned below. A file that fails its check is never deleted from ``data/``: the
 fetch stops with an error naming it. Nothing fetched here is committed: everything
 lands under ``data/``, which is git-ignored.
 """
@@ -24,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import json
 import random
 import sys
@@ -36,13 +34,19 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 MANIFEST_PATH = REPO_ROOT / "manifests" / "calibration_train2017.sha256"
 
-ANNOTATIONS_ZIP_URL = "https://images.cocodataset.org/annotations/annotations_trainval2017.zip"
+# COCO's files are in the S3 bucket images.cocodataset.org. That host name serves S3's certificate, whose names
+# (s3.amazonaws.com, *.s3.amazonaws.com) a dotted bucket name does not match, so HTTPS to it fails verification. The
+# path-style form names the bucket in the path and the host s3.amazonaws.com, which the certificate covers.
+COCO_BASE_URL = "https://s3.amazonaws.com/images.cocodataset.org/"
+ANNOTATIONS_ZIP_URL = COCO_BASE_URL + "annotations/annotations_trainval2017.zip"
 ANNOTATIONS_ZIP_MD5 = "f4bbac642086de4f52a3fdda2de5fa2c"
-VAL_ZIP_URL = "https://images.cocodataset.org/zips/val2017.zip"
+# The sha256 of each archive, read from one verified fetch on 2026-11-19 whose MD5 matched the pin above; MD5 alone
+# is not collision-resistant.
+ANNOTATIONS_ZIP_SHA256 = "113a836d90195ee1f884e704da6304dfaaecff1f023f49b6ca93c4aaae470268"
+VAL_ZIP_URL = COCO_BASE_URL + "zips/val2017.zip"
 VAL_ZIP_MD5 = "442b8da7639aecaf257c1dceb8ba8c80"
-TRAIN_ZIP_URL = "https://images.cocodataset.org/zips/train2017.zip"
-TRAIN_ZIP_MD5 = "cced6f7f71b7629ddf16f17bbcfab6b2"
-TRAIN_IMAGE_URL_PREFIX = "https://images.cocodataset.org/train2017/"
+VAL_ZIP_SHA256 = "4f7e2ccb2866ec5041993c9cf2a952bbed69647b115d0f74da7ce8f4bef82f05"
+TRAIN_IMAGE_URL_PREFIX = COCO_BASE_URL + "train2017/"
 
 # The captions file lists every train2017 image and is far smaller to parse than
 # the instances file, which matters on an 8 GB board.
@@ -75,14 +79,20 @@ def _stream_to(url: str, destination: Path, digests: tuple[str, ...]) -> dict[st
     for attempt in range(1, RETRIES + 1):
         try:
             hashers = {name: hashlib.new(name) for name in digests}
-            with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT_S) as response, partial.open("wb") as sink:
-                while chunk := response.read(CHUNK_BYTES):
-                    sink.write(chunk)
-                    for hasher in hashers.values():
-                        hasher.update(chunk)
+            with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT_S) as response:
+                # A redirect is followed by urllib, so the address the bytes came from is checked, not only the first.
+                final = response.geturl()
+                if not final.startswith(HTTPS_PREFIX):
+                    raise ValueError(f"refusing a download redirected away from HTTPS: {url} -> {final}")
+                with partial.open("wb") as sink:
+                    while chunk := response.read(CHUNK_BYTES):
+                        sink.write(chunk)
+                        for hasher in hashers.values():
+                            hasher.update(chunk)
             partial.replace(destination)
             return {name: hasher.hexdigest() for name, hasher in hashers.items()}
-        except OSError as error:  # URLError and timeouts both derive from OSError.
+        # URLError and timeouts derive from OSError; a connection cut mid-body raises IncompleteRead, which does not.
+        except (OSError, http.client.IncompleteRead) as error:
             last_error = error
             time.sleep(RETRY_SLEEP_S * attempt)
     # The last attempt's truncated file is removed, so a run that gives up leaves nothing half-written behind.
@@ -95,7 +105,7 @@ def extracted_stamp(url: str) -> Path:
     return DATA_DIR / f".{url.rsplit('/', 1)[1]}.extracted"
 
 
-def _fetch_archive(url: str, expected_md5: str, marker: str) -> None:
+def _fetch_archive(url: str, expected_md5: str, expected_sha256: str, marker: str) -> None:
     """Fetch and extract one archive unless a completed extraction of it is recorded and its marker file exists."""
     stamp = extracted_stamp(url)
     if stamp.exists() and (DATA_DIR / marker).exists():
@@ -103,9 +113,13 @@ def _fetch_archive(url: str, expected_md5: str, marker: str) -> None:
         return
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     archive = DATA_DIR / url.rsplit("/", 1)[1]
-    actual = _stream_to(url, archive, ("md5",))["md5"]
-    if actual != expected_md5:
-        raise RuntimeError(f"md5 mismatch for {archive}: got {actual}, expected {expected_md5}; left in place")
+    actual = _stream_to(url, archive, ("md5", "sha256"))
+    if actual["md5"] != expected_md5:
+        raise RuntimeError(f"md5 mismatch for {archive}: got {actual['md5']}, expected {expected_md5}; left in place")
+    if actual["sha256"] != expected_sha256:
+        raise RuntimeError(
+            f"sha256 mismatch for {archive}: got {actual['sha256']}, expected {expected_sha256}; left in place"
+        )
     # ZipFile.extractall strips absolute prefixes and ".." members, so extraction
     # stays inside DATA_DIR even for a malformed archive.
     with zipfile.ZipFile(archive) as bundle:
@@ -118,7 +132,19 @@ def _fetch_archive(url: str, expected_md5: str, marker: str) -> None:
 def _image_names(relative_json: str) -> list[str]:
     """Return the sorted image file names listed by a COCO annotation file."""
     with (DATA_DIR / relative_json).open() as handle:
-        return sorted(image["file_name"] for image in json.load(handle)["images"])
+        names = sorted(image["file_name"] for image in json.load(handle)["images"])
+    unsafe = [name for name in names if not safe_name(name)]
+    if unsafe:
+        raise RuntimeError(f"{relative_json} lists {len(unsafe)} unsafe image file names, the first {unsafe[0]!r}")
+    return names
+
+
+def safe_name(name: str) -> bool:
+    """Whether an image file name stays inside the directory it is joined to: no absolute path, no separator, no
+    "..", and not empty."""
+    if not name or name in (".", "..") or "/" in name or "\\" in name:
+        return False
+    return not Path(name).is_absolute()
 
 
 def select_calibration_names(train_names: list[str], seed: int, count: int) -> list[str]:
@@ -179,10 +205,11 @@ def fetch_calibration(write_manifest: bool = False) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    commands = parser.add_subparsers(dest="what", required=True, metavar="{annotations,val,train,calibration}")
-    commands.add_parser("annotations", help="the trainval2017 annotation archive, which everything needs")
+    commands = parser.add_subparsers(dest="what", required=True, metavar="{annotations,val,calibration}")
+    commands.add_parser(
+        "annotations", help="the trainval2017 annotation archive, which evaluation and the calibration fetch need"
+    )
     commands.add_parser("val", help="the val2017 image archive, which every accuracy run needs")
-    commands.add_parser("train", help="the full train2017 image archive (18 GB); calibration does not need it")
     calibration = commands.add_parser(
         "calibration", help=f"the {CALIBRATION_COUNT} seeded train2017 calibration images, verified by sha256"
     )
@@ -198,14 +225,15 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.what == "annotations":
-            _fetch_archive(ANNOTATIONS_ZIP_URL, ANNOTATIONS_ZIP_MD5, "annotations/instances_val2017.json")
+            _fetch_archive(
+                ANNOTATIONS_ZIP_URL, ANNOTATIONS_ZIP_MD5, ANNOTATIONS_ZIP_SHA256, "annotations/instances_val2017.json"
+            )
         elif args.what == "val":
-            _fetch_archive(VAL_ZIP_URL, VAL_ZIP_MD5, "val2017/000000000139.jpg")
-        elif args.what == "train":
-            _fetch_archive(TRAIN_ZIP_URL, TRAIN_ZIP_MD5, "train2017/000000000009.jpg")
+            _fetch_archive(VAL_ZIP_URL, VAL_ZIP_MD5, VAL_ZIP_SHA256, "val2017/000000000139.jpg")
         else:
             fetch_calibration(write_manifest=args.write_manifest)
-    except RuntimeError as error:
+    except (RuntimeError, ValueError) as error:
+        # ValueError: a download redirected away from HTTPS (_stream_to), refused before any file is written.
         print(f"fetch_coco: {error}", file=sys.stderr)
         return 1
     return 0

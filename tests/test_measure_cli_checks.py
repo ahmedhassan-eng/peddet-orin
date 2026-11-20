@@ -39,6 +39,12 @@ def fails_with_one_line(capsys, main, arguments: list[str], usage_first: bool = 
     return lines[-1]
 
 
+@pytest.fixture(autouse=True)
+def one_image_pool(monkeypatch):
+    """These tests reach the benchmark's later checks with a one-image pool; the real pool is 200 images."""
+    monkeypatch.setattr(benchmark, "IMAGE_POOL_SIZE", 1)
+
+
 def make_data_dir(root: Path, images: int = 1) -> Path:
     (root / "annotations").mkdir(parents=True)
     (root / "val2017").mkdir()
@@ -105,6 +111,13 @@ def test_benchmark_refuses_a_pooled_image_out_of_range_in_one_line(tmp_path, cap
     monkeypatch.setattr(benchmark, "_decode", lambda encoded: torch.full((3, 4, 5), 2.0))
     error = fails_with_one_line(capsys, benchmark.main, ["--precision", "fp32", "--data-dir", str(tmp_path)])
     assert "in file-name order: pooled image 0: expected values in [0, 1]" in error
+
+
+def test_benchmark_refuses_a_pool_shorter_than_its_200_images(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(benchmark, "IMAGE_POOL_SIZE", 200)
+    make_data_dir(tmp_path, images=2)
+    error = fails_with_one_line(capsys, benchmark.main, ["--precision", "fp32", "--data-dir", str(tmp_path)])
+    assert "holds 2 .jpg images and the benchmark times 200; run python scripts/fetch_coco.py val" in error
 
 
 def test_benchmark_empty_image_pool_is_refused(tmp_path, capsys):

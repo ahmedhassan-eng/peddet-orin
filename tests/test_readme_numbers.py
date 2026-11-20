@@ -2,8 +2,8 @@
 """Numbers typed into the README's and CHANGELOG's prose match the code, pins and logs they describe.
 
 The generated blocks are checked by test_readme_table.py; this file covers the figures written by hand around them.
-One is not checkable here: the 5000 val2017 images are COCO's own count, fixed by the archive whose MD5
-scripts/fetch_coco.py checks, and no committed log records an image count.
+One is not checked here: the 5000 val2017 images are COCO's own count, fixed by the archive whose MD5
+scripts/fetch_coco.py checks; every eval log records it as "images": 5000, but no test reads that field yet.
 """
 
 import ast
@@ -16,6 +16,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 README = REPO_ROOT / "README.md"
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 WORDS = {2: "two", 3: "three", 4: "four", 5: "five"}
+# How the README names the judged metric that deviates most from the median.
+LARGEST_LABELS = {"end_to_end_p50_ms": "end-to-end p50", "engine_p50_ms": "engine p50", "avg_power_w": "average power"}
 
 
 def constant(path: Path, name: str):
@@ -62,8 +64,8 @@ def test_the_quieting_figure_is_the_largest_deviation_in_the_repeat_block():
         (abs(float(value)), line) for line in block.splitlines() for value in re.findall(r"\(([+-][0-9.]+)%\)", line)
     ]
     largest, line = max(deviations)
-    assert line.startswith("| end_to_end_p50_ms | FP16 |")
-    assert f"up to {largest:.0f}% on the FP16 end-to-end p50" in flat(readme)
+    metric, precision = (cell.strip() for cell in line.strip("|").split("|")[:2])
+    assert f"up to {largest:.0f}% on the {precision} {LARGEST_LABELS[metric]}" in flat(readme)
 
 
 def test_the_postprocess_settings_sentence_matches_the_model():
@@ -97,6 +99,6 @@ def test_the_sample_counts_image_pool_and_seed_match_the_benchmark():
     )
     assert (
         f"Each repeat times {timed} iterations, after {warmup} untimed warm-up iterations, so each percentile pools "
-        f"{timed * repeats} samples; the images are the first {pool} val2017 images in file-name order, taken in an "
-        f"order drawn with seed {seed}," in flat(README.read_text())
+        f"{timed * repeats} samples; the images are the first {pool} val2017 images in file-name order, taken by "
+        f"{timed * repeats} draws with replacement from that pool, seeded with {seed}," in flat(README.read_text())
     )

@@ -1,0 +1,7 @@
+RUN6 start=2026-11-17T14:40:34Z commit=8ce8f5c4288521ce805e1a7e4126834fb125ebf4 dirty=0
+RUN6 POWER-MODE NV Power Mode: MAXN_SUPER
+QUIET run6-start PASS
+QUIET run6-bench_fp32 PASS
+QUIET run6-bench_fp16 PASS
+QUIET run6-bench_int8 PASS
+RUN6 DONE 2026-11-17T15:34:01Z logs=12 dirty=0

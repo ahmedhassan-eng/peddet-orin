@@ -7,7 +7,7 @@ import generate_tree
 from strict_skips import checkout_skip_reason
 
 CHECKOUT_SKIP = checkout_skip_reason(generate_tree.REPO_ROOT)
-# Every test here reads git ls-files, which a release tarball (no .git) cannot answer.
+# The tests marked needs_checkout read git ls-files, which a release tarball (no .git) cannot answer.
 pytestmark = pytest.mark.skipif(CHECKOUT_SKIP is not None, reason=CHECKOUT_SKIP or "")
 README_TEXT = generate_tree.README.read_text()
 
@@ -38,3 +38,11 @@ def test_a_new_tracked_file_changes_the_tree():
 def test_a_note_for_a_removed_file_is_reported():
     files = [name for name in generate_tree.tracked_files() if name != "PRD.md"]
     assert generate_tree.unknown_descriptions(files) == ["PRD.md"]
+
+
+def test_runs_superseded_is_one_line_in_the_tree():
+    # The superseded runs are one line, like runs-repeat/, so the tree shows the judged runs' place.
+    block = generate_tree.readme_block(README_TEXT)
+    assert "runs-superseded/" in generate_tree.COLLAPSED
+    assert any("── runs-superseded/ " in line for line in block.splitlines())
+    assert "run3/" not in block and "r3-bench_fp16.txt" not in block

@@ -32,6 +32,7 @@ from PIL import Image
 
 from peddet_orin import debug, runlog
 from peddet_orin.cli import (
+    ANNOTATIONS_RELATIVE,
     IMAGES,
     IMAGES_RELATIVE,
     HelpFormatter,
@@ -274,6 +275,19 @@ def peak_rss_mib() -> float:
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / KIB_PER_MIB
 
 
+def pool_names(images_dir: Path = IMAGES) -> list[str]:
+    """The names of the images the benchmark times, in the order image_pool reads them."""
+    return [path.name for path in sorted(images_dir.glob("*.jpg"))[:IMAGE_POOL_SIZE]]
+
+
+def input_hashes(annotations: Path, images_dir: Path) -> dict:
+    """The sha256 of the annotations file, or UNREADABLE where there is none, and of the timed images' names."""
+    return {
+        "annotations_sha256": runlog.file_sha256(annotations) if annotations.is_file() else runlog.UNREADABLE,
+        "images_sha256": runlog.names_sha256(pool_names(images_dir)),
+    }
+
+
 def image_pool(images_dir: Path = IMAGES) -> list[bytes]:
     """Load the encoded bytes of the first validation images, in file-name order."""
     return [path.read_bytes() for path in sorted(images_dir.glob("*.jpg"))[:IMAGE_POOL_SIZE]]
@@ -336,6 +350,26 @@ def _summary(seconds: list[float]) -> dict[str, float]:
     summary = {f"p{q}_ms": float(np.percentile(samples, q) * MS_PER_S) for q in PERCENTILES}
     summary["fps"] = float(1.0 / samples.mean())
     return summary
+
+
+# The raw side file keeps every timed iteration's stage and end-to-end times in ms to this many decimals.
+RAW_DECIMALS = 4
+RAW_COLUMNS = (*runlog.BENCHMARK_STAGES, "end_to_end")
+
+
+def raw_record(timed_repeats: list[list[IterationTimes]], power_mw: list[int]) -> dict:
+    """The raw side file: per repeat, each timed iteration's times in ms, in RAW_COLUMNS order, and the VDD_IN
+    readings in mW, so the logged percentiles, FPS and mean power can be recomputed."""
+    return {
+        "columns": list(RAW_COLUMNS),
+        "unit": "ms",
+        "decimals": RAW_DECIMALS,
+        "repeats": [
+            [[round(getattr(times, column) * MS_PER_S, RAW_DECIMALS) for column in RAW_COLUMNS] for times in repeat]
+            for repeat in timed_repeats
+        ],
+        "vdd_in_mw": list(power_mw),
+    }
 
 
 def stage_summaries(timed: list[IterationTimes]) -> dict[str, dict[str, float]]:
@@ -404,6 +438,12 @@ def main(argv: list[str] | None = None) -> int:
     pool = image_pool(images_dir)
     if not pool:
         usage_error(parser.prog, f"{images_dir} holds no .jpg images; run python scripts/fetch_coco.py val")
+    if len(pool) < IMAGE_POOL_SIZE:
+        usage_error(
+            parser.prog,
+            f"{images_dir} holds {len(pool)} .jpg images and the benchmark times {IMAGE_POOL_SIZE}; "
+            "run python scripts/fetch_coco.py val",
+        )
     try:
         check_pool(pool)
     except ValueError as error:
@@ -420,41 +460,62 @@ def main(argv: list[str] | None = None) -> int:
         if args.postprocess == DEPLOY:
             postprocess = postprocess.for_deployment()
         backend = load_backend(parser.prog, args.precision, args.device, detector, engine_path)
+        # Each sampler and the backend is released in a finally, in reverse order of acquisition, so an error while
+        # timing still stops the sampling processes and frees the backend; the log is then not written.
+        try:
+            for index in range(args.warmup):
+                _iteration(backend, postprocess, pool[index % len(pool)])
 
-        for index in range(args.warmup):
-            _iteration(backend, postprocess, pool[index % len(pool)])
+            baseline = TegrastatsSampler()
+            baseline.start()
+            try:
+                time.sleep(BASELINE_SAMPLE_S)
+            finally:
+                baseline.stop()
 
-        baseline = TegrastatsSampler()
-        baseline.start()
-        time.sleep(BASELINE_SAMPLE_S)
-        baseline.stop()
-
-        picks = order.integers(0, len(pool), size=(args.repeats, args.iterations))
-        # The one-minute load average shows whether other CPU work was running as timing began. The power mode is
-        # read here too, so the log records the mode in force as timing starts.
-        load_before_timing = os.getloadavg()[0]
-        power_mode = runlog.command_output(["nvpmodel", "-q"])
-        sampler = TegrastatsSampler()
-        sampler.start()
-        clock = ClockSampler(clock_files())
-        clock.start()
-        engine_repeats, total_repeats, timed = [], [], []
-        for repeat_picks in picks:
-            engine_seconds, total_seconds = [], []
-            for pick in repeat_picks:
-                times = _iteration(backend, postprocess, pool[int(pick)])
-                engine_seconds.append(times.engine)
-                total_seconds.append(times.end_to_end)
-                timed.append(times)
-            engine_repeats.append(engine_seconds)
-            total_repeats.append(total_seconds)
-        clock.stop()
-        sampler.stop()
-        release_backend(backend)
+            picks = order.integers(0, len(pool), size=(args.repeats, args.iterations))
+            # The one-minute load average shows whether other CPU work was running as timing began. The power mode
+            # is read here too, so the log records the mode in force as timing starts.
+            load_before_timing = os.getloadavg()[0]
+            power_mode = runlog.command_output(["nvpmodel", "-q"])
+            sampler = TegrastatsSampler()
+            sampler.start()
+            try:
+                clock = ClockSampler(clock_files())
+                clock.start()
+                try:
+                    engine_repeats, total_repeats, timed = [], [], []
+                    for repeat_picks in picks:
+                        engine_seconds, total_seconds = [], []
+                        for pick in repeat_picks:
+                            times = _iteration(backend, postprocess, pool[int(pick)])
+                            engine_seconds.append(times.engine)
+                            total_seconds.append(times.end_to_end)
+                            timed.append(times)
+                        engine_repeats.append(engine_seconds)
+                        total_repeats.append(total_seconds)
+                finally:
+                    clock.stop()
+            finally:
+                sampler.stop()
+        finally:
+            release_backend(backend)
         gpu_clock, cpu_clocks = clock_records(clock)
 
         power_samples = len(sampler.values(VDD_IN_PATTERN))
+        sizes = [len(repeat) for repeat in engine_repeats]
+        starts = [sum(sizes[:index]) for index in range(len(sizes))]
+        log.raw = raw_record(
+            [timed[start : start + size] for start, size in zip(starts, sizes, strict=True)],
+            sampler.values(VDD_IN_PATTERN),
+        )
+        if power_samples == 0:
+            # No power was read, so the log would publish no power: stop with one line and write no log.
+            print(f"benchmark: error: {TEGRASTATS} gave no power samples; no log written", file=sys.stderr)
+            raise SystemExit(2)
         debug.log(f"tegrastats samples: {power_samples}")
+        log.results.update(input_hashes(args.data_dir / ANNOTATIONS_RELATIVE, images_dir))
+        log.results["pool_images"] = len(pool)
         log.results.update(
             {
                 "runtime": backend.label,

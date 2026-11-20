@@ -10,8 +10,9 @@ import pytest
 import fetch_coco
 import generate_table
 
-LOGS = generate_table.load_logs(generate_table.RUNS_DIR)
-PRECISIONS = ("fp32", "fp16", "int8")
+# The judged runs' logs, which the results table is built from.
+LOGS = [log for run in sorted(generate_table.REPEATS_DIR.glob("run*")) for log in generate_table.load_logs(run)]
+PRECISIONS = ("fp32", "fp16", "int8", "fp32-trt")
 SHA256_LINE = re.compile(r"^[0-9a-f]{64}  \d{12}\.jpg$")
 
 
@@ -78,3 +79,14 @@ def test_r10_an_int8_drop_over_two_points_is_stated(tmp_path):
     dropped = dict(int8, results=dict(int8["results"], ap=fp16["results"]["ap"] - 0.025))
     (tmp_path / f"{logs.index(int8):02d}.json").write_text(json.dumps(dropped))
     assert "more than the 2-point limit" in generate_table.build_block(tmp_path)
+
+
+def test_the_requirement_logs_are_the_judged_runs():
+    # The logs these checks read are every judged run's, TensorRT FP32 included, not runs/.
+    runs = sorted(path for path in generate_table.REPEATS_DIR.glob("run*") if path.is_dir())
+    assert runs and len(LOGS) == sum(len(generate_table.load_logs(run)) for run in runs)
+    assert {log["commit"] for log in LOGS} != {
+        log["commit"] for log in generate_table.load_logs(generate_table.RUNS_DIR)
+    }
+    for kind in ("build", "eval", "benchmark"):
+        assert generate_table.latest(LOGS, kind, "fp32-trt") is not None, kind

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from pathlib import Path
 
@@ -26,6 +27,14 @@ DEFAULT_ONNX = runlog.REPO_ROOT / "artifacts" / "ssdlite320.onnx"
 
 class OnnxMismatch(AssertionError):
     """ONNX Runtime and PyTorch disagree by more than the tolerance."""
+
+
+def largest_difference(want: np.ndarray, got: np.ndarray) -> float:
+    """The largest element difference, or infinity when either side holds a NaN or an infinity: ``max()`` drops a
+    NaN and ``np.max`` of one is NaN, so without this a broken backend's NaN output would pass the check."""
+    if not (np.isfinite(want).all() and np.isfinite(got).all()):
+        return math.inf
+    return float(np.max(np.abs(want - got)))
 
 
 def export(network: SsdNetwork, path: Path) -> None:
@@ -66,7 +75,7 @@ def max_difference(
         onnx_input = normalise(raw) if normalise_onnx_input else raw
         actual = onnx_runtime.run(list(OUTPUT_NAMES), {INPUT_NAME: onnx_input.numpy()})
         for want, got in zip(expected, actual, strict=True):
-            worst = max(worst, float(np.max(np.abs(want.numpy() - got))))
+            worst = max(worst, largest_difference(want.numpy(), got))
     return worst
 
 
@@ -130,6 +139,7 @@ def main(argv: list[str] | None = None) -> int:
         export(network, args.output)
         worst = assert_matches(network, args.output, seeded_batches(CHECK_SEED, CHECK_BATCHES))
         log.results.update(export_results(worst))
+        log.results["onnx_sha256"] = runlog.file_sha256(args.output)
     print(f"wrote {display_path(args.output)}; onnx matches pytorch: max abs difference {worst:.3g}")
     return 0
 

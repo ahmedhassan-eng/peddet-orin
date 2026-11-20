@@ -25,6 +25,8 @@ EXPECTED_SKIPS = frozenset(
         "test_cuda_forward_matches_cpu",
         "test_tensorrt_fp16_engine_matches_cpu",
         "test_tensorrt_check_fails_on_unnormalised_input",
+        "test_tensorrt_backend_waits_for_its_stream_before_reading_the_outputs",
+        "test_tensorrt_fp16_and_int8_engines_match_the_fp32_engine",
         "test_tensorrt_fp32_engine_matches_cpu_and_logs_no_reduced_precision",
         "test_tensorrt_int8_entropy_engine_builds_runs_and_logs_its_path",
         "test_tensorrt_int8_qdq_fallback_engine_builds_runs_and_logs_its_path",
@@ -38,7 +40,15 @@ GPU_VARIABLE = "PDORIN_REQUIRE_GPU"
 NO_GIT_REASON = "repository rule: no .git here (a release tarball), so git cannot list the tracked files"
 SHALLOW_REASON = "repository rule: a shallow clone lacks the history this test looks commits up in"
 CHECKOUT_REASONS = frozenset({NO_GIT_REASON, SHALLOW_REASON})
+# The release check sets this, so that the tests which only a release tip can pass run; CI and contributors do not.
+RELEASE_VARIABLE = "PDORIN_RELEASE_CHECK"
+RELEASE_REASON = "release check only: set PDORIN_RELEASE_CHECK=1 to run it"
 SKIPPED_PREFIX = "Skipped: "
+
+
+def release_skip_reason() -> str | None:
+    """Return why a release-only test does not run here, or None when the release check is on."""
+    return None if os.environ.get(RELEASE_VARIABLE, "") == "1" else RELEASE_REASON
 
 
 def in_ci() -> bool:
@@ -75,6 +85,8 @@ def unexpected_skips(skipped: list[str | tuple[str, str]], ci: bool = True, gpu:
         if not gpu and name.split("[")[0] in EXPECTED_SKIPS:
             continue
         if not ci and reason in CHECKOUT_REASONS:
+            continue
+        if reason == RELEASE_REASON:
             continue
         unexpected.add(name)
     return sorted(unexpected)

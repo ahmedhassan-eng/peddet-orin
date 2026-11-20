@@ -379,6 +379,7 @@ def test_the_int8_build_log_records_the_engine_and_cache_hashes(calibration, tmp
     results = run_int8_build(calibration, tmp_path, monkeypatch, entropy_writes_both)
     assert results["engine_sha256"] == hashlib.sha256(b"engine").hexdigest()
     assert results["calibration_cache_sha256"] == hashlib.sha256(b"cache").hexdigest()
+    assert results["onnx_sha256"] == hashlib.sha256(b"onnx").hexdigest()
 
 
 def test_an_int8_build_that_writes_no_cache_records_none(calibration, tmp_path, monkeypatch):

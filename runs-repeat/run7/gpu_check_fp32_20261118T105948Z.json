@@ -1,0 +1,61 @@
+{
+  "command": "python -m peddet_orin.gpu_check",
+  "commit": "84271330d28b3fb779ea495de9b711759c9f51ba",
+  "dirty": false,
+  "end_utc": "2026-11-18T10:59:48Z",
+  "environment": {
+    "cuda": "13.0",
+    "cuda_driver": "13.2",
+    "cuda_runtime": "13.0",
+    "libjpeg": "libjpeg-turbo 3.2.0",
+    "numpy": "1.26.4",
+    "nv_tegra_release": "# R39 (release), REVISION: 2.1, GCID: 46758480, BOARD: generic, EABI: aarch64, DATE: Fri Aug  7 05:54:22 AM UTC 2026\n# KERNEL_VARIANT: oot\nTARGET_USERSPACE_LIB_DIR=nvidia\nTARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia",
+    "nvpmodel": "NV Power Mode: MAXN_SUPER\n2",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.31.1",
+    "peddet_orin": "0.1.1",
+    "pillow": "13.0.0",
+    "pycocotools": "2.0.11",
+    "python": "3.12.3",
+    "tensorrt": "10.16.2.10",
+    "torch": "2.14.1+cu130",
+    "torchvision": "0.29.1+cu130"
+  },
+  "iterations": {
+    "matrix_size": 256,
+    "nms_boxes": 2000
+  },
+  "kind": "gpu_check",
+  "other_gpu_processes": "UNREADABLE",
+  "precision": "fp32",
+  "results": {
+    "arch_list": [
+      "sm_80",
+      "sm_90",
+      "sm_100",
+      "sm_110",
+      "sm_120"
+    ],
+    "cuda_available": true,
+    "cudnn_allow_tf32": false,
+    "device_compute_capability": "8.7",
+    "gpu_torch_usable": true,
+    "matmul_allow_tf32": false,
+    "matmul_error": "",
+    "matmul_matches": true,
+    "matmul_max_abs_difference": 6.866455078125e-05,
+    "matmul_tolerance": 0.001,
+    "nms_comparison": {
+      "nms_identical": true,
+      "nms_input_boxes": 2000,
+      "nms_kept_cpu": 1307,
+      "nms_kept_gpu": 1307
+    },
+    "nms_error": "",
+    "nms_matches": true,
+    "torch_warning": "Found GPU0 Orin which is of compute capability (CC) 8.7.\nThe following list shows the CCs this version of PyTorch was built for and the hardware CCs it supports:\n- 8.0 which supports hardware CC >=8.0,<9.0 except {8.7}\n- 9.0 which supports hardware CC >=9.0,<10.0\n- 10.0 which supports hardware CC >=10.0,<11.0 except {10.1}\n- 11.0 which supports hardware CC {10.1, 11.0}\n- 12.0 which supports hardware CC >=12.0,<13.0\nNo published PyTorch CUDA builds for release 2.14.1+cu130 support this GPU. Visit https://pytorch.org/get-started/locally/ to find a compatible release."
+  },
+  "schema_version": 2,
+  "seed": 87,
+  "start_utc": "2026-11-18T10:59:48Z"
+}

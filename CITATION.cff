@@ -1,14 +1,16 @@
 cff-version: 1.2.0
 message: "If you use this software or its results, please cite it as below."
 type: software
-title: "peddet-orin: person detection on the Jetson Orin in FP32, FP16 and INT8"
+title: "peddet-orin: person detection on a Jetson Orin Nano Super in FP32, FP16 and INT8"
 version: 0.1.1
-date-released: 2026-11-16
+date-released: 2026-11-20
 authors:
   - family-names: Hassan
     given-names: Ahmed
 repository-code: "https://github.com/ahmedhassan-eng/peddet-orin"
 url: "https://github.com/ahmedhassan-eng/peddet-orin"
+# CFF reads a list as OR. The work is Apache-2.0 AND BSD-3-Clause: the parts of src/peddet_orin/postprocess.py
+# that follow torchvision are also BSD-3-Clause; see LICENSE and NOTICE.
 license: Apache-2.0
 keywords:
   - Jetson

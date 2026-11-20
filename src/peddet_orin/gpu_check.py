@@ -34,7 +34,7 @@ CPU = "cpu"
 CHECK_SEED = 87
 MATRIX_SIZE = 256
 # Absolute tolerance on the product of matrices with entries in [0, 1). The largest
-# element is about MATRIX_SIZE / 4, so this is a few parts per million of it.
+# element is about 79, so this is about 13 parts per million of it.
 MATMUL_TOLERANCE = 1e-3
 BOX_COUNT = 2000
 CANVAS_PIXELS = 320.0

@@ -1,4 +1,5 @@
-# Output of python scripts/check_planted_defects.py on the files of the commit that last changed this file (git log -1 -- tests/planted_results.txt), as they were before this file was written: the CPU run, then the one GPU entry run on its own on the board.
+# Recorded lines of python scripts/check_planted_defects.py, assembled by the release helper, on the files of the commit that last changed this file (git log -1 -- tests/planted_results.txt), as they were before this file was written: the CPU run's PLANT lines, then the 4 GPU entries' lines, which ran before it, one at a time, on the board, through a helper outside this repository that calls this script's own functions; the script's PLANTED DONE line is not kept.
+# CPU run 2026-11-20T02:08:47Z to 2026-11-20T02:14:31Z; GPU entry 2026-11-20T01:24:05Z to 2026-11-20T02:08:13Z.
 PLANT readme-tree-stale clean-rc=0 planted-rc=1 caught
 PLANT agents-rule-edited clean-rc=0 planted-rc=1 caught
 PLANT test-name-shared clean-rc=0 planted-rc=1 caught
@@ -15,7 +16,6 @@ PLANT commit-id-not-in-history clean-rc=0 planted-rc=1 caught
 PLANT int8-limit-raised clean-rc=0 planted-rc=1 caught
 PLANT nms-ignores-class clean-rc=0 planted-rc=1 caught
 PLANT runlog-fields-unchecked clean-rc=0 planted-rc=1 caught
-PLANT cuda-forward-other-weights clean-rc=0 planted-rc=1 caught
 PLANT eval-bbox-xyxy clean-rc=0 planted-rc=1 caught
 PLANT eval-all-categories clean-rc=0 planted-rc=1 caught
 PLANT eval-ap50-as-ap clean-rc=0 planted-rc=1 caught
@@ -38,3 +38,7 @@ PLANT compare-against-earlier-run clean-rc=0 planted-rc=1 caught
 PLANT compare-skips-missing-log clean-rc=0 planted-rc=1 caught
 PLANT gpu-check-ignores-nms clean-rc=0 planted-rc=1 caught
 PLANT readme-repeat-count-typed-wrong clean-rc=0 planted-rc=1 caught
+PLANT cuda-forward-other-weights clean-rc=0 planted-rc=1 caught
+PLANT trt-stream-not-synchronized clean-rc=0 planted-rc=1 caught
+PLANT fp32-trt-keeps-fp16 clean-rc=0 planted-rc=1 caught
+PLANT int8-calibration-unnormalised clean-rc=0 planted-rc=1 caught

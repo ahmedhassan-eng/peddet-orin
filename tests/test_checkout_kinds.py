@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Outside a full clone, the repository-rule tests skip with their fixed reason instead of failing.
+"""Outside a full clone, the repository-rule tests skip with their fixed reason instead of failing, except in CI.
 
 A release tarball (``git archive HEAD``) has no .git, and ``git clone --depth 1`` has no history.
 Each test builds such a tree from this checkout's tracked files in tmp_path and runs the
@@ -95,8 +95,8 @@ def test_a_release_tarball_tree_skips_the_repository_rules(tmp_path):
     assert done.returncode == 0, done.stdout + done.stderr
     assert " failed" not in done.stdout and " error" not in done.stdout, done.stdout
     skips = skip_lines(done.stdout)
-    # 2 history tests, 5 tree tests, 4 registry tests and 1 cited-test check, all for the one reason.
-    assert "12 skipped" in done.stdout and "1 passed" in done.stdout, done.stdout
+    # 2 history tests, 6 tree tests, 4 registry tests and 1 cited-test check, all for the one reason.
+    assert "13 skipped" in done.stdout and "1 passed" in done.stdout, done.stdout
     assert skips and all(line.endswith(NO_GIT_REASON) for line in skips), skips
 
 

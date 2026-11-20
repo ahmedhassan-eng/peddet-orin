@@ -8,6 +8,7 @@ run" when none failed but some needed a GPU it did not have, or "PLANTED DONE FA
 Usage: python scripts/check_planted_defects.py
 """
 
+import argparse
 import os
 import shutil
 import subprocess
@@ -59,8 +60,20 @@ def verdict(failures: int, not_run: int) -> str:
     return f"PLANTED DONE INCOMPLETE {not_run} not run" if not_run else "PLANTED DONE PASS"
 
 
-def main() -> int:
-    gpu = cuda_available()
+def cpu_only_status(line: str, not_run: int, gpu_entries: int) -> int:
+    """CI's status for a CPU-only run: 0 when no entry failed and exactly the GPU-only entries were not run."""
+    return 0 if line == f"PLANTED DONE INCOMPLETE {gpu_entries} not run" and not_run == gpu_entries else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Plant each registered defect and check that its test catches it.")
+    parser.add_argument(
+        "--cpu-only",
+        action="store_true",
+        help="run the CPU entries only, as CI does; pass when each is caught and only the GPU entries are not run",
+    )
+    args = parser.parse_args(argv)
+    gpu = cuda_available() and not args.cpu_only
     failures = not_run = 0
     (REPO_ROOT / ".cache").mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="planted-", dir=REPO_ROOT / ".cache"))
@@ -89,6 +102,8 @@ def main() -> int:
         shutil.rmtree(work)
     line = verdict(failures, not_run)
     print(line)
+    if args.cpu_only:
+        return cpu_only_status(line, not_run, sum(defect.get("needs") == "gpu" for defect in DEFECTS))
     return 0 if line == "PLANTED DONE PASS" else 1
 
 

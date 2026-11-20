@@ -380,6 +380,7 @@ def main(argv: list[str] | None = None) -> int:
                 "build_seconds": round(time.perf_counter() - started, 1),
                 "engine_bytes": output.stat().st_size,
                 "engine_sha256": file_sha256(output),
+                "onnx_sha256": file_sha256(args.onnx),
                 "calibration_cache_sha256": calibration_cache_sha256(route, output),
                 "builder_flags": list(flags),
             }

@@ -1,4 +1,5 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: Apache-2.0 AND BSD-3-Clause
+# Follows torchvision's SSD postprocess, Copyright (c) Soumith Chintala 2016, BSD 3-Clause; see NOTICE.
 """The one postprocess: anchors, box decoding, score filtering and NMS.
 
 The exported network stops at raw box regression and class logits. Everything
@@ -28,8 +29,8 @@ BACKGROUND_LABEL = 0
 PERSON_LABEL = 1
 LOGITS_DIM = -1
 # The deployment-style postprocess keeps the person class only, with one fixed score threshold. 0.5 is a fixed
-# midpoint chosen before any deployment-style run; it is not tuned on the results, and no recall or AP is reported at
-# this threshold. Everything else is torchvision's.
+# midpoint; by the author's record it was chosen before any deployment-style run and not tuned on the results,
+# and no recall or AP is reported at this threshold. Everything else is torchvision's.
 DEPLOY_SCORE_THRESHOLD = 0.5
 DEPLOY_LABELS = (PERSON_LABEL,)
 

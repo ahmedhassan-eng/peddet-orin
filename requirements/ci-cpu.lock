@@ -2,8 +2,9 @@
 # CPU-only set for CI (ubuntu-24.04, Python 3.11 and 3.12). No CUDA, no TensorRT:
 # the GPU and TensorRT tests skip when those are absent.
 #
-# A complete lock: every package pip installs from this file is pinned here, transitive
-# dependencies included, so nothing floats between runs. It was resolved with
+# A complete set of version pins: every package pip installs from this file is pinned here,
+# transitive dependencies included, so nothing floats between runs. CI installs
+# requirements/ci-cpu.lock, the same version pins with hashes, with --require-hashes. It was resolved with
 # pip install --dry-run --report for manylinux x86_64 on Python 3.11 and 3.12; the
 # packages whose versions differ between those Pythons carry environment markers.
 --extra-index-url https://download.pytorch.org/whl/cpu
@@ -198,7 +199,8 @@ pycocotools==2.0.11 \
     --hash=sha256:f7eb43b79448476b094240450420b7425d06e297880144b8ea6f01e9b4340e43 \
     --hash=sha256:fd72b9734e6084b217c1fc3945bfd4ec05bdc75a44e4f0c461a91442bb804973 \
     --hash=sha256:ffe806ce535f5996445188f9a35643791dc54beabc61bd81e2b03367356d604f
-# pillow 13.0.0 and pytest 9.0.3 are the first releases with the fixes pip-audit names for 12.3.0 and 7.4.4.
+# By the author's pip-audit run when they were set, pillow 13.0.0 and pytest 9.0.3 are the first releases with
+# fixes for the advisories it listed against 12.3.0 and 7.4.4.
 pillow==13.0.0 \
     --hash=sha256:02464da86f561f410e13b061ec37c3068a9cb557a095494157742d07b3c24a27 \
     --hash=sha256:04a63720f79e22fd54d897c233a68314c50ca0603360f54ce2bd5db8f0f43782 \

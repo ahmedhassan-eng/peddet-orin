@@ -67,7 +67,8 @@ def load_detector(pretrained: bool) -> nn.Module:
     """Build SSDLite in eval mode. Without ``pretrained`` it fetches nothing at all.
 
     The pretrained weights are loaded as tensors only (``weights_only=True``), after their full sha256 is checked,
-    so a replaced file in the cache can neither run code nor load silently.
+    so a replaced file in the cache cannot run code. The file is hashed by path and then read again to load, so a
+    file swapped between the two loads unchecked.
     """
     # weights_backbone defaults to an ImageNet download, so it must be disabled explicitly. COCO has 91 classes.
     model = ssdlite320_mobilenet_v3_large(weights=None, weights_backbone=None, num_classes=91)

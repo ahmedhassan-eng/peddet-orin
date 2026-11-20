@@ -1,0 +1,140 @@
+{
+  "command": "python -m peddet_orin.benchmark --precision fp32-trt",
+  "commit": "84271330d28b3fb779ea495de9b711759c9f51ba",
+  "dirty": false,
+  "end_utc": "2026-11-18T10:42:27Z",
+  "environment": {
+    "cuda": "13.0",
+    "cuda_driver": "13.2",
+    "cuda_runtime": "13.0",
+    "libjpeg": "libjpeg-turbo 3.2.0",
+    "numpy": "1.26.4",
+    "nv_tegra_release": "# R39 (release), REVISION: 2.1, GCID: 46758480, BOARD: generic, EABI: aarch64, DATE: Fri Aug  7 05:54:22 AM UTC 2026\n# KERNEL_VARIANT: oot\nTARGET_USERSPACE_LIB_DIR=nvidia\nTARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia",
+    "nvpmodel": "NV Power Mode: MAXN_SUPER\n2",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.31.1",
+    "peddet_orin": "0.1.1",
+    "pillow": "13.0.0",
+    "pycocotools": "2.0.11",
+    "python": "3.12.3",
+    "tensorrt": "10.16.2.10",
+    "torch": "2.14.1+cu130",
+    "torchvision": "0.29.1+cu130"
+  },
+  "iterations": {
+    "batch": 1,
+    "repeats": 3,
+    "timed": 1000,
+    "warmup": 50
+  },
+  "kind": "benchmark",
+  "other_gpu_processes": "UNREADABLE",
+  "precision": "fp32-trt",
+  "results": {
+    "avg_power_w": 7.3296497175141235,
+    "cpu_clocks": {
+      "policy0": {
+        "at_max_samples": 901,
+        "cur_khz_counts": {
+          "1728000": 901,
+          "729600": 5,
+          "806400": 1
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 907,
+        "unreadable_samples": 0
+      },
+      "policy4": {
+        "at_max_samples": 5,
+        "cur_khz_counts": {
+          "1728000": 5,
+          "729600": 902
+        },
+        "governor": "schedutil",
+        "max_khz": 1728000,
+        "samples": 907,
+        "unreadable_samples": 0
+      }
+    },
+    "cpu_load_1min_before_timing": 1.5087890625,
+    "end_to_end": {
+      "fps": 16.61204399560319,
+      "p50_ms": 60.47156103886664,
+      "p90_ms": 73.46849665045738,
+      "p99_ms": 80.98230980336665
+    },
+    "end_to_end_p50_ms_per_repeat": [
+      60.95428753178567,
+      60.16717304009944,
+      60.75743003748357
+    ],
+    "engine": {
+      "fps": 170.73916117429826,
+      "p50_ms": 5.85250707808882,
+      "p90_ms": 5.915145738981664,
+      "p99_ms": 6.0083263204433015
+    },
+    "engine_p50_ms_per_repeat": [
+      5.851770984008908,
+      5.851291585713625,
+      5.8546679792925715
+    ],
+    "engine_sha256": "1ac58d2df1295af0c3bff02b986672dad617e45ebe21212a9bc387661880b1f1",
+    "gpu_busy_pct_before_timing": 0.0,
+    "gpu_clock": {
+      "at_max_samples": 907,
+      "cur_hz_counts": {
+        "1020000000": 907
+      },
+      "governor": "performance",
+      "max_hz": 1020000000,
+      "min_hz": 306000000,
+      "samples": 907,
+      "unreadable_samples": 0
+    },
+    "peak_process_rss_mib": 1135.88671875,
+    "postprocess_settings": {
+      "detections_per_image": 300,
+      "nms_iou_threshold": 0.55,
+      "num_classes": 91,
+      "score_threshold": 0.001,
+      "top_k_per_class": 300
+    },
+    "power_mode": "NV Power Mode: MAXN_SUPER\n2",
+    "power_samples": 885,
+    "repeats": 3,
+    "runtime": "tensorrt-gpu",
+    "stages": {
+      "decode": {
+        "fps": 144.2381095346062,
+        "p50_ms": 6.908146082423627,
+        "p90_ms": 8.88998962473124,
+        "p99_ms": 11.225971812382337
+      },
+      "engine": {
+        "fps": 170.73916117429826,
+        "p50_ms": 5.85250707808882,
+        "p90_ms": 5.915145738981664,
+        "p99_ms": 6.0083263204433015
+      },
+      "postprocess": {
+        "fps": 22.036904051400615,
+        "p50_ms": 45.48353550489992,
+        "p90_ms": 58.67647274862975,
+        "p99_ms": 64.2974127596244
+      },
+      "preprocess": {
+        "fps": 492.85472838008195,
+        "p50_ms": 2.0510988542810082,
+        "p90_ms": 2.5630330899730325,
+        "p99_ms": 3.630157792940734
+      }
+    },
+    "system_ram_rise_mib": 140.71428571428578,
+    "torch_num_threads": 6
+  },
+  "schema_version": 2,
+  "seed": 7,
+  "start_utc": "2026-11-18T10:39:18Z"
+}
